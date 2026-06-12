@@ -1,0 +1,37 @@
+model {
+
+  ############################################################
+  # AIDE-CRM discount model with random r
+  #
+  # Data required:
+  #   N              : total number of dose assignments
+  #   J              : number of dose levels
+  #   y[i]           : DLT outcome, 0/1
+  #   dose[i]        : assigned dose level, integer 1,...,J
+  #   ipde[i]        : 0 = regular assignment, 1 = IPDE/recycled assignment
+  #   q[j]           : CRM skeleton probability for dose j
+  #   tau_alpha      : precision for alpha prior, e.g. 1 / 2^2
+  #   a_r, b_r       : beta prior parameters for r
+  ############################################################
+
+  alpha ~ dnorm(0, tau_alpha)
+
+  r ~ dbeta(a_r, b_r)
+
+  for (j in 1:J) {
+    # CRM power model: p_j(alpha) = q_j ^ exp(alpha)
+    p[j] <- pow(q[j], exp(alpha))
+
+    # Observed DLT probability for an IPDE/recycled assignment
+    theta_ipde[j] <- r + (1 - r) * p[j]
+  }
+
+  for (i in 1:N) {
+    # Regular: Pr(Y_i = 1) = p[dose[i]]
+    # IPDE   : Pr(Y_i = 1) = r + (1-r) * p[dose[i]]
+    theta[i] <- (1 - ipde[i]) * p[dose[i]] +
+                ipde[i] * theta_ipde[dose[i]]
+
+    y[i] ~ dbern(theta[i])
+  }
+}
