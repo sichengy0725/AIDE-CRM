@@ -35,15 +35,15 @@ simulate_AIDE_design <- function(
   decision_method = c("boin", "approx1", "approx2"),
   mtd_method = NULL,
   r_carry = 0.1,
+  r_estimator = c("r_fixed", "r_mle"),
   
   # --- CRM discount-model options ---
-  crm_r_model = c("fixed", "random"),
+  crm_r_model = c("fixed", "random", "level"),
   crm_skeleton = NULL,
+  crm_model_file = NULL,
   crm_alpha_sd = 2,
   crm_a_r = 1,
   crm_b_r = 9,
-  crm_fixed_model_file = "fix_CRM.bug",
-  crm_random_model_file = "random_CRM.bug",
   crm_n_chains = 2,
   crm_n_adapt = 500,
   crm_n_burnin = 500,
@@ -56,6 +56,7 @@ simulate_AIDE_design <- function(
   
   if (model == "BOIN") {
     decision_method <- match.arg(decision_method)
+    r_estimator <- match.arg(r_estimator)
     
     if (is.null(mtd_method)) {
       mtd_method <- decision_method
@@ -84,6 +85,10 @@ simulate_AIDE_design <- function(
     
     if (!is.finite(crm_alpha_sd) || crm_alpha_sd <= 0) {
       stop("crm_alpha_sd must be positive.")
+    }
+    
+    if (crm_r_model == "level" && length(p_true) != 5L) {
+      stop("crm_r_model = 'level' requires exactly 5 dose levels.")
     }
     
     decision_method <- paste0("crm_", crm_r_model)
@@ -330,6 +335,19 @@ simulate_AIDE_design <- function(
     NI_curr <- sum(dat_curr$type == "retreat")
     YI_curr <- sum(dat_curr$y[dat_curr$type == "retreat"] == 1L)
     
+    ## Dose-wise regular-patient counts available at this decision time.
+    ## These are used by BOIN r_mle to compute the pooled adjacent
+    ## regular-toxicity cap for r.
+    n_regular_all_dec <- tabulate(
+      dat_dec$dose[dat_dec$type == "new"],
+      nbins = K
+    )
+    
+    y_regular_all_dec <- tabulate(
+      dat_dec$dose[dat_dec$type == "new" & dat_dec$y == 1L],
+      nbins = K
+    )
+    
     if (elimi[curr_dose] == 1L && curr_dose > 1L) {
       
       move <- list(
@@ -363,7 +381,13 @@ simulate_AIDE_design <- function(
           NI_star = NI_curr,
           lambda_e = lambda_e,
           lambda_d = lambda_d,
+          phi = TARGET,
           r_carry = r_carry,
+          r_estimator = r_estimator,
+          
+          ## New BOIN r_mle truncation inputs.
+          y_regular_all = y_regular_all_dec,
+          n_regular_all = n_regular_all_dec,
           
           elimi = elimi,
           n_trt_curr = n_trt_curr,
@@ -391,9 +415,7 @@ simulate_AIDE_design <- function(
           b_r = crm_b_r,
           
           alpha_sd = crm_alpha_sd,
-          
-          fixed_model_file = crm_fixed_model_file,
-          random_model_file = crm_random_model_file,
+          model_file = crm_model_file,
           
           n_chains = crm_n_chains,
           n_adapt = crm_n_adapt,
@@ -569,6 +591,12 @@ simulate_AIDE_design <- function(
         decision_method = decision_method,
         mtd_method = mtd_method,
         r_carry = r_carry,
+        r_estimator = if (model == "BOIN") r_estimator else NA_character_,
+        r_model = if (model == "CRM") crm_r_model else NA_character_,
+        r_hat = rep(NA_real_, K),
+        r_use = rep(NA_real_, K),
+        r_cap = rep(NA_real_, K),
+        model_file = if (model == "CRM") crm_model_file else NA_character_,
         model = model
       )
     ))
@@ -609,7 +637,9 @@ simulate_AIDE_design <- function(
     min(admin$t_arrival, na.rm = TRUE)
   
   phat <- rep(NA_real_, K)
-  r_hat <- if (model == "CRM" && crm_r_model == "fixed") r_carry else NA_real_
+  r_hat <- if (model == "CRM" && crm_r_model == "fixed") r_carry else rep(NA_real_, K)
+  r_use <- rep(NA_real_, K)
+  r_cap <- rep(NA_real_, K)
   
   if (earlystop == 1L) {
     final_dose <- 99L
@@ -617,7 +647,9 @@ simulate_AIDE_design <- function(
       phat = rep(NA_real_, K),
       pj_iso = rep(NA_real_, K),
       eliminated = elimi,
-      r_hat = r_hat
+      r_hat = r_hat,
+      r_use = r_use,
+      r_cap = r_cap
     )
   } else {
     
@@ -630,6 +662,8 @@ simulate_AIDE_design <- function(
         cutoff.eli = cutoff,
         approx = mtd_method,
         r_carry = r_carry,
+        r_estimator = r_estimator,
+        phi = TARGET,
         y_new = y_new_final,
         n_new = n_new_final,
         y_recycle = y_recycle_final,
@@ -650,10 +684,7 @@ simulate_AIDE_design <- function(
         a_r = crm_a_r,
         b_r = crm_b_r,
         alpha_sd = crm_alpha_sd,
-        
-        fixed_model_file = crm_fixed_model_file,
-        random_model_file = crm_random_model_file,
-        
+        model_file = crm_model_file,
         n_chains = crm_n_chains,
         n_adapt = crm_n_adapt,
         n_burnin = crm_n_burnin,
@@ -668,6 +699,8 @@ simulate_AIDE_design <- function(
     final_dose <- final_fit$MTD
     phat[seq_along(final_fit$phat)] <- final_fit$phat
     if (!is.null(final_fit$r_hat)) r_hat <- final_fit$r_hat
+    if (!is.null(final_fit$r_use)) r_use <- final_fit$r_use
+    if (!is.null(final_fit$r_cap)) r_cap <- final_fit$r_cap
   }
   
   final_elimi <- if (!is.null(final_fit$eliminated)) final_fit$eliminated else elimi
@@ -686,9 +719,362 @@ simulate_AIDE_design <- function(
       decision_method = decision_method,
       mtd_method = mtd_method,
       r_carry = r_carry,
+      r_estimator = if (model == "BOIN") r_estimator else NA_character_,
       r_model = if (model == "CRM") crm_r_model else NA_character_,
-      r_hat = r_hat,
+      r_hat = if (model == "BOIN") r_hat else final_fit$r_hat,
+      r_use = if (model == "BOIN") r_use else rep(NA_real_, K),
+      r_cap = if (model == "BOIN") r_cap else rep(NA_real_, K),
+      model_file = if (model == "CRM") crm_model_file else NA_character_,
       model = model
     )
   )
+}
+## ------------------------------------------------------------
+## Operating-characteristic simulation wrapper for AIDE-BOIN / AIDE-CRM
+## ------------------------------------------------------------
+get_oc_sim_AIDE <- function(
+    target,
+    p.true,
+    p.true_ipde = p.true,
+    ntrial = 1000,
+    seed = 1,
+    
+    model = c("BOIN", "CRM"),
+    ipde_design = 2,
+    
+    N_pat = 30L,
+    Nmax_eff = 30L,
+    C = 3L,
+    T_assess = 28,
+    cycle_max = 2L,
+    
+    arrival_rate = 0.2,
+    t0 = 0,
+    
+    cutoff = 0.95,
+    
+    ## old stopping cap
+    d.cap = 100,
+    
+    ## escalation gate
+    dose_cap = 3L,
+    
+    day_obs = 0,
+    
+    dlt_dist = 2,
+    dlt_alpha = 0.5,
+    
+    ## BOIN decision / final MTD method
+    decision_method = c("boin", "approx1", "approx2"),
+    mtd_method = NULL,
+    r_carry = 0.1,
+    r_estimator = c("r_fixed", "r_mle"),
+    
+    ## CRM options
+    crm_r_model = c("fixed", "random", "level"),
+    crm_skeleton = NULL,
+    crm_model_file = NULL,
+    crm_alpha_sd = 2,
+    crm_a_r = 1,
+    crm_b_r = 9,
+    crm_n_chains = 2,
+    crm_n_adapt = 500,
+    crm_n_burnin = 500,
+    crm_n_iter = 2000,
+    crm_thin = 1,
+    
+    store_raw = FALSE,
+    verbose = FALSE
+) {
+  model <- match.arg(model)
+  
+  if (model == "BOIN") {
+    decision_method <- match.arg(decision_method)
+    r_estimator <- match.arg(r_estimator)
+    
+    if (is.null(mtd_method)) {
+      mtd_method <- decision_method
+    }
+    
+    mtd_method <- match.arg(
+      mtd_method,
+      choices = c("boin", "approx1", "approx2")
+    )
+  }
+  
+  if (model == "CRM") {
+    crm_r_model <- match.arg(crm_r_model)
+    
+    if (is.null(crm_skeleton)) {
+      stop("For model = 'CRM', provide crm_skeleton.")
+    }
+    
+    if (length(crm_skeleton) != length(p.true)) {
+      stop("crm_skeleton must have the same length as p.true.")
+    }
+    
+    if (any(!is.finite(crm_skeleton)) || any(crm_skeleton <= 0 | crm_skeleton >= 1)) {
+      stop("crm_skeleton must contain probabilities in (0, 1).")
+    }
+    
+    if (!is.finite(crm_alpha_sd) || crm_alpha_sd <= 0) {
+      stop("crm_alpha_sd must be positive.")
+    }
+    
+    if (crm_r_model == "level" && length(p.true) != 5L) {
+      stop("crm_r_model = 'level' requires exactly 5 dose levels.")
+    }
+    
+    decision_method <- paste0("crm_", crm_r_model)
+    mtd_method <- decision_method
+  }
+  
+  p.true <- as.numeric(p.true)
+  p.true_ipde <- as.numeric(p.true_ipde)
+  
+  ndose <- length(p.true)
+  
+  if (length(p.true_ipde) != ndose) {
+    stop("p.true_ipde must have the same length as p.true.")
+  }
+  
+  sel_count <- integer(ndose)
+  stop_count <- 0L
+  na_count <- 0L
+  
+  ## direct early-stop indicator returned by simulate_AIDE_design()
+  earlystop_vec <- integer(ntrial)
+  
+  n_by_dose <- numeric(ndose)
+  unique_n_by_dose <- numeric(ndose)
+  nipde_by_dose <- numeric(ndose)
+  
+  total_admin <- numeric(ntrial)
+  total_unique <- numeric(ntrial)
+  duration <- numeric(ntrial)
+  
+  final_MTD <- rep(NA_integer_, ntrial)
+  pj_iso_mat <- matrix(NA_real_, nrow = ntrial, ncol = ndose)
+  
+  r_hat_mat <- matrix(NA_real_, nrow = ntrial, ncol = ndose)
+  r_use_mat <- matrix(NA_real_, nrow = ntrial, ncol = ndose)
+  r_cap_mat <- matrix(NA_real_, nrow = ntrial, ncol = ndose)
+  
+  raw_trials <- if (store_raw) vector("list", ntrial) else NULL
+  
+  for (itrial in seq_len(ntrial)) {
+    trial_seed <- seed + itrial - 1L
+    
+    fit <- simulate_AIDE_design(
+      N_pat = N_pat,
+      Nmax_eff = Nmax_eff,
+      C = C,
+      T_assess = T_assess,
+      cycle_max = cycle_max,
+      
+      arrival_rate = arrival_rate,
+      t0 = t0,
+      
+      dlt_dist = dlt_dist,
+      dlt_alpha = dlt_alpha,
+      
+      p_true = p.true,
+      p_ipde = p.true_ipde,
+      seed = trial_seed,
+      verbose = verbose,
+      
+      TARGET = target,
+      cutoff = cutoff,
+      
+      model = model,
+      ipde_design = ipde_design,
+      
+      d.cap = d.cap,
+      dose_cap = dose_cap,
+      day_obs = day_obs,
+      
+      decision_method = decision_method,
+      mtd_method = mtd_method,
+      r_carry = r_carry,
+      r_estimator = r_estimator,
+      
+      ## CRM pass-through
+      crm_r_model = crm_r_model,
+      crm_skeleton = crm_skeleton,
+      crm_alpha_sd = crm_alpha_sd,
+      crm_a_r = crm_a_r,
+      crm_b_r = crm_b_r,
+      crm_model_file = crm_model_file,
+      crm_n_chains = crm_n_chains,
+      crm_n_adapt = crm_n_adapt,
+      crm_n_burnin = crm_n_burnin,
+      crm_n_iter = crm_n_iter,
+      crm_thin = crm_thin
+    )
+    
+    admin <- fit$admin
+    mtd <- fit$final$MTD
+    final_MTD[itrial] <- mtd
+    
+    earlystop_vec[itrial] <- if (!is.null(fit$final$earlystop)) {
+      as.integer(isTRUE(as.logical(fit$final$earlystop)))
+    } else {
+      as.integer(!is.na(mtd) && mtd == 99L)
+    }
+    
+    pj_i <- fit$final$pj_iso
+    if (is.null(pj_i)) pj_i <- fit$final$phat
+    
+    if (!is.null(pj_i) && length(pj_i) > 0L) {
+      pj_tmp <- rep(NA_real_, ndose)
+      L <- min(length(pj_i), ndose)
+      pj_tmp[seq_len(L)] <- as.numeric(pj_i[seq_len(L)])
+      pj_iso_mat[itrial, ] <- pj_tmp
+    }
+    
+    if (model == "BOIN") {
+      r_hat_i <- fit$final$r_hat
+      if (!is.null(r_hat_i) && length(r_hat_i) > 0L) {
+        r_tmp <- rep(NA_real_, ndose)
+        L <- min(length(r_hat_i), ndose)
+        r_tmp[seq_len(L)] <- as.numeric(r_hat_i[seq_len(L)])
+        r_hat_mat[itrial, ] <- r_tmp
+      }
+      
+      r_use_i <- fit$final$r_use
+      if (!is.null(r_use_i) && length(r_use_i) > 0L) {
+        r_tmp <- rep(NA_real_, ndose)
+        L <- min(length(r_use_i), ndose)
+        r_tmp[seq_len(L)] <- as.numeric(r_use_i[seq_len(L)])
+        r_use_mat[itrial, ] <- r_tmp
+      }
+      
+      r_cap_i <- fit$final$r_cap
+      if (!is.null(r_cap_i) && length(r_cap_i) > 0L) {
+        r_tmp <- rep(NA_real_, ndose)
+        L <- min(length(r_cap_i), ndose)
+        r_tmp[seq_len(L)] <- as.numeric(r_cap_i[seq_len(L)])
+        r_cap_mat[itrial, ] <- r_tmp
+      }
+    }
+    
+    if (length(mtd) == 0L || is.na(mtd)) {
+      na_count <- na_count + 1L
+    } else if (mtd == 99L) {
+      stop_count <- stop_count + 1L
+    } else if (mtd >= 1L && mtd <= ndose) {
+      sel_count[mtd] <- sel_count[mtd] + 1L
+    } else {
+      na_count <- na_count + 1L
+    }
+    
+    if (nrow(admin) > 0L) {
+      n_by_dose <- n_by_dose + tabulate(admin$dose, nbins = ndose)
+      
+      nipde_by_dose <- nipde_by_dose +
+        tabulate(admin$dose[admin$type == "retreat"], nbins = ndose)
+      
+      unique_by_dose_i <- sapply(seq_len(ndose), function(d) {
+        length(unique(admin$id[admin$dose == d]))
+      })
+      
+      unique_n_by_dose <- unique_n_by_dose + unique_by_dose_i
+      
+      total_admin[itrial] <- nrow(admin)
+      total_unique[itrial] <- length(unique(admin$id))
+      duration[itrial] <- fit$final$trial_time
+    } else {
+      total_admin[itrial] <- 0
+      total_unique[itrial] <- 0
+      duration[itrial] <- NA_real_
+    }
+    
+    if (store_raw) {
+      raw_trials[[itrial]] <- fit
+    }
+  }
+  
+  pj_iso_mean <- apply(pj_iso_mat, 2, function(z) {
+    if (all(is.na(z))) NA_real_ else mean(z, na.rm = TRUE)
+  })
+  
+  r_hat_mean <- apply(r_hat_mat, 2, function(z) {
+    if (all(is.na(z))) NA_real_ else mean(z, na.rm = TRUE)
+  })
+  
+  r_use_mean <- apply(r_use_mat, 2, function(z) {
+    if (all(is.na(z))) NA_real_ else mean(z, na.rm = TRUE)
+  })
+  
+  r_cap_mean <- apply(r_cap_mat, 2, function(z) {
+    if (all(is.na(z))) NA_real_ else mean(z, na.rm = TRUE)
+  })
+  
+  earlystop_count <- sum(earlystop_vec, na.rm = TRUE)
+  
+  out <- list(
+    target = target,
+    p.true = p.true,
+    p.true_ipde = p.true_ipde,
+    ntrial = ntrial,
+    ndose = ndose,
+    
+    model = model,
+    ipde_design = ipde_design,
+    
+    d.cap = d.cap,
+    dose_cap = dose_cap,
+    decision_method = decision_method,
+    mtd_method = mtd_method,
+    r_carry = r_carry,
+    r_estimator = if (model == "BOIN") r_estimator else NA_character_,
+    
+    crm_r_model = if (model == "CRM") crm_r_model else NA_character_,
+    crm_skeleton = if (model == "CRM") crm_skeleton else NULL,
+    crm_alpha_sd = if (model == "CRM") crm_alpha_sd else NA_real_,
+    crm_a_r = if (model == "CRM") crm_a_r else NA_real_,
+    crm_b_r = if (model == "CRM") crm_b_r else NA_real_,
+    crm_model_file = if (model == "CRM") crm_model_file else NA_character_,
+    
+    sel_count = sel_count,
+    stop_count = stop_count,
+    na_count = na_count,
+    
+    selection_pct = 100 * sel_count / ntrial,
+    early_stop_pct = 100 * earlystop_count / ntrial,
+    na_pct = 100 * na_count / ntrial,
+    
+    earlystop = earlystop_vec,
+    earlystop_count = earlystop_count,
+    
+    final_MTD = final_MTD,
+    pj_iso_by_trial = pj_iso_mat,
+    pj_iso_mean = pj_iso_mean,
+    
+    r_hat_by_trial = if (model == "BOIN") r_hat_mat else NULL,
+    r_hat_mean = if (model == "BOIN") r_hat_mean else NULL,
+    
+    r_use_by_trial = if (model == "BOIN") r_use_mat else NULL,
+    r_use_mean = if (model == "BOIN") r_use_mean else NULL,
+    
+    r_cap_by_trial = if (model == "BOIN") r_cap_mat else NULL,
+    r_cap_mean = if (model == "BOIN") r_cap_mean else NULL,
+    
+    n_by_dose = n_by_dose / ntrial,
+    unique_n_by_dose = unique_n_by_dose / ntrial,
+    nipde_by_dose = nipde_by_dose / ntrial,
+    
+    total_admin_mean = mean(total_admin, na.rm = TRUE),
+    total_unique_mean = mean(total_unique, na.rm = TRUE),
+    duration_mean = mean(duration, na.rm = TRUE),
+    
+    total_admin = total_admin,
+    total_unique = total_unique,
+    duration = duration,
+    
+    raw_trials = raw_trials
+  )
+  
+  class(out) <- "oc_AIDE"
+  out
 }

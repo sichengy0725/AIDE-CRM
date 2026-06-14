@@ -4,6 +4,15 @@
 ##   1) original BOIN boundary: method = "boin"
 ##   2) approximate IPDE MLE: method = "approx1"
 ##   3) moment / closed-form approximation: method = "approx2"
+##
+## For approx1/approx2, r can be handled in two ways:
+##   r_estimator = "r_fixed": use the user-specified fixed r_carry
+##   r_estimator = "r_mle"  : estimate r by the smoothed MLE and plug it in
+##
+## Smoothed r_MLE uses posterior means under Beta(phi/2, 1 - phi/2):
+##   pR_tilde = (YR + phi/2) / (NR + 1)
+##   pI_tilde = (YI + phi/2) / (NI + 1)
+##   r_hat = (pI_tilde - pR_tilde) / (1 - pR_tilde), truncated to [0, 1).
 ## ============================================================
 
 clip01 <- function(x) {
@@ -112,6 +121,132 @@ exact_mixed_mle_model2 <- function(yR,
   best <- candidates[which.max(ll)]
   
   clip01(best)
+}
+
+## ------------------------------------------------------------
+## Smoothed MLE for r under model 2
+##
+## Raw MLE:
+##   r_hat = (YI/NI - YR/NR) / (1 - YR/NR)
+##
+## Here, YI/NI and YR/NR are replaced by posterior means under
+## Beta(phi/2, 1 - phi/2).  Since a0 + b0 = 1,
+##   p_post = (y + phi/2) / (n + 1).
+## ------------------------------------------------------------
+beta_binom_post_rate_phi <- function(y, n, phi) {
+  if (length(phi) != 1L || !is.finite(phi) || phi <= 0 || phi >= 1) {
+    stop("phi must be a scalar in (0, 1).")
+  }
+  if (length(y) != 1L || length(n) != 1L ||
+      !is.finite(y) || !is.finite(n) || y < 0 || n < 0) {
+    stop("y and n must be finite nonnegative scalars.")
+  }
+  if (y > n + 1e-8) {
+    stop("Observed toxicities cannot exceed sample size.")
+  }
+  
+  a0 <- phi / 2 
+  b0 <- 1 - phi / 2
+  
+  (y + a0) / (n + a0 + b0)
+}
+
+## ------------------------------------------------------------
+## Pooled regular-patient toxicity cap for r
+##
+## For current dose j:
+##   j = 1: use regular data from dose 1 only
+##   j > 1: use regular data pooled from doses j-1 and j
+##
+## Smoothed by Beta(phi/2, 1 - phi/2):
+##   p_cap = (Y_pool + phi/2) / (N_pool + 1)
+## ------------------------------------------------------------
+estimate_r_cap_pooled_regular <- function(current_dose,
+                                          y_regular,
+                                          n_regular,
+                                          phi) {
+  if (length(phi) != 1L || !is.finite(phi) || phi <= 0 || phi >= 1) {
+    stop("phi must be a scalar in (0, 1).")
+  }
+  
+  if (is.null(y_regular) || is.null(n_regular)) {
+    return(NA_real_)
+  }
+  
+  y_regular <- as.numeric(y_regular)
+  n_regular <- as.numeric(n_regular)
+  
+  if (length(y_regular) != length(n_regular)) {
+    stop("y_regular and n_regular must have the same length.")
+  }
+  if (length(y_regular) < 1L) {
+    return(NA_real_)
+  }
+  if (current_dose < 1L || current_dose > length(y_regular)) {
+    stop("current_dose must be between 1 and length(y_regular).")
+  }
+  
+  if (current_dose == 1L) {
+    idx <- 1L
+  } else {
+    idx <- c(current_dose - 1L, current_dose)
+  }
+  
+  y_pool <- sum(y_regular[idx], na.rm = TRUE)
+  n_pool <- sum(n_regular[idx], na.rm = TRUE)
+  
+  if (!is.finite(y_pool) || !is.finite(n_pool) ||
+      y_pool < 0 || n_pool < 0 || y_pool > n_pool + 1e-8) {
+    stop("Invalid pooled regular-patient counts for r truncation.")
+  }
+  
+  if (n_pool <= 0) {
+    return(NA_real_)
+  }
+  
+  beta_binom_post_rate_phi(
+    y = y_pool,
+    n = n_pool,
+    phi = phi
+  )
+}
+
+
+estimate_r_mle_beta_binom <- function(yR,
+                                      yI,
+                                      NR,
+                                      NI,
+                                      phi,
+                                      r_cap = NA_real_,
+                                      eps = 1e-12) {
+  pR_post <- beta_binom_post_rate_phi(y = yR, n = NR, phi = phi)
+  pI_post <- beta_binom_post_rate_phi(y = yI, n = NI, phi = phi)
+  
+  denom <- 1 - pR_post
+  
+  if (!is.finite(denom) || denom <= eps) {
+    r_hat_raw <- 1 - eps
+  } else {
+    r_hat_raw <- (pI_post - pR_post) / denom
+    r_hat_raw <- max(0, min(1 - eps, r_hat_raw))
+  }
+  
+  ## Truncate raw r_MLE by pooled adjacent regular-patient toxicity.
+  ## If r_cap is unavailable, keep the raw r_MLE.
+  if (length(r_cap) != 1L || !is.finite(r_cap)) {
+    r_use <- r_hat_raw
+  } else {
+    r_cap <- max(0, min(1 - eps, r_cap))
+    r_use <- min(r_hat_raw, r_cap)
+  }
+  
+  list(
+    r_hat = as.numeric(r_hat_raw),
+    r_use = as.numeric(r_use),
+    r_cap = if (is.finite(r_cap)) as.numeric(r_cap) else NA_real_,
+    pR_post = as.numeric(pR_post),
+    pI_post = as.numeric(pI_post)
+  )
 }
 
 ## ------------------------------------------------------------
@@ -439,8 +574,12 @@ get.boundary <- function(target, ncohort, cohortsize = 3,
 ## ------------------------------------------------------------
 ## Unified dose-move function
 ## ------------------------------------------------------------
+## ------------------------------------------------------------
+## Unified dose-move function
+## ------------------------------------------------------------
 boin_move <- function(current_dose, ndose,
                       method = c("boin", "approx1", "approx2"),
+                      r_estimator = c("r_fixed", "r_mle"),
                       y_curr = NULL,
                       n_curr = NULL,
                       b.e = NULL,
@@ -452,18 +591,25 @@ boin_move <- function(current_dose, ndose,
                       NI_star = 0,
                       lambda_e = NULL,
                       lambda_d = NULL,
+                      phi = NULL,
                       r_carry = 0.1,
+                      y_regular_all = NULL,
+                      n_regular_all = NULL,
                       elimi = rep(0L, ndose),
                       n_trt_curr = n_curr,
                       dose_cap = 3L) {
   
   method <- match.arg(method)
+  r_estimator <- match.arg(r_estimator)
   
   next_dose <- current_dose
   action <- "stay"
   mu_hat <- NA_real_
   n_eff <- NA_real_
   nc <- NA_integer_
+  r_hat <- NA_real_
+  r_use <- NA_real_
+  r_cap <- NA_real_
   
   can_escalate <- function() {
     current_dose < ndose &&
@@ -519,28 +665,90 @@ boin_move <- function(current_dose, ndose,
       stop("For approx1/approx2, provide lambda_e and lambda_d.")
     }
     
-    if (r_carry < 0 || r_carry >= 1) {
-      stop("r_carry must be in [0, 1).")
-    }
+    YR <- as.numeric(YR)
+    YI <- as.numeric(YI)
+    NR_star <- as.numeric(NR_star)
+    NI_star <- as.numeric(NI_star)
     
     N_star <- NR_star + NI_star
     n_eff <- N_star
     
     if (N_star <= 0) {
+      
       mu_hat <- NA_real_
-    } else if (method == "approx1") {
-      mu_hat <- exact_mixed_mle_model2(
-        yR = YR,
-        yI = YI,
-        N = N_star,
-        NR = NR_star,
-        NI = NI_star,
-        r_carry = r_carry
-      )
-    } else if (method == "approx2") {
-      mu_hat <- clip01(
-        (YR + (YI - r_carry * NI_star) / (1 - r_carry)) / N_star
-      )
+      r_use <- NA_real_
+      r_hat <- NA_real_
+      r_cap <- NA_real_
+      
+    } else {
+      
+      ##########################################################
+      # For approx1/approx2, use either:
+      #   r_fixed: fixed r_carry
+      #   r_mle  : smoothed MLE, truncated by pooled adjacent
+      #            regular-patient toxicity.
+      #
+      # Important:
+      # When only IPDE patients are observed at the current dose
+      # and no regular patients are observed, we still use r_mle.
+      # We do NOT fall back to the empirical IPDE rate.
+      ##########################################################
+      
+      if (r_estimator == "r_fixed") {
+        
+        if (r_carry < 0 || r_carry >= 1) {
+          stop("r_carry must be in [0, 1).")
+        }
+        
+        r_use <- r_carry
+        r_hat <- NA_real_
+        r_cap <- NA_real_
+        
+      } else if (r_estimator == "r_mle") {
+        
+        if (is.null(phi) || length(phi) != 1L ||
+            !is.finite(phi) || phi <= 0 || phi >= 1) {
+          stop("For r_estimator = 'r_mle', provide phi in (0, 1), typically phi = target.")
+        }
+        
+        r_cap <- estimate_r_cap_pooled_regular(
+          current_dose = current_dose,
+          y_regular = y_regular_all,
+          n_regular = n_regular_all,
+          phi = phi
+        )
+        
+        r_out <- estimate_r_mle_beta_binom(
+          yR = YR,
+          yI = YI,
+          NR = NR_star,
+          NI = NI_star,
+          phi = phi,
+          r_cap = r_cap
+        )
+        
+        r_hat <- r_out$r_hat
+        r_use <- r_out$r_use
+        r_cap <- r_out$r_cap
+      }
+      
+      if (method == "approx1") {
+        
+        mu_hat <- exact_mixed_mle_model2(
+          yR = YR,
+          yI = YI,
+          N = N_star,
+          NR = NR_star,
+          NI = NI_star,
+          r_carry = r_use
+        )
+        
+      } else if (method == "approx2") {
+        
+        mu_hat <- clip01(
+          (YR + (YI - r_use * NI_star) / (1 - r_use)) / N_star
+        )
+      }
     }
     
     if (!is.finite(mu_hat)) {
@@ -584,10 +792,18 @@ boin_move <- function(current_dose, ndose,
     STFT = NA_real_,
     pi_E = NA_real_,
     pi_D = NA_real_,
-    r_carry = r_carry
+    r_carry = r_carry,
+    r_estimator = r_estimator,
+    r_hat = r_hat,
+    r_use = r_use,
+    r_cap = r_cap,
+    phi = if (r_estimator == "r_mle") phi else NA_real_
   )
 }
 
+## ------------------------------------------------------------
+## Final MTD selection supporting boin / approx1 / approx2
+## ------------------------------------------------------------
 ## ------------------------------------------------------------
 ## Final MTD selection supporting boin / approx1 / approx2
 ## ------------------------------------------------------------
@@ -596,12 +812,15 @@ select.mtd <- function(target,
                        cutoff.eli = 0.95,
                        approx = c("boin", "approx1", "approx2"),
                        r_carry = 0.1,
+                       r_estimator = c("r_fixed", "r_mle"),
+                       phi = target,
                        y_new = NULL,
                        n_new = NULL,
                        y_recycle = NULL,
                        n_recycle = NULL) {
   
   approx <- match.arg(approx)
+  r_estimator <- match.arg(r_estimator)
   ndose <- length(n)
   
   pava <- function(x, wt = rep(1, length(x))) {
@@ -670,6 +889,9 @@ select.mtd <- function(target,
   }
   
   phat_out <- rep(NA_real_, ndose)
+  r_hat <- rep(NA_real_, ndose)
+  r_use <- rep(NA_real_, ndose)
+  r_cap <- rep(NA_real_, ndose)
   
   if (elimi[1L] == 1L) {
     return(list(
@@ -677,7 +899,11 @@ select.mtd <- function(target,
       phat = phat_out,
       pj_iso = phat_out,
       eliminated = elimi,
-      approx = approx
+      approx = approx,
+      r_estimator = r_estimator,
+      r_hat = r_hat,
+      r_use = r_use,
+      r_cap = r_cap
     ))
   }
   
@@ -687,7 +913,11 @@ select.mtd <- function(target,
       phat = phat_out,
       pj_iso = phat_out,
       eliminated = elimi,
-      approx = approx
+      approx = approx,
+      r_estimator = r_estimator,
+      r_hat = r_hat,
+      r_use = r_use,
+      r_cap = r_cap
     ))
   }
   
@@ -714,22 +944,59 @@ select.mtd <- function(target,
       n_eff[j] <- N_star
       
       if (N_star > 0) {
+        
+        if (r_estimator == "r_fixed") {
+          
+          if (r_carry < 0 || r_carry >= 1) {
+            stop("r_carry must be in [0, 1).")
+          }
+          
+          r_use[j] <- r_carry
+          r_hat[j] <- NA_real_
+          r_cap[j] <- NA_real_
+          
+        } else if (r_estimator == "r_mle") {
+          
+          if (length(phi) != 1L || !is.finite(phi) || phi <= 0 || phi >= 1) {
+            stop("For r_estimator = 'r_mle', provide phi in (0, 1), typically phi = target.")
+          }
+          
+          r_cap[j] <- estimate_r_cap_pooled_regular(
+            current_dose = j,
+            y_regular = y_new,
+            n_regular = n_new,
+            phi = phi
+          )
+          
+          r_out <- estimate_r_mle_beta_binom(
+            yR = YR,
+            yI = YI,
+            NR = NR,
+            NI = NI,
+            phi = phi,
+            r_cap = r_cap[j]
+          )
+          
+          r_hat[j] <- r_out$r_hat
+          r_use[j] <- r_out$r_use
+          r_cap[j] <- r_out$r_cap
+        }
+        
         if (approx == "approx1") {
+          
           mu_hat[j] <- exact_mixed_mle_model2(
             yR = YR,
             yI = YI,
             N = N_star,
             NR = NR,
             NI = NI,
-            r_carry = r_carry
+            r_carry = r_use[j]
           )
+          
         } else if (approx == "approx2") {
-          if (r_carry < 0 || r_carry >= 1) {
-            stop("r_carry must be in [0, 1).")
-          }
           
           mu_hat[j] <- clip01(
-            (YR + (YI - r_carry * NI) / (1 - r_carry)) / N_star
+            (YR + (YI - r_use[j] * NI) / (1 - r_use[j])) / N_star
           )
         }
       }
@@ -752,7 +1019,11 @@ select.mtd <- function(target,
       phat = phat_out,
       pj_iso = phat_out,
       eliminated = elimi,
-      approx = approx
+      approx = approx,
+      r_estimator = r_estimator,
+      r_hat = r_hat,
+      r_use = r_use,
+      r_cap = r_cap
     ))
   }
   
@@ -792,6 +1063,10 @@ select.mtd <- function(target,
     eliminated = elimi,
     approx = approx,
     mu_hat = mu_hat,
-    n_eff = n_eff
+    n_eff = n_eff,
+    r_estimator = r_estimator,
+    r_hat = r_hat,
+    r_use = r_use,
+    r_cap = r_cap
   )
 }

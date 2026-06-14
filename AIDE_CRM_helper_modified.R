@@ -6,13 +6,12 @@ crm_fit_discount <- function(dat,
                              skeleton,
                              target = 0.30,
                              cutoff.eli = 0.95,
-                             r_model = c("fixed", "random"),
+                             r_model = c("fixed", "random", "level"),
                              r_carry = 0.10,
                              a_r = 1,
                              b_r = 9,
                              alpha_sd = 2,
-                             fixed_model_file = "fix_CRM.bug",
-                             random_model_file = "random_CRM.bug",
+                             model_file = NULL,
                              n_chains = 2,
                              n_adapt = 500,
                              n_burnin = 500,
@@ -21,6 +20,15 @@ crm_fit_discount <- function(dat,
                              seed = NULL) {
   
   r_model <- match.arg(r_model)
+  
+  if (is.null(model_file)) {
+    model_file <- switch(
+      r_model,
+      fixed  = "fix_CRM.bug",
+      random = "random_CRM.bug",
+      level  = "random_CRM_level.bug"
+    )
+  }
   
   if (!requireNamespace("rjags", quietly = TRUE)) {
     stop("Package 'rjags' is required for CRM. Install/load JAGS and rjags first.")
@@ -50,6 +58,9 @@ crm_fit_discount <- function(dat,
        r_carry < 0 ||
        r_carry >= 1)) {
     stop("For fixed r, r_carry must be a scalar in [0, 1).")
+  }
+  if (r_model == "level" && ndose != 5L) {
+    stop("The level-specific random r model random_CRM_level.bug is written for exactly 5 dose levels.")
   }
   
   ## dat should contain dose, y, and type, where type is "new" or "retreat".
@@ -81,23 +92,27 @@ crm_fit_discount <- function(dat,
     tau_alpha = 1 / alpha_sd^2
   )
   
-  model_file <- fixed_model_file
   monitors <- c("alpha", "p", "theta_ipde")
   
   if (r_model == "fixed") {
     jags_data$r <- r_carry
-  } else {
-    model_file <- random_model_file
+    
+  } else if (r_model == "random") {
     jags_data$a_r <- a_r
     jags_data$b_r <- b_r
     monitors <- c(monitors, "r")
+    
+  } else if (r_model == "level") {
+    jags_data$a_r <- a_r
+    jags_data$b_r <- b_r
+    monitors <- c(monitors, paste0("r", 2:ndose))
   }
   
   if (!file.exists(model_file)) {
     stop("Cannot find JAGS model file: ", model_file)
   }
   
-  if (!is.null(seed)) set.seed(seed)
+  # if (!is.null(seed)) set.seed(seed)
   
   jm <- rjags::jags.model(
     file = model_file,
@@ -133,9 +148,22 @@ crm_fit_discount <- function(dat,
   }
   
   r_hat <- if (r_model == "fixed") {
-    r_carry
+    as.numeric(r_carry)
+    
+  } else if (r_model == "random") {
+    as.numeric(mean(post[, "r"]))
+    
   } else {
-    mean(post[, "r"])
+    r_cols <- paste0("r", 2:ndose)
+    
+    if (!all(r_cols %in% colnames(post))) {
+      stop("Posterior samples do not contain r2,...,rJ. Check the level-specific CRM model file.")
+    }
+    
+    out <- rep(NA_real_, ndose)
+    names(out) <- paste0("D", seq_len(ndose))
+    out[2:ndose] <- colMeans(post[, r_cols, drop = FALSE])
+    out
   }
   
   ## CRM-specific overdose stopping rule:
@@ -154,9 +182,10 @@ crm_fit_discount <- function(dat,
   list(
     p_hat = as.numeric(p_hat),
     theta_ipde_hat = as.numeric(theta_hat),
-    r_hat = as.numeric(r_hat),
+    r_hat = r_hat,
     post = post,
     r_model = r_model,
+    model_file = model_file,
     target = target,
     cutoff.eli = cutoff.eli,
     skeleton = skeleton,
@@ -165,6 +194,7 @@ crm_fit_discount <- function(dat,
     eliminated = eliminated
   )
 }
+
 
 ## ------------------------------------------------------------
 ## CRM dose-move function, analogous to boin_move()
@@ -175,13 +205,12 @@ crm_move <- function(current_dose,
                      target = 0.30,
                      cutoff.eli = 0.95,
                      skeleton,
-                     r_model = c("fixed", "random"),
+                     r_model = c("fixed", "random", "level"),
                      r_carry = 0.10,
                      a_r = 1,
                      b_r = 9,
                      alpha_sd = 2,
-                     fixed_model_file = "fix_CRM.bug",
-                     random_model_file = "random_CRM.bug",
+                     model_file = NULL,
                      n_chains = 2,
                      n_adapt = 500,
                      n_burnin = 500,
@@ -214,11 +243,20 @@ crm_move <- function(current_dose,
       method = paste0("crm_", r_model),
       p_hat = rep(NA_real_, ndose),
       theta_ipde_hat = rep(NA_real_, ndose),
-      r_hat = if (r_model == "fixed") r_carry else NA_real_,
+      r_hat = if (r_model == "fixed") {
+        r_carry
+      } else if (r_model == "level") {
+        out <- rep(NA_real_, ndose)
+        names(out) <- paste0("D", seq_len(ndose))
+        out
+      } else {
+        NA_real_
+      },
       prob_p1_over_target = NA_real_,
       crm_selected_dose = NA_integer_,
       r_carry = r_carry,
       r_model = r_model,
+      model_file = model_file,
       earlystop = 0L,
       stop_trial = FALSE,
       eliminated = elimi
@@ -236,8 +274,7 @@ crm_move <- function(current_dose,
     a_r = a_r,
     b_r = b_r,
     alpha_sd = alpha_sd,
-    fixed_model_file = fixed_model_file,
-    random_model_file = random_model_file,
+    model_file = model_file,
     n_chains = n_chains,
     n_adapt = n_adapt,
     n_burnin = n_burnin,
@@ -262,6 +299,7 @@ crm_move <- function(current_dose,
       crm_selected_dose = NA_integer_,
       r_carry = r_carry,
       r_model = r_model,
+      model_file = fit$model_file,
       earlystop = 1L,
       stop_trial = TRUE,
       eliminated = fit$eliminated
@@ -285,6 +323,7 @@ crm_move <- function(current_dose,
       crm_selected_dose = NA_integer_,
       r_carry = r_carry,
       r_model = r_model,
+      model_file = fit$model_file,
       earlystop = 0L,
       stop_trial = FALSE,
       eliminated = elimi
@@ -301,10 +340,12 @@ crm_move <- function(current_dose,
       next_dose <- current_dose
       action <- "stay_escalation_blocked"
     }
+    
   } else if (crm_selected_dose < current_dose) {
     next_dose <- if (no_skip) current_dose - 1L else crm_selected_dose
     next_dose <- max(1L, next_dose)
     action <- "de-escalate"
+    
   } else {
     next_dose <- current_dose
     action <- "stay"
@@ -325,11 +366,13 @@ crm_move <- function(current_dose,
     crm_selected_dose = as.integer(crm_selected_dose),
     r_carry = r_carry,
     r_model = r_model,
+    model_file = fit$model_file,
     earlystop = 0L,
     stop_trial = FALSE,
     eliminated = elimi
   )
 }
+
 
 ## ------------------------------------------------------------
 ## Optional final MTD selection using CRM posterior p_j
@@ -339,13 +382,12 @@ select.mtd.crm <- function(target,
                            ndose,
                            skeleton,
                            cutoff.eli = 0.95,
-                           r_model = c("fixed", "random"),
+                           r_model = c("fixed", "random", "level"),
                            r_carry = 0.10,
                            a_r = 1,
                            b_r = 9,
                            alpha_sd = 2,
-                           fixed_model_file = "fix_CRM.bug",
-                           random_model_file = "random_CRM.bug",
+                           model_file = NULL,
                            n_chains = 2,
                            n_adapt = 500,
                            n_burnin = 500,
@@ -368,8 +410,17 @@ select.mtd.crm <- function(target,
       approx = paste0("crm_", r_model),
       p_hat = phat_out,
       theta_ipde_hat = rep(NA_real_, ndose),
-      r_hat = if (r_model == "fixed") r_carry else NA_real_,
+      r_hat = if (r_model == "fixed") {
+        r_carry
+      } else if (r_model == "level") {
+        out <- rep(NA_real_, ndose)
+        names(out) <- paste0("D", seq_len(ndose))
+        out
+      } else {
+        NA_real_
+      },
       prob_p1_over_target = NA_real_,
+      model_file = model_file,
       earlystop = 0L
     ))
   }
@@ -387,8 +438,7 @@ select.mtd.crm <- function(target,
     a_r = a_r,
     b_r = b_r,
     alpha_sd = alpha_sd,
-    fixed_model_file = fixed_model_file,
-    random_model_file = random_model_file,
+    model_file = model_file,
     n_chains = n_chains,
     n_adapt = n_adapt,
     n_burnin = n_burnin,
@@ -415,6 +465,7 @@ select.mtd.crm <- function(target,
       theta_ipde_hat = fit$theta_ipde_hat,
       r_hat = fit$r_hat,
       prob_p1_over_target = fit$prob_p1_over_target,
+      model_file = fit$model_file,
       earlystop = 1L
     ))
   }
@@ -444,6 +495,7 @@ select.mtd.crm <- function(target,
     theta_ipde_hat = fit$theta_ipde_hat,
     r_hat = fit$r_hat,
     prob_p1_over_target = fit$prob_p1_over_target,
+    model_file = fit$model_file,
     earlystop = 0L
   )
 }

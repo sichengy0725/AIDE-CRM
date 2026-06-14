@@ -1,0 +1,50 @@
+model {
+
+  ############################################################
+  # AIDE-CRM discount model with dose-specific random r
+  #
+  # This model is written for exactly 5 dose levels.
+  # Dose 1 has no IPDE carryover parameter.
+  # Doses 2-5 have independent Beta(a_r, b_r) priors.
+  # With the default helper settings, a_r = 1 and b_r = 9.
+  #
+  # Data required:
+  #   N              : total number of dose assignments
+  #   J              : number of dose levels; must be 5
+  #   y[i]           : DLT outcome, 0/1
+  #   dose[i]        : assigned dose level, integer 1,...,5
+  #   ipde[i]        : 0 = regular assignment, 1 = IPDE/recycled assignment
+  #   q[j]           : CRM skeleton probability for dose j
+  #   tau_alpha      : precision for alpha prior, e.g. 1 / 2^2
+  #   a_r, b_r       : beta prior parameters for r2, r3, r4, r5
+  ############################################################
+
+  alpha ~ dnorm(0, tau_alpha)
+
+  r2 ~ dbeta(a_r, b_r)
+  r3 ~ dbeta(a_r, b_r)
+  r4 ~ dbeta(a_r, b_r)
+  r5 ~ dbeta(a_r, b_r)
+
+  for (j in 1:J) {
+    # CRM power model: p_j(alpha) = q_j ^ exp(alpha)
+    p[j] <- pow(q[j], exp(alpha))
+  }
+
+  # No dose-specific r for dose 1.
+  theta_ipde[1] <- p[1]
+
+  theta_ipde[2] <- r2 + (1 - r2) * p[2]
+  theta_ipde[3] <- r3 + (1 - r3) * p[3]
+  theta_ipde[4] <- r4 + (1 - r4) * p[4]
+  theta_ipde[5] <- r5 + (1 - r5) * p[5]
+
+  for (i in 1:N) {
+    # Regular: Pr(Y_i = 1) = p[dose[i]]
+    # IPDE   : Pr(Y_i = 1) = theta_ipde[dose[i]]
+    theta[i] <- (1 - ipde[i]) * p[dose[i]] +
+                ipde[i] * theta_ipde[dose[i]]
+
+    y[i] ~ dbern(theta[i])
+  }
+}
