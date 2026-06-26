@@ -1,22 +1,21 @@
 ## ============================================================
 ## Extract AIDE OC from cluster jobs
-## Matched to run_oc_AIDE.R
+## Matched to run_oc_AIDE_cluster_SetB_8dose.R
 ##
 ## Newest runner naming rules:
 ##
 ## Folder:
-##   oc_results_cluster_AIDE_Set_5dose_methods_prior/
-##   Set_5dose_methods_prior-model-{model}-opt-{method_tag}-w-{T_assess}-c-{C}-
-##   cyc-{cycle_max}-rate-{arrival_rate}-Nmax-{Nmax_eff}-tried-{0/1}/
+##   oc_results_cluster_AIDE_SetB_8dose/
+##   SetB_8dose-model-{model}-opt-{method_tag}-w-{T_assess}-c-{C}-cyc-{cycle_max}-
+##   rate-{arrival_rate}-Nmax-{Nmax_eff}/
 ##
 ## Combined file:
-##   Set_5dose_methods_prior_SC{sc}_{model}_{method_tag}_a{alpha_true}_r{r_carry}_
-##   rate{arrival_rate}_cyc{cycle_max}_cont{0/1}_tried{0/1}-job-{job}-combined.rds
+##   SetB_8dose_SC{sc}_{model}_{method_tag}_a{alpha_true}_r{r_carry}_rate{arrival_rate}_
+##   cyc{cycle_max}_cont{0/1}-job-{job}-combined.rds
 ##
 ## Supports:
 ##   BOIN: boin / approx1 / approx2 with r_fixed or r_mle
 ##   CRM : fixed / random / level / alpha_crm / cumu_crm
-##   CFO : empirical / pride
 ## ============================================================
 
 rm(list = ls())
@@ -27,24 +26,26 @@ rm(list = ls())
 
 ## setwd("/rsrch8/home/biostatistics/syang10/AIDE")
 
-scenario_set_name <- "Set_5dose_methods_prior"
+scenario_set_name <- "SetB_8dose"
 results_root <- paste0("oc_results_cluster_AIDE_", scenario_set_name)
 
-## Five-dose true DLT scenarios used by run_oc_AIDE.R.
-p_true_scenarios <- rbind(
-  `1` = c(0.07, 0.12, 0.17, 0.22, 0.30),
-  `2` = c(0.05, 0.10, 0.18, 0.30, 0.40),
-  `3` = c(0.15, 0.20, 0.30, 0.35, 0.45),
-  `4` = c(0.15, 0.30, 0.38, 0.45, 0.55),
-  `5` = c(0.30, 0.35, 0.40, 0.45, 0.50),
-  `6` = c(0.50, 0.55, 0.60, 0.65, 0.70)
+## Set B: eight-dose true DLT scenarios
+p_true_setB <- rbind(
+  `1` = c(0.07, 0.10, 0.12, 0.14, 0.17, 0.19, 0.22, 0.26),
+  `2` = c(0.05, 0.08, 0.10, 0.15, 0.20, 0.22, 0.30, 0.45),
+  `3` = c(0.05, 0.10, 0.12, 0.15, 0.20, 0.30, 0.50, 0.60),
+  `4` = c(0.02, 0.10, 0.15, 0.18, 0.30, 0.44, 0.52, 0.60),
+  `5` = c(0.05, 0.10, 0.22, 0.30, 0.46, 0.53, 0.59, 0.66),
+  `6` = c(0.20, 0.30, 0.47, 0.51, 0.56, 0.60, 0.64, 0.69),
+  `7` = c(0.30, 0.35, 0.50, 0.55, 0.60, 0.65, 0.70, 0.80),
+  `8` = c(0.40, 0.41, 0.43, 0.45, 0.47, 0.49, 0.52, 0.56)
 )
-scenario_id_list <- as.integer(rownames(p_true_scenarios))
-ndose_expected <- ncol(p_true_scenarios)
+scenario_id_list <- as.integer(rownames(p_true_setB))
+ndose_expected <- ncol(p_true_setB)
 
 jobs.expected <- 1:2000
 
-## If each LSF job used ntrial.total = 1, expected total is 2000.
+## If each LSF job used ntrial.total = 2, expected total is 4000.
 ## Change this if you pass a different trials-per-job argument to the runner.
 ntrial_per_job_expected <- 1L
 ntrial.expected <- length(jobs.expected) * ntrial_per_job_expected
@@ -54,24 +55,30 @@ target <- 0.30
 T_assess <- 28
 C <- 3L
 cycle_max_list <- c(1L, 2L, 3L)
-Nmax_eff <- 45L
+Nmax_eff <- 30L
 dose_cap <- 3L
 continuous_enrollment <- TRUE
-restrict_to_tried <- TRUE
 
 alpha_true_list <- c(0, 0.3, 0.6, 0.9)
 arrival_rate_list <- c(1 / 14)
 
 ## BOIN settings matched to runner
-boin_method_list <- c("approx1", "approx2")
+boin_method_list <- c("approx1")
 boin_r_estimator_list <- c("r_fixed")
 boin_r_carry_list_r_mle <- c(0)
 boin_r_carry_list_fixed <- c(0)
 
-## CRM settings are kept available for optional extraction if model_list includes "CRM".
+## CRM settings matched to the actual SetB_8dose runner outputs.
+## Your current example folder/file is for alpha_crm with r0:
+##   SetB_8dose-model-CRM-opt-crm_alpha_crm-...
+##   SetB_8dose_SC7_CRM_crm_alpha_crm_a0_r0_rate0p07_cyc1_cont1-job-1630-combined.rds
+##
+## Edit this vector to extract other CRM backends. The r values are selected
+## below by crm_r_carry_values.
+# crm_r_model_list <- c("alpha_crm")
 crm_r_model_list <- c("fixed", "level", "random", "alpha_crm", "cumu_crm")
 
-## r values by CRM backend, matching the names produced by run_oc_AIDE.R.
+## r values by CRM backend, matching the names produced by the SetB runner.
 ## fixed CRM uses r_carry; alpha_crm/cumu_crm do not use fixed r, so the
 ## runner convention is usually r0 in the filename.
 crm_r_carry_values <- list(
@@ -91,7 +98,7 @@ get_crm_r_loop <- function(crm_r_model) {
 }
 
 ## skeleton for power CRM and alpha-CRM
-crm_skeleton <- c(0.15, 0.20, 0.30, 0.35, 0.45)
+crm_skeleton <- c(0.04, 0.08, 0.12, 0.16, 0.30, 0.47, 0.54, 0.60)
 q_skeleton <- crm_skeleton
 
 ## Power CRM / alpha-CRM prior: theta ~ N(0, 2)
@@ -104,7 +111,7 @@ crm_a_r <- target / 2
 crm_b_r <- 1 - crm_a_r
 
 ## alpha-CRM actual dose amounts, mg
-crm_dose_values_alpha <- c(15, 20, 30, 35, 45)
+crm_dose_values_alpha <- c(10, 20, 30, 40, 50, 60, 70, 80)
 dose_alpha_mg <- crm_dose_values_alpha
 crm_alpha_grid_length <- 61L
 
@@ -112,14 +119,15 @@ crm_alpha_grid_length <- 61L
 ## beta0 ~ t(fixed_intercept, precision = beta0_prec, df = beta0_df)
 ## beta1 ~ Gamma(beta1_shape, beta1_rate)
 ## beta2 ~ Exp(1), but beta2 drops out at baseline when cumu.d = 0
-crm_dose_scores_raw <- c(15, 20, 30, 35, 45)
+crm_dose_scores_raw <- c(0.1, 0.3, 0.5, 0.7, 0.9, 1.1, 1.3, 1.5)
 dose_ipcrm <- crm_dose_scores_raw
-crm_dose_scores_cumu <- dose_ipcrm / (2 * stats::sd(dose_ipcrm))
-fixed_intercept <- -2.8
+## Runner passes these scores directly; do not standardize them here.
+crm_dose_scores_cumu <- dose_ipcrm
+fixed_intercept <- -3
 beta0_prec <- 2
 beta0_df <- 1
-beta1_shape <- 2.5
-beta1_rate <- 1.6
+beta1_shape <- 2.83
+beta1_rate <- 1.21
 beta2_rate <- 1
 crm_cumu_beta0_mean <- fixed_intercept
 crm_cumu_beta0_prec <- beta0_prec
@@ -129,21 +137,9 @@ crm_cumu_beta1_rate <- beta1_rate
 crm_cumu_beta2_rate <- beta2_rate
 crm_cumu_include_current <- FALSE
 
-## CFO / PRIDE settings matched to methods_prior.R and run_oc_AIDE.R.
-cfo_method_list <- c("empirical", "pride")
-cfo_skeleton <- c(0.005, 0.01, 0.05, 0.1, 0.3)
-cfo_model_file <- "PRIDE.bug"
-cfo_sigma2_beta <- 30
-cfo_eta <- 1
-cfo_pk_method <- "approx"
-cfo_n_mc_w <- 200
-cfo_m_use <- 1000
-cfo_use_monotone_pair <- FALSE
-
-## Extract these models. Active run_oc_AIDE.R defaults to BOIN + CFO.
-model_list <- c("BOIN", "CFO")
-## model_list <- c("BOIN", "CRM", "CFO")
-## model_list <- c("CRM")
+## Extract these models. For newest CRM-only runs, leave as c("CRM").
+model_list <- c("CRM")
+## model_list <- c("BOIN", "CRM")
 
 out.dir <- paste0("OC_summary_from_parallel_AIDE_jobs_", scenario_set_name)
 if (!dir.exists(out.dir)) dir.create(out.dir, recursive = TRUE)
@@ -192,22 +188,17 @@ get_field <- function(x, candidates, required = TRUE) {
 make_method_tag <- function(model,
                             boin_method = NULL,
                             boin_r_estimator = NULL,
-                            crm_r_model = NULL,
-                            cfo_method = NULL) {
+                            crm_r_model = NULL) {
   if (model == "BOIN") {
     return(paste0(boin_method, "-", boin_r_estimator))
   }
-  if (model == "CRM") {
-    return(paste0("crm_", crm_r_model))
-  }
-  paste0("cfo_", cfo_method)
+  paste0("crm_", crm_r_model)
 }
 
 make_foldername <- function(model,
                             method_tag,
                             cycle_max,
                             arrival_rate,
-                            restrict_to_tried,
                             scenario_set = scenario_set_name) {
   paste0(
     scenario_set,
@@ -217,8 +208,7 @@ make_foldername <- function(model,
     "-c-", fmt_short(C),
     "-cyc-", fmt_short(cycle_max),
     "-rate-", fmt_short(arrival_rate),
-    "-Nmax-", fmt_short(Nmax_eff),
-    "-tried-", as.integer(isTRUE(restrict_to_tried))
+    "-Nmax-", fmt_short(Nmax_eff)
   )
 }
 
@@ -230,7 +220,6 @@ make_group_key <- function(sc,
                            arrival_rate,
                            cycle_max,
                            continuous_enrollment,
-                           restrict_to_tried,
                            scenario_set = scenario_set_name) {
   paste(
     paste0(scenario_set, "_SC", sc),
@@ -241,7 +230,6 @@ make_group_key <- function(sc,
     paste0("rate", fmt_short(arrival_rate)),
     paste0("cyc", fmt_short(cycle_max)),
     paste0("cont", as.integer(isTRUE(continuous_enrollment))),
-    paste0("tried", as.integer(isTRUE(restrict_to_tried))),
     sep = "_"
   )
 }
@@ -254,7 +242,6 @@ make_filename <- function(sc,
                           arrival_rate,
                           cycle_max,
                           continuous_enrollment,
-                          restrict_to_tried,
                           job) {
   paste0(
     make_group_key(
@@ -265,8 +252,7 @@ make_filename <- function(sc,
       r_carry = r_carry,
       arrival_rate = arrival_rate,
       cycle_max = cycle_max,
-      continuous_enrollment = continuous_enrollment,
-      restrict_to_tried = restrict_to_tried
+      continuous_enrollment = continuous_enrollment
     ),
     "-job-", job,
     "-combined.rds"
@@ -411,13 +397,11 @@ summarize_aide_files <- function(files.use,
                                  boin_method,
                                  boin_r_estimator,
                                  crm_r_model,
-                                 cfo_method,
                                  alpha_true,
                                  r_carry,
                                  arrival_rate,
                                  cycle_max,
-                                 continuous_enrollment,
-                                 restrict_to_tried) {
+                                 continuous_enrollment) {
   res.list <- lapply(files.use, readRDS)
   
   ndose <- get_field(res.list[[1]], c("ndose"))
@@ -425,18 +409,18 @@ summarize_aide_files <- function(files.use,
   
   p.true <- as.numeric(get_field(res.list[[1]], c("p.true")))
   p.true_ipde <- as.numeric(get_field(res.list[[1]], c("p.true_ipde")))
-  p.true_expected <- if (as.character(sc) %in% rownames(p_true_scenarios)) {
-    as.numeric(p_true_scenarios[as.character(sc), ])
+  p.true_setB_expected <- if (as.character(sc) %in% rownames(p_true_setB)) {
+    as.numeric(p_true_setB[as.character(sc), ])
   } else {
     rep(NA_real_, length(p.true))
   }
-  if (!all(is.na(p.true_expected))) {
-    if (length(p.true) != length(p.true_expected) ||
-        any(abs(p.true - p.true_expected) > 1e-10)) {
+  if (!all(is.na(p.true_setB_expected))) {
+    if (length(p.true) != length(p.true_setB_expected) ||
+        any(abs(p.true - p.true_setB_expected) > 1e-10)) {
       warning(
         "Scenario ", sc,
-        ": p.true stored in the RDS does not match this extractor's scenario set. ",
-        "The output keeps the RDS p.true values; check that the runner and extractor match."
+        ": p.true stored in the RDS does not match Set B in this extractor. ",
+        "The output keeps the RDS p.true values; check that the runner used Set B."
       )
     }
   }
@@ -499,14 +483,12 @@ summarize_aide_files <- function(files.use,
     BOIN_Method = ifelse(model == "BOIN", boin_method, NA_character_),
     BOIN_r_estimator = ifelse(model == "BOIN", boin_r_estimator, NA_character_),
     CRM_r_model = ifelse(model == "CRM", crm_r_model, NA_character_),
-    CFO_Method = ifelse(model == "CFO", cfo_method, NA_character_),
     Alpha_true = alpha_true,
     r_carry = r_carry,
     Accrual = arrival_rate,
     T_assess = T_assess,
     Cycle_Max = cycle_max,
     Continuous_Enrollment = as.integer(isTRUE(continuous_enrollment)),
-    Restrict_To_Tried = as.integer(isTRUE(restrict_to_tried)),
     Dose = seq_len(ndose),
     
     True_DLT_rate = p.true,
@@ -534,14 +516,6 @@ summarize_aide_files <- function(files.use,
     CRM_Theta_Prior_SD = crm_theta_prior_sd,
     CRM_r_Prior_a = crm_a_r,
     CRM_r_Prior_b = crm_b_r,
-    CFO_Skeleton = ifelse(model == "CFO", paste(cfo_skeleton, collapse = ","), NA_character_),
-    CFO_Model_File = ifelse(model == "CFO" && cfo_method == "pride", cfo_model_file, NA_character_),
-    CFO_Sigma2_Beta = ifelse(model == "CFO", cfo_sigma2_beta, NA_real_),
-    CFO_Eta = ifelse(model == "CFO", cfo_eta, NA_real_),
-    CFO_PK_Method = ifelse(model == "CFO", cfo_pk_method, NA_character_),
-    CFO_N_MC_W = ifelse(model == "CFO", cfo_n_mc_w, NA_integer_),
-    CFO_M_Use = ifelse(model == "CFO", cfo_m_use, NA_integer_),
-    CFO_Use_Monotone_Pair = ifelse(model == "CFO", as.integer(isTRUE(cfo_use_monotone_pair)), NA_integer_),
     stringsAsFactors = FALSE
   )
   
@@ -583,7 +557,7 @@ summarize_aide_files <- function(files.use,
   metrics <- c(
     "True DLT rate",
     "True IPDE DLT rate",
-    ifelse(model == "CRM", "Estimated CRM pj", ifelse(model == "CFO", "Estimated CFO pj_iso", "Estimated pj_iso")),
+    ifelse(model == "CRM", "Estimated CRM pj", "Estimated pj_iso"),
     "r_hat",
     "r_cap",
     "r_use",
@@ -606,14 +580,12 @@ summarize_aide_files <- function(files.use,
     BOIN_Method = ifelse(model == "BOIN", boin_method, NA_character_),
     BOIN_r_estimator = ifelse(model == "BOIN", boin_r_estimator, NA_character_),
     CRM_r_model = ifelse(model == "CRM", crm_r_model, NA_character_),
-    CFO_Method = ifelse(model == "CFO", cfo_method, NA_character_),
     Alpha_true = alpha_true,
     r_carry = r_carry,
     Accrual = arrival_rate,
     T_assess = T_assess,
     Cycle_Max = cycle_max,
     Continuous_Enrollment = as.integer(isTRUE(continuous_enrollment)),
-    Restrict_To_Tried = as.integer(isTRUE(restrict_to_tried)),
     Metric = metrics,
     stringsAsFactors = FALSE
   )
@@ -663,17 +635,10 @@ for (model in model_list) {
     method_loop <- boin_method_list
     boin_r_estimator_loop <- boin_r_estimator_list
     crm_loop <- NA_character_
-    cfo_loop <- NA_character_
-  } else if (model == "CRM") {
-    method_loop <- NA_character_
-    boin_r_estimator_loop <- NA_character_
-    crm_loop <- crm_r_model_list
-    cfo_loop <- NA_character_
   } else {
     method_loop <- NA_character_
     boin_r_estimator_loop <- NA_character_
-    crm_loop <- NA_character_
-    cfo_loop <- cfo_method_list
+    crm_loop <- crm_r_model_list
   }
   
   for (sc in scenario_id_list) {
@@ -683,194 +648,179 @@ for (model in model_list) {
           for (method0 in method_loop) {
             for (boin_r_estimator in boin_r_estimator_loop) {
               for (crm_r_model in crm_loop) {
-                for (cfo_method in cfo_loop) {
                 
-                  if (model == "BOIN") {
-                    r_loop <- if (identical(boin_r_estimator, "r_fixed")) {
-                      boin_r_carry_list_fixed
-                    } else {
-                      boin_r_carry_list_r_mle
-                    }
-                  } else if (model == "CRM") {
-                    r_loop <- get_crm_r_loop(crm_r_model)
+                if (model == "BOIN") {
+                  r_loop <- if (identical(boin_r_estimator, "r_fixed")) {
+                    boin_r_carry_list_fixed
                   } else {
-                    r_loop <- c(0)
+                    boin_r_carry_list_r_mle
                   }
+                } else {
+                  r_loop <- get_crm_r_loop(crm_r_model)
+                }
                 
-                  for (r_carry in r_loop) {
-                    method_tag <- make_method_tag(
-                      model = model,
-                      boin_method = if (model == "BOIN") method0 else NULL,
-                      boin_r_estimator = if (model == "BOIN") boin_r_estimator else NULL,
-                      crm_r_model = if (model == "CRM") crm_r_model else NULL,
-                      cfo_method = if (model == "CFO") cfo_method else NULL
+                for (r_carry in r_loop) {
+                  method_tag <- make_method_tag(
+                    model = model,
+                    boin_method = if (model == "BOIN") method0 else NULL,
+                    boin_r_estimator = if (model == "BOIN") boin_r_estimator else NULL,
+                    crm_r_model = if (model == "CRM") crm_r_model else NULL
+                  )
+                  
+                  foldername <- make_foldername(
+                    model = model,
+                    method_tag = method_tag,
+                    cycle_max = cycle_max,
+                    arrival_rate = arrival_rate
+                  )
+                  
+                  folderpath <- file.path(results_root, foldername)
+                  
+                  files <- file.path(
+                    folderpath,
+                    vapply(
+                      jobs.expected,
+                      function(j) {
+                        make_filename(
+                          sc = sc,
+                          model = model,
+                          method_tag = method_tag,
+                          alpha_true = alpha_true,
+                          r_carry = r_carry,
+                          arrival_rate = arrival_rate,
+                          cycle_max = cycle_max,
+                          continuous_enrollment = continuous_enrollment,
+                          job = j
+                        )
+                      },
+                      character(1)
                     )
-                    
-                    foldername <- make_foldername(
+                  )
+                  
+                  exists.vec <- file.exists(files)
+                  files.use <- files[exists.vec]
+                  missing.jobs <- jobs.expected[!exists.vec]
+                  
+                  ## Fallback: discover matching combined files in the folder.
+                  ## This is useful if a run was started at a non-1 job index,
+                  ## or if jobs.expected does not exactly match the submitted array.
+                  if (length(files.use) == 0L && dir.exists(folderpath)) {
+                    strict_key <- make_group_key(
+                      sc = sc,
                       model = model,
                       method_tag = method_tag,
-                      cycle_max = cycle_max,
+                      alpha_true = alpha_true,
+                      r_carry = r_carry,
                       arrival_rate = arrival_rate,
-                      restrict_to_tried = restrict_to_tried
+                      cycle_max = cycle_max,
+                      continuous_enrollment = continuous_enrollment
                     )
-                    
-                    folderpath <- file.path(results_root, foldername)
-                    
-                    files <- file.path(
+                    pattern <- paste0("^", strict_key, "-job-[0-9]+-combined\\.rds$")
+                    files.use <- list.files(
                       folderpath,
-                      vapply(
-                        jobs.expected,
-                        function(j) {
-                          make_filename(
-                            sc = sc,
-                            model = model,
-                            method_tag = method_tag,
-                            alpha_true = alpha_true,
-                            r_carry = r_carry,
-                            arrival_rate = arrival_rate,
-                            cycle_max = cycle_max,
-                            continuous_enrollment = continuous_enrollment,
-                            restrict_to_tried = restrict_to_tried,
-                            job = j
-                          )
-                        },
-                        character(1)
-                      )
+                      pattern = pattern,
+                      full.names = TRUE
                     )
-                    
-                    exists.vec <- file.exists(files)
-                    files.use <- files[exists.vec]
-                    missing.jobs <- jobs.expected[!exists.vec]
-                    
-                    ## Fallback: discover matching combined files in the folder.
-                    ## This is useful if a run was started at a non-1 job index,
-                    ## or if jobs.expected does not exactly match the submitted array.
-                    if (length(files.use) == 0L && dir.exists(folderpath)) {
-                      strict_key <- make_group_key(
-                        sc = sc,
-                        model = model,
-                        method_tag = method_tag,
-                        alpha_true = alpha_true,
-                        r_carry = r_carry,
-                        arrival_rate = arrival_rate,
-                        cycle_max = cycle_max,
-                        continuous_enrollment = continuous_enrollment,
-                        restrict_to_tried = restrict_to_tried
-                      )
-                      pattern <- paste0("^", strict_key, "-job-[0-9]+-combined\\.rds$")
-                      files.use <- list.files(
-                        folderpath,
-                        pattern = pattern,
-                        full.names = TRUE
-                      )
-                      if (length(files.use) > 0L) {
-                        found_jobs <- as.integer(sub(
-                          paste0(".*-job-([0-9]+)-combined\\.rds$"),
-                          "\\1",
-                          basename(files.use)
-                        ))
-                        missing.jobs <- setdiff(jobs.expected, found_jobs)
-                      }
+                    if (length(files.use) > 0L) {
+                      found_jobs <- as.integer(sub(
+                        paste0(".*-job-([0-9]+)-combined\\.rds$"),
+                        "\\1",
+                        basename(files.use)
+                      ))
+                      missing.jobs <- setdiff(jobs.expected, found_jobs)
                     }
-                    
-                    cat("\n====================================\n")
-                    cat("Scenario set:", scenario_set_name, "\n")
-                    cat("Scenario:", sc, "\n")
-                    cat("Model:", model, "\n")
-                    cat("Method tag:", method_tag, "\n")
-                    cat("BOIN method:", ifelse(model == "BOIN", method0, NA), "\n")
-                    cat("BOIN r estimator:", ifelse(model == "BOIN", boin_r_estimator, NA), "\n")
-                    cat("CRM r model:", ifelse(model == "CRM", crm_r_model, NA), "\n")
-                    cat("CFO method:", ifelse(model == "CFO", cfo_method, NA), "\n")
-                    cat("alpha_true:", alpha_true, "\n")
-                    cat("r_carry:", r_carry, "\n")
-                    cat("Accrual:", arrival_rate, "\n")
-                    cat("Cycle max:", cycle_max, "\n")
-                    cat("Continuous:", continuous_enrollment, "\n")
-                    cat("Restrict to tried:", restrict_to_tried, "\n")
-                    cat("Folder:", folderpath, "\n")
-                    cat("Example file:", files[1], "\n")
-                    cat("Found", length(files.use), "files; missing", length(missing.jobs), "jobs.\n")
-                    cat("====================================\n")
-                    
-                    missing.log[[miss.idx]] <- data.frame(
-                      Scenario_Set = scenario_set_name,
-                      Scenario_Name = paste0(scenario_set_name, "_SC", sc),
-                      Scenario = sc,
-                      Model = model,
-                      Method = method_tag,
-                      BOIN_Method = ifelse(model == "BOIN", method0, NA_character_),
-                      BOIN_r_estimator = ifelse(model == "BOIN", boin_r_estimator, NA_character_),
-                      CRM_r_model = ifelse(model == "CRM", crm_r_model, NA_character_),
-                      CFO_Method = ifelse(model == "CFO", cfo_method, NA_character_),
-                      Alpha_true = alpha_true,
-                      r_carry = r_carry,
-                      Accrual = arrival_rate,
-                      T_assess = T_assess,
-                      Cycle_Max = cycle_max,
-                      Continuous_Enrollment = as.integer(isTRUE(continuous_enrollment)),
-                      Restrict_To_Tried = as.integer(isTRUE(restrict_to_tried)),
-                      Folder = folderpath,
-                      Example_file = files[1],
-                      n_found = length(files.use),
-                      n_missing = length(missing.jobs),
-                      missing_jobs = paste(missing.jobs, collapse = ","),
-                      stringsAsFactors = FALSE
-                    )
-                    miss.idx <- miss.idx + 1L
-                    
-                    if (length(files.use) == 0L) {
-                      warning("No files found for folder: ", folderpath)
-                      next
-                    }
-                    
-                    t.read <- Sys.time()
-                    
-                    one <- summarize_aide_files(
-                      files.use = files.use,
-                      sc = sc,
-                      model = model,
-                      method_tag = method_tag,
-                      boin_method = method0,
-                      boin_r_estimator = boin_r_estimator,
-                      crm_r_model = crm_r_model,
-                      cfo_method = cfo_method,
-                      alpha_true = alpha_true,
-                      r_carry = r_carry,
-                      arrival_rate = arrival_rate,
-                      cycle_max = cycle_max,
-                      continuous_enrollment = continuous_enrollment,
-                      restrict_to_tried = restrict_to_tried
-                    )
-                    
-                    cat(
-                      "read/summarize time:",
-                      round(difftime(Sys.time(), t.read, units = "secs"), 2),
-                      "sec\n"
-                    )
-                    
-                    if (one$n_valid != ntrial.expected) {
-                      cat(
-                        "Warning: expected", ntrial.expected,
-                        "trials but found", one$n_valid, "\n"
-                      )
-                    }
-                    
-                    key <- make_group_key(
-                      sc = sc,
-                      model = model,
-                      method_tag = method_tag,
-                      alpha_true = alpha_true,
-                      r_carry = r_carry,
-                      arrival_rate = arrival_rate,
-                      cycle_max = cycle_max,
-                      continuous_enrollment = continuous_enrollment,
-                      restrict_to_tried = restrict_to_tried
-                    )
-                    
-                    all.dose.summary[[key]] <- one$dose_summary
-                    all.table.summary[[key]] <- one$table_summary
                   }
+                  
+                  cat("\n====================================\n")
+                  cat("Scenario set:", scenario_set_name, "\n")
+                  cat("Scenario:", sc, "\n")
+                  cat("Model:", model, "\n")
+                  cat("Method tag:", method_tag, "\n")
+                  cat("BOIN method:", ifelse(model == "BOIN", method0, NA), "\n")
+                  cat("BOIN r estimator:", ifelse(model == "BOIN", boin_r_estimator, NA), "\n")
+                  cat("CRM r model:", ifelse(model == "CRM", crm_r_model, NA), "\n")
+                  cat("alpha_true:", alpha_true, "\n")
+                  cat("r_carry:", r_carry, "\n")
+                  cat("Accrual:", arrival_rate, "\n")
+                  cat("Cycle max:", cycle_max, "\n")
+                  cat("Continuous:", continuous_enrollment, "\n")
+                  cat("Folder:", folderpath, "\n")
+                  cat("Example file:", files[1], "\n")
+                  cat("Found", length(files.use), "files; missing", length(missing.jobs), "jobs.\n")
+                  cat("====================================\n")
+                  
+                  missing.log[[miss.idx]] <- data.frame(
+                    Scenario_Set = scenario_set_name,
+                    Scenario_Name = paste0(scenario_set_name, "_SC", sc),
+                    Scenario = sc,
+                    Model = model,
+                    Method = method_tag,
+                    BOIN_Method = ifelse(model == "BOIN", method0, NA_character_),
+                    BOIN_r_estimator = ifelse(model == "BOIN", boin_r_estimator, NA_character_),
+                    CRM_r_model = ifelse(model == "CRM", crm_r_model, NA_character_),
+                    Alpha_true = alpha_true,
+                    r_carry = r_carry,
+                    Accrual = arrival_rate,
+                    T_assess = T_assess,
+                    Cycle_Max = cycle_max,
+                    Continuous_Enrollment = as.integer(isTRUE(continuous_enrollment)),
+                    Folder = folderpath,
+                    Example_file = files[1],
+                    n_found = length(files.use),
+                    n_missing = length(missing.jobs),
+                    missing_jobs = paste(missing.jobs, collapse = ","),
+                    stringsAsFactors = FALSE
+                  )
+                  miss.idx <- miss.idx + 1L
+                  
+                  if (length(files.use) == 0L) {
+                    warning("No files found for folder: ", folderpath)
+                    next
+                  }
+                  
+                  t.read <- Sys.time()
+                  
+                  one <- summarize_aide_files(
+                    files.use = files.use,
+                    sc = sc,
+                    model = model,
+                    method_tag = method_tag,
+                    boin_method = method0,
+                    boin_r_estimator = boin_r_estimator,
+                    crm_r_model = crm_r_model,
+                    alpha_true = alpha_true,
+                    r_carry = r_carry,
+                    arrival_rate = arrival_rate,
+                    cycle_max = cycle_max,
+                    continuous_enrollment = continuous_enrollment
+                  )
+                  
+                  cat(
+                    "read/summarize time:",
+                    round(difftime(Sys.time(), t.read, units = "secs"), 2),
+                    "sec\n"
+                  )
+                  
+                  if (one$n_valid != ntrial.expected) {
+                    cat(
+                      "Warning: expected", ntrial.expected,
+                      "trials but found", one$n_valid, "\n"
+                    )
+                  }
+                  
+                  key <- make_group_key(
+                    sc = sc,
+                    model = model,
+                    method_tag = method_tag,
+                    alpha_true = alpha_true,
+                    r_carry = r_carry,
+                    arrival_rate = arrival_rate,
+                    cycle_max = cycle_max,
+                    continuous_enrollment = continuous_enrollment
+                  )
+                  
+                  all.dose.summary[[key]] <- one$dose_summary
+                  all.table.summary[[key]] <- one$table_summary
                 }
               }
             }
@@ -904,7 +854,6 @@ out.tag <- paste0(
   if ("BOIN" %in% model_list) paste0("_boin", paste(boin_method_list, collapse = "_")) else "",
   if ("BOIN" %in% model_list) paste0("_rest", paste(boin_r_estimator_list, collapse = "_")) else "",
   if ("CRM" %in% model_list) paste0("_crm", paste(crm_r_model_list, collapse = "_")) else "",
-  if ("CFO" %in% model_list) paste0("_cfo", paste(cfo_method_list, collapse = "_")) else "",
   "_target", fmt_num(target),
   "_w", fmt_short(T_assess),
   "_c", fmt_short(C),
@@ -913,7 +862,6 @@ out.tag <- paste0(
   "_Nmax", fmt_short(Nmax_eff),
   "_dosecap", fmt_short(dose_cap),
   "_cont", as.integer(isTRUE(continuous_enrollment)),
-  "_tried", as.integer(isTRUE(restrict_to_tried)),
   "_jobs", min(jobs.expected), "to", max(jobs.expected)
 )
 
