@@ -28,7 +28,7 @@ posttoxf <- function(alpha, p, y, d, j) { p[j]^(exp(alpha))*posterior(alpha, p, 
 
 CRM<-function(PI, TARGET=0.3, p, COHORTSIZE=3, ncohort=10, ntrial)
 {
-  TOXSTOP = 0.9; ## toxicity stopping boundary
+  TOXSTOP = 0.95; ## toxicity stopping boundary
   set.seed(6);
   ndose = length(p);
   pi.hat = numeric(ndose); # estimate of toxicity prob
@@ -80,17 +80,27 @@ CRM<-function(PI, TARGET=0.3, p, COHORTSIZE=3, ncohort=10, ntrial)
 
 
 ## Your 5-dose scenarios
+# scenarios <- rbind(
+#   SC1 = c(0.07, 0.12, 0.17, 0.22, 0.30),
+#   SC2 = c(0.05, 0.10, 0.18, 0.30, 0.40),
+#   SC3 = c(0.15, 0.20, 0.30, 0.35, 0.45),
+#   SC4 = c(0.15, 0.30, 0.38, 0.45, 0.55),
+#   SC5 = c(0.30, 0.35, 0.40, 0.45, 0.50),
+#   SC6 = c(0.50, 0.55, 0.60, 0.65, 0.70)
+# )
 scenarios <- rbind(
-  SC1 = c(0.07, 0.12, 0.17, 0.22, 0.30),
-  SC2 = c(0.05, 0.10, 0.18, 0.30, 0.40),
-  SC3 = c(0.15, 0.20, 0.30, 0.35, 0.45),
-  SC4 = c(0.15, 0.30, 0.38, 0.45, 0.55),
-  SC5 = c(0.30, 0.35, 0.40, 0.45, 0.50),
-  SC6 = c(0.50, 0.55, 0.60, 0.65, 0.70)
+  c(0.07, 0.10, 0.12, 0.14, 0.17, 0.19, 0.22, 0.26),
+  c(0.05, 0.08, 0.10, 0.15, 0.20, 0.22, 0.30, 0.45),
+  c(0.05, 0.10, 0.12, 0.15, 0.20, 0.30, 0.50, 0.60),
+  c(0.02, 0.10, 0.15, 0.18, 0.30, 0.44, 0.52, 0.60),
+  c(0.05, 0.10, 0.22, 0.30, 0.46, 0.53, 0.59, 0.66),
+  c(0.20, 0.30, 0.47, 0.51, 0.56, 0.60, 0.64, 0.69),
+  c(0.30, 0.35, 0.50, 0.55, 0.60, 0.65, 0.70, 0.80),
+  c(0.40, 0.41, 0.43, 0.45, 0.47, 0.49, 0.52, 0.56)
 )
 
 ## CRM skeleton used in AIDE paper for 5-dose setting
-p_skeleton <- c(0.15, 0.20, 0.30, 0.35, 0.45)
+p_skeleton <- c(0.04, 0.08, 0.12, 0.16, 0.30, 0.47, 0.54, 0.60)
 
 for (s in seq_len(nrow(scenarios))) {
   cat("\n====================================\n")
@@ -104,7 +114,7 @@ for (s in seq_len(nrow(scenarios))) {
     TARGET = 0.3,
     p = p_skeleton,
     COHORTSIZE = 3,
-    ncohort = 10,
+    ncohort = 15,
     ntrial = 2000
   )
 }

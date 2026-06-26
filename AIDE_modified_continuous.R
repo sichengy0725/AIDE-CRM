@@ -1,6 +1,6 @@
 ## ============================================================
-## AIDE simulation wrapper with continuous new-patient accrual,
-## CFO, and five CRM backends:
+## AIDE simulation wrapper with continuous new-patient accrual
+## and five CRM backends:
 ##   fixed/r_fixed, random, level, alpha_crm, cumu_crm
 ##
 ## Source this after BOIN helpers and AIDE_CRM_helper_final.R.
@@ -8,102 +8,84 @@
 
 simulate_AIDE_design <- function(
     # --- trial size / timing ---
-  N_pat       = 30L,
-  Nmax_eff    = 30L,
-  C           = 3L,
-  T_assess    = 28,
-  cycle_max   = 2L,
+    N_pat       = 30L,
+    Nmax_eff    = 30L,
+    C           = 3L,
+    T_assess    = 28,
+    cycle_max   = 2L,
 
-  # --- arrival process ---
-  arrival_rate = 0.2,
-  t0 = 0,
-  continuous_enrollment = TRUE,
+    # --- arrival process ---
+    arrival_rate = 0.2,
+    t0 = 0,
+    continuous_enrollment = TRUE,
 
-  # --- DLT time generation ---
-  dlt_dist  = 2,
-  dlt_alpha = 0.5,
+    # --- DLT time generation ---
+    dlt_dist  = 2,
+    dlt_alpha = 0.5,
 
-  # --- truth ---
-  p_true,
-  p_ipde = p_true,
-  seed = NULL,
-  verbose = FALSE,
+    # --- truth ---
+    p_true,
+    p_ipde = p_true,
+    seed = NULL,
+    verbose = FALSE,
 
-  TARGET = 0.3,
-  cutoff = 0.95,
+    TARGET = 0.3,
+    cutoff = 0.95,
 
-  model = c("BOIN", "CRM", "CFO"),
-  ipde_design = 2,
-  d.cap = 100,
-  day_obs = 0,
+    model = c("BOIN", "CRM"),
+    ipde_design = 2,
+    d.cap = 100,
+    day_obs = 0,
 
-  # --- escalation gate ---
-  dose_cap = 3L,
+    # --- escalation gate ---
+    dose_cap = 3L,
 
-  # --- BOIN decision / final selection method ---
-  decision_method = c("boin", "approx1", "approx2"),
-  mtd_method = NULL,
-  r_carry = 0.1,
-  r_estimator = c("r_fixed", "r_mle"),
+    # --- BOIN decision / final selection method ---
+    decision_method = c("boin", "approx1", "approx2"),
+    mtd_method = NULL,
+    r_carry = 0.1,
+    r_estimator = c("r_fixed", "r_mle"),
 
-  # --- CRM model options ---
-  crm_r_model = c("fixed", "r_fixed", "random", "level", "alpha_crm", "cumu_crm"),
-  crm_skeleton = NULL,
-  crm_model_file = NULL,
-  crm_fixed_model_file = "fix_CRM.bug",
-  crm_random_model_file = "random_CRM.bug",
-  crm_level_model_file = "random_CRM_level.bug",
-  crm_alpha_sd = 2,
-  crm_a_r = 1,
-  crm_b_r = 9,
+    # --- CRM model options ---
+    crm_r_model = c("fixed", "r_fixed", "random", "level", "alpha_crm", "cumu_crm"),
+    crm_skeleton = NULL,
+    crm_model_file = NULL,
+    crm_fixed_model_file = "fix_CRM.bug",
+    crm_random_model_file = "random_CRM.bug",
+    crm_level_model_file = "random_CRM_level.bug",
+    crm_alpha_sd = 2,
+    crm_a_r = 1,
+    crm_b_r = 9,
 
-  # --- alpha-CRM options ---
-  crm_dose_values = NULL,
-  crm_time_col = "t_start",
-  crm_alpha_grid = seq(0.01, 0.99, length.out = 61),
-  crm_alpha_T = T_assess,
-  crm_theta_prior_mean = 0,
-  crm_theta_prior_sd = sqrt(2),
-  crm_alpha_L = 8,
-  crm_alpha_rel_tol = 1e-8,
-  crm_alpha_eps = 1e-12,
-  crm_alpha_n_draw_prior = 5000,
+    # --- alpha-CRM options ---
+    crm_dose_values = NULL,
+    crm_time_col = "t_start",
+    crm_alpha_grid = seq(0.01, 0.99, length.out = 61),
+    crm_alpha_T = T_assess,
+    crm_theta_prior_mean = 0,
+    crm_theta_prior_sd = sqrt(2),
+    crm_alpha_L = 8,
+    crm_alpha_rel_tol = 1e-8,
+    crm_alpha_eps = 1e-12,
+    crm_alpha_n_draw_prior = 5000,
 
-  # --- cumulative CRM options ---
-  crm_dose_scores = NULL,
-  crm_cumu_model_file = NULL,
-  crm_cumu_beta0_mean = stats::qlogis(TARGET),
-  crm_cumu_beta0_prec = 4,
-  crm_cumu_beta0_df = 1,
-  crm_cumu_beta1_shape = 5.83,
-  crm_cumu_beta1_rate = 1.21,
-  crm_cumu_beta2_rate = 1,
-  crm_cumu_include_current = FALSE,
+    # --- cumulative CRM options ---
+    crm_dose_scores = NULL,
+    crm_cumu_model_file = NULL,
+    crm_cumu_beta0_mean = stats::qlogis(TARGET),
+    crm_cumu_beta0_prec = 4,
+    crm_cumu_beta0_df = 1,
+    crm_cumu_beta1_shape = 5.83,
+    crm_cumu_beta1_rate = 1.21,
+    crm_cumu_beta2_rate = 1,
+    crm_cumu_include_current = FALSE,
 
-  # --- CFO / PRIDE options ---
-  cfo_method = c("empirical", "pride"),
-  cfo_skeleton = NULL,
-  cfo_mu = NULL,
-  cfo_model_file = "PRIDE.bug",
-  cfo_sigma2_beta = 10,
-  cfo_eta = 1,
-  cfo_pk_method = c("approx", "mc"),
-  cfo_n_mc_w = 200,
-  cfo_m_use = 1000,
-  cfo_use_monotone_pair = FALSE,
-  cfo_restrict_to_tried = TRUE,
-
-  # --- MCMC options ---
-  crm_n_chains = 2,
-  crm_n_adapt = 500,
-  crm_n_burnin = 500,
-  crm_n_iter = 2000,
-  crm_thin = 1,
-  cfo_n_chains = 3,
-  cfo_n_adapt = 1000,
-  cfo_n_burnin = 2000,
-  cfo_n_iter = 5000,
-  cfo_thin = 2
+    # --- MCMC options ---
+    crm_n_chains = 2,
+    crm_n_adapt = 500,
+    crm_n_burnin = 500,
+    crm_n_iter = 2000,
+    crm_thin = 1
 ) {
   if (!is.null(seed)) set.seed(seed)
 
@@ -161,39 +143,6 @@ simulate_AIDE_design <- function(
     }
 
     decision_method <- paste0("crm_", crm_r_model)
-    mtd_method <- decision_method
-  }
-
-  if (model == "CFO") {
-    cfo_method <- match.arg(cfo_method)
-    cfo_pk_method <- match.arg(cfo_pk_method)
-
-    if (!file.exists("CFO_tox_utils.R")) {
-      stop("Cannot find CFO utility file: CFO_tox_utils.R")
-    }
-    source("CFO_tox_utils.R")
-
-    if (cfo_method == "pride") {
-      if (is.null(cfo_mu)) {
-        if (is.null(cfo_skeleton)) {
-          stop("For PRIDE-backed CFO, provide cfo_mu or cfo_skeleton.")
-        }
-        cfo_mu <- stats::qlogis(cfo_skeleton)
-      }
-      if (length(cfo_mu) != length(p_true) || any(!is.finite(cfo_mu))) {
-        stop("cfo_mu must be finite and have the same length as p_true.")
-      }
-      if (!file.exists("PRIDE.R")) {
-        stop("Cannot find PRIDE helper file: PRIDE.R")
-      }
-      aide_select_mtd <- select.mtd
-      source("PRIDE.R", local = TRUE)
-      select.mtd <- aide_select_mtd
-    } else if (!is.null(cfo_skeleton) && length(cfo_skeleton) != length(p_true)) {
-      stop("cfo_skeleton must have the same length as p_true.")
-    }
-
-    decision_method <- paste0("cfo_", cfo_method)
     mtd_method <- decision_method
   }
 
@@ -505,60 +454,6 @@ simulate_AIDE_design <- function(
       nbins = K
     )
 
-    post_dec_cfo <- NULL
-
-    if (model == "CFO") {
-      n_cfo_dec <- tabulate(dat_dec$dose, nbins = K)
-      y_cfo_dec <- tabulate(dat_dec$dose[dat_dec$y == 1L], nbins = K)
-
-      if (cfo_method == "pride") {
-        dat_pride_dec <- data.frame(
-          id = dat_dec$id,
-          dose = dat_dec$dose,
-          y = dat_dec$y,
-          stringsAsFactors = FALSE
-        )
-
-        post_dec_cfo <- get_pride_posterior(
-          tmp = dat_pride_dec,
-          K = K,
-          mu = cfo_mu,
-          TARGET = TARGET,
-          model_file = cfo_model_file,
-          sigma2_beta = cfo_sigma2_beta,
-          eta = cfo_eta,
-          m_use = cfo_m_use,
-          pk_method = cfo_pk_method,
-          n_mc_w = cfo_n_mc_w,
-          seed_subsample = seed,
-          n.chains = cfo_n_chains,
-          n.adapt = cfo_n_adapt,
-          n.burn = cfo_n_burnin,
-          n.iter = cfo_n_iter,
-          thin = cfo_thin
-        )
-
-        post_overtox_curr <- post_dec_cfo$prob_overtox[curr_dose]
-      } else {
-        post_overtox_curr <- post.prob.fn(
-          phi = TARGET,
-          y = y_cfo_dec[curr_dose],
-          n = n_cfo_dec[curr_dose],
-          alp.prior = TARGET,
-          bet.prior = 1 - TARGET
-        )
-      }
-
-      if (n_cfo_dec[curr_dose] >= 3L && post_overtox_curr > cutoff) {
-        elimi[curr_dose:K] <- 1L
-
-        if (curr_dose == 1L) {
-          earlystop <- 1L
-          break
-        }
-      }
-    }
-
     if (elimi[curr_dose] == 1L && curr_dose > 1L) {
       move <- list(
         next_dose = curr_dose - 1L,
@@ -657,184 +552,6 @@ simulate_AIDE_design <- function(
           cumu_beta2_rate = crm_cumu_beta2_rate,
           cumu_include_current = crm_cumu_include_current
         )
-      } else if (model == "CFO") {
-        if (cfo_method == "empirical") {
-          if (K == 1L) {
-            next_cfo <- 1L
-          } else if (curr_dose == 1L) {
-            cys <- c(NA, y_cfo_dec[1L], y_cfo_dec[2L])
-            cns <- c(NA, n_cfo_dec[1L], n_cfo_dec[2L])
-            cover.doses <- c(NA, elimi[1L], elimi[2L])
-            next_cfo <- make.decision.CFO.fn(
-              phi = TARGET,
-              cys = cys,
-              cns = cns,
-              alp.prior = TARGET,
-              bet.prior = 1 - TARGET,
-              cover.doses = cover.doses
-            ) - 2L + curr_dose
-          } else {
-            idx <- (curr_dose - 1L):(curr_dose + 1L)
-            cys <- y_cfo_dec[idx]
-            cns <- n_cfo_dec[idx]
-            cover.doses <- elimi[idx]
-            next_cfo <- make.decision.CFO.fn(
-              phi = TARGET,
-              cys = cys,
-              cns = cns,
-              alp.prior = TARGET,
-              bet.prior = 1 - TARGET,
-              cover.doses = cover.doses
-            ) - 2L + curr_dose
-          }
-
-          next_cfo <- max(1L, min(K, as.integer(next_cfo)))
-          action <- if (next_cfo > curr_dose) {
-            "escalate"
-          } else if (next_cfo < curr_dose) {
-            "de-escalate"
-          } else {
-            "stay"
-          }
-
-          if (next_cfo > curr_dose &&
-              (!is.finite(n_trt_curr) || n_trt_curr < dose_cap ||
-               elimi[next_cfo] == 1L)) {
-            next_cfo <- curr_dose
-            action <- "stay_escalation_blocked"
-          }
-
-          move <- list(
-            next_dose = next_cfo,
-            action = action,
-            mu_hat = if (n_cfo_dec[curr_dose] > 0) {
-              y_cfo_dec[curr_dose] / n_cfo_dec[curr_dose]
-            } else {
-              NA_real_
-            },
-            n_eff = sum(n_cfo_dec),
-            method = "cfo_empirical",
-            stop_trial = FALSE,
-            earlystop = 0L,
-            eliminated = elimi
-          )
-
-          move$prob_overtox <- post.prob.fn(
-            phi = TARGET,
-            y = y_cfo_dec[curr_dose],
-            n = n_cfo_dec[curr_dose],
-            alp.prior = TARGET,
-            bet.prior = 1 - TARGET
-          )
-          move$prob_p1_over_target <- post.prob.fn(
-            phi = TARGET,
-            y = y_cfo_dec[1L],
-            n = n_cfo_dec[1L],
-            alp.prior = TARGET,
-            bet.prior = 1 - TARGET
-          )
-          move$model_file <- NA_character_
-        } else {
-          alp.prior <- TARGET
-          bet.prior <- 1 - TARGET
-
-          if (K == 1L) {
-            gammaL <- Inf
-            gammaR <- Inf
-          } else if (curr_dose == 1L) {
-            gammaL <- Inf
-            gammaR <- optim.gamma.fn(
-              n1 = n_cfo_dec[curr_dose],
-              n2 = n_cfo_dec[curr_dose + 1L],
-              phi = TARGET,
-              type = "R",
-              alp.prior = alp.prior,
-              bet.prior = bet.prior
-            )$gamma
-          } else if (curr_dose == K) {
-            gammaL <- optim.gamma.fn(
-              n1 = n_cfo_dec[curr_dose - 1L],
-              n2 = n_cfo_dec[curr_dose],
-              phi = TARGET,
-              type = "L",
-              alp.prior = alp.prior,
-              bet.prior = bet.prior
-            )$gamma
-            gammaR <- Inf
-          } else {
-            gammaL <- optim.gamma.fn(
-              n1 = n_cfo_dec[curr_dose - 1L],
-              n2 = n_cfo_dec[curr_dose],
-              phi = TARGET,
-              type = "L",
-              alp.prior = alp.prior,
-              bet.prior = bet.prior
-            )$gamma
-            gammaR <- optim.gamma.fn(
-              n1 = n_cfo_dec[curr_dose],
-              n2 = n_cfo_dec[curr_dose + 1L],
-              phi = TARGET,
-              type = "R",
-              alp.prior = alp.prior,
-              bet.prior = bet.prior
-            )$gamma
-          }
-
-          next_cfo <- cfo_move_pride(
-            cur_dose = curr_dose,
-            pk_draws = post_dec_cfo$pk_draws,
-            TARGET = TARGET,
-            gammaL = gammaL,
-            gammaR = gammaR,
-            elim = elimi,
-            use_monotone_pair = cfo_use_monotone_pair
-          )
-
-          if (next_cfo == 0L) {
-            move <- list(
-              next_dose = 99L,
-              action = "earlystop_all_lower_eliminated",
-              mu_hat = post_dec_cfo$posttox[curr_dose],
-              n_eff = nrow(dat_dec),
-              method = "cfo_pride",
-              stop_trial = TRUE,
-              earlystop = 1L,
-              eliminated = elimi
-            )
-          } else {
-            next_cfo <- max(1L, min(K, as.integer(next_cfo)))
-            action <- if (next_cfo > curr_dose) {
-              "escalate"
-            } else if (next_cfo < curr_dose) {
-              "de-escalate"
-            } else {
-              "stay"
-            }
-
-            if (next_cfo > curr_dose &&
-                (!is.finite(n_trt_curr) || n_trt_curr < dose_cap ||
-                 elimi[next_cfo] == 1L)) {
-              next_cfo <- curr_dose
-              action <- "stay_escalation_blocked"
-            }
-
-            move <- list(
-              next_dose = next_cfo,
-              action = action,
-              mu_hat = post_dec_cfo$posttox[curr_dose],
-              n_eff = nrow(dat_dec),
-              method = "cfo_pride",
-              stop_trial = FALSE,
-              earlystop = 0L,
-              eliminated = elimi
-            )
-          }
-
-          move$p_hat <- post_dec_cfo$posttox
-          move$prob_overtox <- post_dec_cfo$prob_overtox[curr_dose]
-          move$prob_p1_over_target <- post_dec_cfo$prob_overtox[1L]
-          move$model_file <- cfo_model_file
-        }
       }
     }
 
@@ -998,17 +715,10 @@ simulate_AIDE_design <- function(
         r_carry = r_carry,
         r_estimator = if (model == "BOIN") r_estimator else NA_character_,
         r_model = if (model == "CRM") crm_r_model else NA_character_,
-        cfo_method = if (model == "CFO") cfo_method else NA_character_,
         r_hat = rep(NA_real_, K),
         r_use = rep(NA_real_, K),
         r_cap = rep(NA_real_, K),
-        model_file = if (model == "CRM") {
-          crm_model_file
-        } else if (model == "CFO") {
-          if (cfo_method == "pride") cfo_model_file else NA_character_
-        } else {
-          NA_character_
-        },
+        model_file = if (model == "CRM") crm_model_file else NA_character_,
         model = model
       )
     ))
@@ -1126,16 +836,6 @@ simulate_AIDE_design <- function(
         cumu_beta2_rate = crm_cumu_beta2_rate,
         cumu_include_current = crm_cumu_include_current
       )
-    } else if (model == "CFO") {
-      final_fit <- select.mtd(
-        target = TARGET,
-        y = y_final,
-        n = n_final,
-        cutoff.eli = cutoff,
-        approx = "boin"
-      )
-      final_fit$approx <- paste0("cfo_", cfo_method)
-      final_fit$model_file <- if (cfo_method == "pride") cfo_model_file else NA_character_
     }
 
     final_dose <- final_fit$MTD
@@ -1164,19 +864,12 @@ simulate_AIDE_design <- function(
       r_carry = r_carry,
       r_estimator = if (model == "BOIN") r_estimator else NA_character_,
       r_model = if (model == "CRM") crm_r_model else NA_character_,
-      cfo_method = if (model == "CFO") cfo_method else NA_character_,
       r_hat = if (!is.null(final_fit$r_hat)) final_fit$r_hat else r_hat,
       r_use = if (model == "BOIN") r_use else rep(NA_real_, K),
       r_cap = if (model == "BOIN") r_cap else rep(NA_real_, K),
       prob_p1_over_target = if (!is.null(final_fit$prob_p1_over_target)) final_fit$prob_p1_over_target else NA_real_,
       model_file = if (model == "CRM") {
         if (!is.null(final_fit$model_file)) final_fit$model_file else crm_model_file
-      } else if (model == "CFO") {
-        if (cfo_method == "pride") {
-          if (!is.null(final_fit$model_file)) final_fit$model_file else cfo_model_file
-        } else {
-          NA_character_
-        }
       } else {
         NA_character_
       },
@@ -1186,7 +879,7 @@ simulate_AIDE_design <- function(
 }
 
 ## ------------------------------------------------------------
-## Operating-characteristic simulation wrapper for AIDE-BOIN / AIDE-CRM / AIDE-CFO
+## Operating-characteristic simulation wrapper for AIDE-BOIN / AIDE-CRM
 ## ------------------------------------------------------------
 get_oc_sim_AIDE <- function(
     target,
@@ -1195,7 +888,7 @@ get_oc_sim_AIDE <- function(
     ntrial = 1000,
     seed = 1,
 
-    model = c("BOIN", "CRM", "CFO"),
+    model = c("BOIN", "CRM"),
     ipde_design = 2,
 
     N_pat = 30L,
@@ -1251,30 +944,11 @@ get_oc_sim_AIDE <- function(
     crm_cumu_beta1_rate = 1.21,
     crm_cumu_beta2_rate = 1,
     crm_cumu_include_current = FALSE,
-
-    ## CFO / PRIDE options
-    cfo_method = c("empirical", "pride"),
-    cfo_skeleton = NULL,
-    cfo_mu = NULL,
-    cfo_model_file = "PRIDE.bug",
-    cfo_sigma2_beta = 10,
-    cfo_eta = 1,
-    cfo_pk_method = c("approx", "mc"),
-    cfo_n_mc_w = 200,
-    cfo_m_use = 1000,
-    cfo_use_monotone_pair = FALSE,
-    cfo_restrict_to_tried = TRUE,
-
     crm_n_chains = 2,
     crm_n_adapt = 500,
     crm_n_burnin = 500,
     crm_n_iter = 2000,
     crm_thin = 1,
-    cfo_n_chains = 3,
-    cfo_n_adapt = 1000,
-    cfo_n_burnin = 2000,
-    cfo_n_iter = 5000,
-    cfo_thin = 2,
 
     store_raw = FALSE,
     verbose = FALSE
@@ -1323,28 +997,6 @@ get_oc_sim_AIDE <- function(
     }
 
     decision_method <- paste0("crm_", crm_r_model)
-    mtd_method <- decision_method
-  }
-
-  if (model == "CFO") {
-    cfo_method <- match.arg(cfo_method)
-    cfo_pk_method <- match.arg(cfo_pk_method)
-
-    if (cfo_method == "pride") {
-      if (is.null(cfo_mu)) {
-        if (is.null(cfo_skeleton)) {
-          stop("For PRIDE-backed CFO, provide cfo_mu or cfo_skeleton.")
-        }
-        cfo_mu <- stats::qlogis(cfo_skeleton)
-      }
-      if (length(cfo_mu) != length(p.true) || any(!is.finite(cfo_mu))) {
-        stop("cfo_mu must be finite and have the same length as p.true.")
-      }
-    } else if (!is.null(cfo_skeleton) && length(cfo_skeleton) != length(p.true)) {
-      stop("cfo_skeleton must have the same length as p.true.")
-    }
-
-    decision_method <- paste0("cfo_", cfo_method)
     mtd_method <- decision_method
   }
 
@@ -1439,23 +1091,7 @@ get_oc_sim_AIDE <- function(
       crm_n_adapt = crm_n_adapt,
       crm_n_burnin = crm_n_burnin,
       crm_n_iter = crm_n_iter,
-      crm_thin = crm_thin,
-      cfo_method = cfo_method,
-      cfo_skeleton = cfo_skeleton,
-      cfo_mu = cfo_mu,
-      cfo_model_file = cfo_model_file,
-      cfo_sigma2_beta = cfo_sigma2_beta,
-      cfo_eta = cfo_eta,
-      cfo_pk_method = cfo_pk_method,
-      cfo_n_mc_w = cfo_n_mc_w,
-      cfo_m_use = cfo_m_use,
-      cfo_use_monotone_pair = cfo_use_monotone_pair,
-      cfo_restrict_to_tried = cfo_restrict_to_tried,
-      cfo_n_chains = cfo_n_chains,
-      cfo_n_adapt = cfo_n_adapt,
-      cfo_n_burnin = cfo_n_burnin,
-      cfo_n_iter = cfo_n_iter,
-      cfo_thin = cfo_thin
+      crm_thin = crm_thin
     )
 
     admin <- fit$admin
@@ -1581,13 +1217,6 @@ get_oc_sim_AIDE <- function(
     crm_model_file = if (model == "CRM") crm_model_file else NA_character_,
     crm_dose_values = if (model == "CRM") crm_dose_values else NULL,
     crm_dose_scores = if (model == "CRM") crm_dose_scores else NULL,
-    cfo_method = if (model == "CFO") cfo_method else NA_character_,
-    cfo_skeleton = if (model == "CFO") cfo_skeleton else NULL,
-    cfo_mu = if (model == "CFO") cfo_mu else NULL,
-    cfo_model_file = if (model == "CFO" && cfo_method == "pride") cfo_model_file else NA_character_,
-    cfo_sigma2_beta = if (model == "CFO") cfo_sigma2_beta else NA_real_,
-    cfo_eta = if (model == "CFO") cfo_eta else NA_real_,
-    cfo_pk_method = if (model == "CFO") cfo_pk_method else NA_character_,
     sel_count = sel_count,
     stop_count = stop_count,
     na_count = na_count,

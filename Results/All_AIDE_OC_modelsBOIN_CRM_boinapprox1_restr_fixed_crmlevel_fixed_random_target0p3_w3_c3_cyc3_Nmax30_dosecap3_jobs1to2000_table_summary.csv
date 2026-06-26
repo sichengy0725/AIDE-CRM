@@ -1,0 +1,337 @@
+"Scenario","Model","Method","BOIN_Method","BOIN_r_estimator","CRM_r_model","Alpha_true","r_carry","Accrual","Metric","D1","D2","D3","D4","D5","Total","Duration","n_valid","ntrial_from_files"
+1,"BOIN","approx1-r_fixed","approx1","r_fixed",NA,0,0,0.5,"True DLT rate",0.07,0.12,0.17,0.22,0.3,NA,NA,1999,1999
+1,"BOIN","approx1-r_fixed","approx1","r_fixed",NA,0,0,0.5,"True IPDE DLT rate",0.07,0.12,0.17,0.22,0.3,NA,NA,1999,1999
+1,"BOIN","approx1-r_fixed","approx1","r_fixed",NA,0,0,0.5,"Estimated pj_iso",0.0083,0.0283,0.0698,0.1449,0.3003,NA,NA,1999,1999
+1,"BOIN","approx1-r_fixed","approx1","r_fixed",NA,0,0,0.5,"r_hat raw MLE",NA,NA,NA,NA,NA,NA,NA,1999,1999
+1,"BOIN","approx1-r_fixed","approx1","r_fixed",NA,0,0,0.5,"r_cap pooled adjacent",NA,NA,NA,NA,NA,NA,NA,1999,1999
+1,"BOIN","approx1-r_fixed","approx1","r_fixed",NA,0,0,0.5,"r_use truncated",0,0,0,0,0,NA,NA,1999,1999
+1,"BOIN","approx1-r_fixed","approx1","r_fixed",NA,0,0,0.5,"MTD Selection %",0.6503,3.4517,13.1066,31.3157,51.4757,NA,NA,1999,1999
+1,"BOIN","approx1-r_fixed","approx1","r_fixed",NA,0,0,0.5,"# Pts Treated",4.2126,5.3127,6.4352,6.7594,7.2801,NA,NA,1999,1999
+1,"BOIN","approx1-r_fixed","approx1","r_fixed",NA,0,0,0.5,"# Unique Pts by Dose",4.2126,5.3127,6.4352,6.7594,7.2801,NA,NA,1999,1999
+1,"BOIN","approx1-r_fixed","approx1","r_fixed",NA,0,0,0.5,"# IPDE Doses",0,3.3847,3.6333,1.6883,2.7959,NA,NA,1999,1999
+1,"BOIN","approx1-r_fixed","approx1","r_fixed",NA,0,0,0.5,"# Total Administrations",NA,NA,NA,NA,NA,30,NA,1999,1999
+1,"BOIN","approx1-r_fixed","approx1","r_fixed",NA,0,0,0.5,"# Total Unique Patients",NA,NA,NA,NA,NA,18.4977,NA,1999,1999
+1,"BOIN","approx1-r_fixed","approx1","r_fixed",NA,0,0,0.5,"% Early Stopping",NA,NA,NA,NA,NA,0,NA,1999,1999
+1,"BOIN","approx1-r_fixed","approx1","r_fixed",NA,0,0,0.5,"Duration",NA,NA,NA,NA,NA,NA,64.7627,1999,1999
+1,"BOIN","approx1-r_fixed","approx1","r_fixed",NA,0.3,0,0.5,"True DLT rate",0.07,0.12,0.17,0.22,0.3,NA,NA,1999,1999
+1,"BOIN","approx1-r_fixed","approx1","r_fixed",NA,0.3,0,0.5,"True IPDE DLT rate",0.07,0.141,0.206,0.271,0.366,NA,NA,1999,1999
+1,"BOIN","approx1-r_fixed","approx1","r_fixed",NA,0.3,0,0.5,"Estimated pj_iso",0.0111,0.0412,0.0947,0.1717,0.3176,NA,NA,1999,1999
+1,"BOIN","approx1-r_fixed","approx1","r_fixed",NA,0.3,0,0.5,"r_hat raw MLE",NA,NA,NA,NA,NA,NA,NA,1999,1999
+1,"BOIN","approx1-r_fixed","approx1","r_fixed",NA,0.3,0,0.5,"r_cap pooled adjacent",NA,NA,NA,NA,NA,NA,NA,1999,1999
+1,"BOIN","approx1-r_fixed","approx1","r_fixed",NA,0.3,0,0.5,"r_use truncated",0,0,0,0,0,NA,NA,1999,1999
+1,"BOIN","approx1-r_fixed","approx1","r_fixed",NA,0.3,0,0.5,"MTD Selection %",0.8004,5.8529,18.5593,35.918,38.8694,NA,NA,1999,1999
+1,"BOIN","approx1-r_fixed","approx1","r_fixed",NA,0.3,0,0.5,"# Pts Treated",4.3192,6.009,7.1421,6.7609,5.7689,NA,NA,1999,1999
+1,"BOIN","approx1-r_fixed","approx1","r_fixed",NA,0.3,0,0.5,"# Unique Pts by Dose",4.3192,6.009,7.1421,6.7609,5.7689,NA,NA,1999,1999
+1,"BOIN","approx1-r_fixed","approx1","r_fixed",NA,0.3,0,0.5,"# IPDE Doses",0,3.4942,3.8724,1.8764,2.4707,NA,NA,1999,1999
+1,"BOIN","approx1-r_fixed","approx1","r_fixed",NA,0.3,0,0.5,"# Total Administrations",NA,NA,NA,NA,NA,30,NA,1999,1999
+1,"BOIN","approx1-r_fixed","approx1","r_fixed",NA,0.3,0,0.5,"# Total Unique Patients",NA,NA,NA,NA,NA,18.2861,NA,1999,1999
+1,"BOIN","approx1-r_fixed","approx1","r_fixed",NA,0.3,0,0.5,"% Early Stopping",NA,NA,NA,NA,NA,0,NA,1999,1999
+1,"BOIN","approx1-r_fixed","approx1","r_fixed",NA,0.3,0,0.5,"Duration",NA,NA,NA,NA,NA,NA,64.3577,1999,1999
+1,"BOIN","approx1-r_fixed","approx1","r_fixed",NA,0.6,0,0.5,"True DLT rate",0.07,0.12,0.17,0.22,0.3,NA,NA,1999,1999
+1,"BOIN","approx1-r_fixed","approx1","r_fixed",NA,0.6,0,0.5,"True IPDE DLT rate",0.07,0.162,0.242,0.322,0.432,NA,NA,1999,1999
+1,"BOIN","approx1-r_fixed","approx1","r_fixed",NA,0.6,0,0.5,"Estimated pj_iso",0.0139,0.0538,0.1157,0.1901,0.3378,NA,NA,1999,1999
+1,"BOIN","approx1-r_fixed","approx1","r_fixed",NA,0.6,0,0.5,"r_hat raw MLE",NA,NA,NA,NA,NA,NA,NA,1999,1999
+1,"BOIN","approx1-r_fixed","approx1","r_fixed",NA,0.6,0,0.5,"r_cap pooled adjacent",NA,NA,NA,NA,NA,NA,NA,1999,1999
+1,"BOIN","approx1-r_fixed","approx1","r_fixed",NA,0.6,0,0.5,"r_use truncated",0,0,0,0,0,NA,NA,1999,1999
+1,"BOIN","approx1-r_fixed","approx1","r_fixed",NA,0.6,0,0.5,"MTD Selection %",1.1506,9.7549,23.2116,36.1681,29.7149,NA,NA,1999,1999
+1,"BOIN","approx1-r_fixed","approx1","r_fixed",NA,0.6,0,0.5,"# Pts Treated",4.4677,6.8554,7.6493,6.3662,4.6613,NA,NA,1999,1999
+1,"BOIN","approx1-r_fixed","approx1","r_fixed",NA,0.6,0,0.5,"# Unique Pts by Dose",4.4677,6.8554,7.6493,6.3662,4.6613,NA,NA,1999,1999
+1,"BOIN","approx1-r_fixed","approx1","r_fixed",NA,0.6,0,0.5,"# IPDE Doses",0,3.6088,4.1266,1.915,2.1291,NA,NA,1999,1999
+1,"BOIN","approx1-r_fixed","approx1","r_fixed",NA,0.6,0,0.5,"# Total Administrations",NA,NA,NA,NA,NA,30,NA,1999,1999
+1,"BOIN","approx1-r_fixed","approx1","r_fixed",NA,0.6,0,0.5,"# Total Unique Patients",NA,NA,NA,NA,NA,18.2206,NA,1999,1999
+1,"BOIN","approx1-r_fixed","approx1","r_fixed",NA,0.6,0,0.5,"% Early Stopping",NA,NA,NA,NA,NA,0,NA,1999,1999
+1,"BOIN","approx1-r_fixed","approx1","r_fixed",NA,0.6,0,0.5,"Duration",NA,NA,NA,NA,NA,NA,64.1489,1999,1999
+1,"BOIN","approx1-r_fixed","approx1","r_fixed",NA,0.9,0,0.5,"True DLT rate",0.07,0.12,0.17,0.22,0.3,NA,NA,1999,1999
+1,"BOIN","approx1-r_fixed","approx1","r_fixed",NA,0.9,0,0.5,"True IPDE DLT rate",0.07,0.183,0.278,0.373,0.498,NA,NA,1999,1999
+1,"BOIN","approx1-r_fixed","approx1","r_fixed",NA,0.9,0,0.5,"Estimated pj_iso",0.0174,0.0676,0.1392,0.2165,0.3746,NA,NA,1999,1999
+1,"BOIN","approx1-r_fixed","approx1","r_fixed",NA,0.9,0,0.5,"r_hat raw MLE",NA,NA,NA,NA,NA,NA,NA,1999,1999
+1,"BOIN","approx1-r_fixed","approx1","r_fixed",NA,0.9,0,0.5,"r_cap pooled adjacent",NA,NA,NA,NA,NA,NA,NA,1999,1999
+1,"BOIN","approx1-r_fixed","approx1","r_fixed",NA,0.9,0,0.5,"r_use truncated",0,0,0,0,0,NA,NA,1999,1999
+1,"BOIN","approx1-r_fixed","approx1","r_fixed",NA,0.9,0,0.5,"MTD Selection %",1.7009,13.907,28.2641,36.5683,19.5598,NA,NA,1999,1999
+1,"BOIN","approx1-r_fixed","approx1","r_fixed",NA,0.9,0,0.5,"# Pts Treated",4.6628,7.6838,8.074,6.096,3.4832,NA,NA,1999,1999
+1,"BOIN","approx1-r_fixed","approx1","r_fixed",NA,0.9,0,0.5,"# Unique Pts by Dose",4.6628,7.6838,8.074,6.096,3.4832,NA,NA,1999,1999
+1,"BOIN","approx1-r_fixed","approx1","r_fixed",NA,0.9,0,0.5,"# IPDE Doses",0,3.7504,4.3372,1.9175,1.7694,NA,NA,1999,1999
+1,"BOIN","approx1-r_fixed","approx1","r_fixed",NA,0.9,0,0.5,"# Total Administrations",NA,NA,NA,NA,NA,30,NA,1999,1999
+1,"BOIN","approx1-r_fixed","approx1","r_fixed",NA,0.9,0,0.5,"# Total Unique Patients",NA,NA,NA,NA,NA,18.2256,NA,1999,1999
+1,"BOIN","approx1-r_fixed","approx1","r_fixed",NA,0.9,0,0.5,"% Early Stopping",NA,NA,NA,NA,NA,0,NA,1999,1999
+1,"BOIN","approx1-r_fixed","approx1","r_fixed",NA,0.9,0,0.5,"Duration",NA,NA,NA,NA,NA,NA,64.1564,1999,1999
+2,"BOIN","approx1-r_fixed","approx1","r_fixed",NA,0,0,0.5,"True DLT rate",0.05,0.1,0.18,0.3,0.4,NA,NA,1999,1999
+2,"BOIN","approx1-r_fixed","approx1","r_fixed",NA,0,0,0.5,"True IPDE DLT rate",0.05,0.1,0.18,0.3,0.4,NA,NA,1999,1999
+2,"BOIN","approx1-r_fixed","approx1","r_fixed",NA,0,0,0.5,"Estimated pj_iso",0.007,0.032,0.1039,0.2345,0.3888,NA,NA,1999,1999
+2,"BOIN","approx1-r_fixed","approx1","r_fixed",NA,0,0,0.5,"r_hat raw MLE",NA,NA,NA,NA,NA,NA,NA,1999,1999
+2,"BOIN","approx1-r_fixed","approx1","r_fixed",NA,0,0,0.5,"r_cap pooled adjacent",NA,NA,NA,NA,NA,NA,NA,1999,1999
+2,"BOIN","approx1-r_fixed","approx1","r_fixed",NA,0,0,0.5,"r_use truncated",0,0,0,0,0,NA,NA,1999,1999
+2,"BOIN","approx1-r_fixed","approx1","r_fixed",NA,0,0,0.5,"MTD Selection %",0.3502,2.8514,25.8129,46.023,24.9625,NA,NA,1999,1999
+2,"BOIN","approx1-r_fixed","approx1","r_fixed",NA,0,0,0.5,"# Pts Treated",3.7534,5.098,8.1476,8.4372,4.5638,NA,NA,1999,1999
+2,"BOIN","approx1-r_fixed","approx1","r_fixed",NA,0,0,0.5,"# Unique Pts by Dose",3.7534,5.098,8.1476,8.4372,4.5638,NA,NA,1999,1999
+2,"BOIN","approx1-r_fixed","approx1","r_fixed",NA,0,0,0.5,"# IPDE Doses",0,3.2661,3.7984,2.1791,2.2261,NA,NA,1999,1999
+2,"BOIN","approx1-r_fixed","approx1","r_fixed",NA,0,0,0.5,"# Total Administrations",NA,NA,NA,NA,NA,30,NA,1999,1999
+2,"BOIN","approx1-r_fixed","approx1","r_fixed",NA,0,0,0.5,"# Total Unique Patients",NA,NA,NA,NA,NA,18.5303,NA,1999,1999
+2,"BOIN","approx1-r_fixed","approx1","r_fixed",NA,0,0,0.5,"% Early Stopping",NA,NA,NA,NA,NA,0,NA,1999,1999
+2,"BOIN","approx1-r_fixed","approx1","r_fixed",NA,0,0,0.5,"Duration",NA,NA,NA,NA,NA,NA,64.8902,1999,1999
+2,"BOIN","approx1-r_fixed","approx1","r_fixed",NA,0.3,0,0.5,"True DLT rate",0.05,0.1,0.18,0.3,0.4,NA,NA,1999,1999
+2,"BOIN","approx1-r_fixed","approx1","r_fixed",NA,0.3,0,0.5,"True IPDE DLT rate",0.05,0.115,0.21,0.354,0.49,NA,NA,1999,1999
+2,"BOIN","approx1-r_fixed","approx1","r_fixed",NA,0.3,0,0.5,"Estimated pj_iso",0.008,0.0402,0.1214,0.2576,0.4193,NA,NA,1999,1999
+2,"BOIN","approx1-r_fixed","approx1","r_fixed",NA,0.3,0,0.5,"r_hat raw MLE",NA,NA,NA,NA,NA,NA,NA,1999,1999
+2,"BOIN","approx1-r_fixed","approx1","r_fixed",NA,0.3,0,0.5,"r_cap pooled adjacent",NA,NA,NA,NA,NA,NA,NA,1999,1999
+2,"BOIN","approx1-r_fixed","approx1","r_fixed",NA,0.3,0,0.5,"r_use truncated",0,0,0,0,0,NA,NA,1999,1999
+2,"BOIN","approx1-r_fixed","approx1","r_fixed",NA,0.3,0,0.5,"MTD Selection %",0.5003,5.1026,31.6158,46.6233,16.1581,NA,NA,1999,1999
+2,"BOIN","approx1-r_fixed","approx1","r_fixed",NA,0.3,0,0.5,"# Pts Treated",3.8404,5.6053,8.8469,8.2076,3.4997,NA,NA,1999,1999
+2,"BOIN","approx1-r_fixed","approx1","r_fixed",NA,0.3,0,0.5,"# Unique Pts by Dose",3.8404,5.6053,8.8469,8.2076,3.4997,NA,NA,1999,1999
+2,"BOIN","approx1-r_fixed","approx1","r_fixed",NA,0.3,0,0.5,"# IPDE Doses",0,3.3307,3.9985,2.3077,1.924,NA,NA,1999,1999
+2,"BOIN","approx1-r_fixed","approx1","r_fixed",NA,0.3,0,0.5,"# Total Administrations",NA,NA,NA,NA,NA,30,NA,1999,1999
+2,"BOIN","approx1-r_fixed","approx1","r_fixed",NA,0.3,0,0.5,"# Total Unique Patients",NA,NA,NA,NA,NA,18.4392,NA,1999,1999
+2,"BOIN","approx1-r_fixed","approx1","r_fixed",NA,0.3,0,0.5,"% Early Stopping",NA,NA,NA,NA,NA,0,NA,1999,1999
+2,"BOIN","approx1-r_fixed","approx1","r_fixed",NA,0.3,0,0.5,"Duration",NA,NA,NA,NA,NA,NA,64.8193,1999,1999
+2,"BOIN","approx1-r_fixed","approx1","r_fixed",NA,0.6,0,0.5,"True DLT rate",0.05,0.1,0.18,0.3,0.4,NA,NA,1999,1999
+2,"BOIN","approx1-r_fixed","approx1","r_fixed",NA,0.6,0,0.5,"True IPDE DLT rate",0.05,0.13,0.24,0.408,0.58,NA,NA,1999,1999
+2,"BOIN","approx1-r_fixed","approx1","r_fixed",NA,0.6,0,0.5,"Estimated pj_iso",0.0096,0.0496,0.1375,0.2774,0.4395,NA,NA,1999,1999
+2,"BOIN","approx1-r_fixed","approx1","r_fixed",NA,0.6,0,0.5,"r_hat raw MLE",NA,NA,NA,NA,NA,NA,NA,1999,1999
+2,"BOIN","approx1-r_fixed","approx1","r_fixed",NA,0.6,0,0.5,"r_cap pooled adjacent",NA,NA,NA,NA,NA,NA,NA,1999,1999
+2,"BOIN","approx1-r_fixed","approx1","r_fixed",NA,0.6,0,0.5,"r_use truncated",0,0,0,0,0,NA,NA,1999,1999
+2,"BOIN","approx1-r_fixed","approx1","r_fixed",NA,0.6,0,0.5,"MTD Selection %",0.7504,8.3042,37.2686,42.9715,10.7054,NA,NA,1999,1999
+2,"BOIN","approx1-r_fixed","approx1","r_fixed",NA,0.6,0,0.5,"# Pts Treated",3.9305,6.3212,9.3527,7.6913,2.7044,NA,NA,1999,1999
+2,"BOIN","approx1-r_fixed","approx1","r_fixed",NA,0.6,0,0.5,"# Unique Pts by Dose",3.9305,6.3212,9.3527,7.6913,2.7044,NA,NA,1999,1999
+2,"BOIN","approx1-r_fixed","approx1","r_fixed",NA,0.6,0,0.5,"# IPDE Doses",0,3.3842,4.2151,2.3447,1.5898,NA,NA,1999,1999
+2,"BOIN","approx1-r_fixed","approx1","r_fixed",NA,0.6,0,0.5,"# Total Administrations",NA,NA,NA,NA,NA,30,NA,1999,1999
+2,"BOIN","approx1-r_fixed","approx1","r_fixed",NA,0.6,0,0.5,"# Total Unique Patients",NA,NA,NA,NA,NA,18.4662,NA,1999,1999
+2,"BOIN","approx1-r_fixed","approx1","r_fixed",NA,0.6,0,0.5,"% Early Stopping",NA,NA,NA,NA,NA,0,NA,1999,1999
+2,"BOIN","approx1-r_fixed","approx1","r_fixed",NA,0.6,0,0.5,"Duration",NA,NA,NA,NA,NA,NA,64.7716,1999,1999
+2,"BOIN","approx1-r_fixed","approx1","r_fixed",NA,0.9,0,0.5,"True DLT rate",0.05,0.1,0.18,0.3,0.4,NA,NA,1999,1999
+2,"BOIN","approx1-r_fixed","approx1","r_fixed",NA,0.9,0,0.5,"True IPDE DLT rate",0.05,0.145,0.27,0.462,0.67,NA,NA,1999,1999
+2,"BOIN","approx1-r_fixed","approx1","r_fixed",NA,0.9,0,0.5,"Estimated pj_iso",0.0109,0.0595,0.1554,0.2998,0.4669,NA,NA,1999,1999
+2,"BOIN","approx1-r_fixed","approx1","r_fixed",NA,0.9,0,0.5,"r_hat raw MLE",NA,NA,NA,NA,NA,NA,NA,1999,1999
+2,"BOIN","approx1-r_fixed","approx1","r_fixed",NA,0.9,0,0.5,"r_cap pooled adjacent",NA,NA,NA,NA,NA,NA,NA,1999,1999
+2,"BOIN","approx1-r_fixed","approx1","r_fixed",NA,0.9,0,0.5,"r_use truncated",0,0,0,0,0,NA,NA,1999,1999
+2,"BOIN","approx1-r_fixed","approx1","r_fixed",NA,0.9,0,0.5,"MTD Selection %",0.8504,11.4557,42.3712,39.5198,5.8029,NA,NA,1999,1999
+2,"BOIN","approx1-r_fixed","approx1","r_fixed",NA,0.9,0,0.5,"# Pts Treated",4.0235,7.1181,9.6858,7.1556,2.017,NA,NA,1999,1999
+2,"BOIN","approx1-r_fixed","approx1","r_fixed",NA,0.9,0,0.5,"# Unique Pts by Dose",4.0235,7.1181,9.6858,7.1556,2.017,NA,NA,1999,1999
+2,"BOIN","approx1-r_fixed","approx1","r_fixed",NA,0.9,0,0.5,"# IPDE Doses",0,3.4807,4.4667,2.2661,1.2996,NA,NA,1999,1999
+2,"BOIN","approx1-r_fixed","approx1","r_fixed",NA,0.9,0,0.5,"# Total Administrations",NA,NA,NA,NA,NA,30,NA,1999,1999
+2,"BOIN","approx1-r_fixed","approx1","r_fixed",NA,0.9,0,0.5,"# Total Unique Patients",NA,NA,NA,NA,NA,18.4867,NA,1999,1999
+2,"BOIN","approx1-r_fixed","approx1","r_fixed",NA,0.9,0,0.5,"% Early Stopping",NA,NA,NA,NA,NA,0,NA,1999,1999
+2,"BOIN","approx1-r_fixed","approx1","r_fixed",NA,0.9,0,0.5,"Duration",NA,NA,NA,NA,NA,NA,64.8808,1999,1999
+3,"BOIN","approx1-r_fixed","approx1","r_fixed",NA,0,0,0.5,"True DLT rate",0.15,0.2,0.3,0.35,0.45,NA,NA,1999,1999
+3,"BOIN","approx1-r_fixed","approx1","r_fixed",NA,0,0,0.5,"True IPDE DLT rate",0.15,0.2,0.3,0.35,0.45,NA,NA,1999,1999
+3,"BOIN","approx1-r_fixed","approx1","r_fixed",NA,0,0,0.5,"Estimated pj_iso",0.0503,0.1201,0.2214,0.3001,0.4367,NA,NA,1999,1999
+3,"BOIN","approx1-r_fixed","approx1","r_fixed",NA,0,0,0.5,"r_hat raw MLE",NA,NA,NA,NA,NA,NA,NA,1999,1999
+3,"BOIN","approx1-r_fixed","approx1","r_fixed",NA,0,0,0.5,"r_cap pooled adjacent",NA,NA,NA,NA,NA,NA,NA,1999,1999
+3,"BOIN","approx1-r_fixed","approx1","r_fixed",NA,0,0,0.5,"r_use truncated",0,0,0,0,0,NA,NA,1999,1999
+3,"BOIN","approx1-r_fixed","approx1","r_fixed",NA,0,0,0.5,"MTD Selection %",6.6033,27.8639,34.1171,22.8114,7.5538,NA,NA,1999,1999
+3,"BOIN","approx1-r_fixed","approx1","r_fixed",NA,0,0,0.5,"# Pts Treated",7.0685,9.2431,7.9165,4.049,1.4782,NA,NA,1999,1999
+3,"BOIN","approx1-r_fixed","approx1","r_fixed",NA,0,0,0.5,"# Unique Pts by Dose",7.0685,9.2431,7.9165,4.049,1.4782,NA,NA,1999,1999
+3,"BOIN","approx1-r_fixed","approx1","r_fixed",NA,0,0,0.5,"# IPDE Doses",0,4.1906,4.0385,1.2296,0.7904,NA,NA,1999,1999
+3,"BOIN","approx1-r_fixed","approx1","r_fixed",NA,0,0,0.5,"# Total Administrations",NA,NA,NA,NA,NA,29.7554,NA,1999,1999
+3,"BOIN","approx1-r_fixed","approx1","r_fixed",NA,0,0,0.5,"# Total Unique Patients",NA,NA,NA,NA,NA,19.5063,NA,1999,1999
+3,"BOIN","approx1-r_fixed","approx1","r_fixed",NA,0,0,0.5,"% Early Stopping",NA,NA,NA,NA,NA,1.0505,NA,1999,1999
+3,"BOIN","approx1-r_fixed","approx1","r_fixed",NA,0,0,0.5,"Duration",NA,NA,NA,NA,NA,NA,66.3996,1999,1999
+3,"BOIN","approx1-r_fixed","approx1","r_fixed",NA,0.3,0,0.5,"True DLT rate",0.15,0.2,0.3,0.35,0.45,NA,NA,1999,1999
+3,"BOIN","approx1-r_fixed","approx1","r_fixed",NA,0.3,0,0.5,"True IPDE DLT rate",0.15,0.245,0.36,0.44,0.555,NA,NA,1999,1999
+3,"BOIN","approx1-r_fixed","approx1","r_fixed",NA,0.3,0,0.5,"Estimated pj_iso",0.0602,0.1484,0.251,0.3314,0.4537,NA,NA,1999,1999
+3,"BOIN","approx1-r_fixed","approx1","r_fixed",NA,0.3,0,0.5,"r_hat raw MLE",NA,NA,NA,NA,NA,NA,NA,1999,1999
+3,"BOIN","approx1-r_fixed","approx1","r_fixed",NA,0.3,0,0.5,"r_cap pooled adjacent",NA,NA,NA,NA,NA,NA,NA,1999,1999
+3,"BOIN","approx1-r_fixed","approx1","r_fixed",NA,0.3,0,0.5,"r_use truncated",0,0,0,0,0,NA,NA,1999,1999
+3,"BOIN","approx1-r_fixed","approx1","r_fixed",NA,0.3,0,0.5,"MTD Selection %",9.4547,38.3192,30.4652,16.9585,3.7519,NA,NA,1999,1999
+3,"BOIN","approx1-r_fixed","approx1","r_fixed",NA,0.3,0,0.5,"# Pts Treated",7.7949,10.6928,7.3612,3.03,0.8764,NA,NA,1999,1999
+3,"BOIN","approx1-r_fixed","approx1","r_fixed",NA,0.3,0,0.5,"# Unique Pts by Dose",7.7949,10.6928,7.3612,3.03,0.8764,NA,NA,1999,1999
+3,"BOIN","approx1-r_fixed","approx1","r_fixed",NA,0.3,0,0.5,"# IPDE Doses",0,4.5363,4.0325,0.973,0.5208,NA,NA,1999,1999
+3,"BOIN","approx1-r_fixed","approx1","r_fixed",NA,0.3,0,0.5,"# Total Administrations",NA,NA,NA,NA,NA,29.7554,NA,1999,1999
+3,"BOIN","approx1-r_fixed","approx1","r_fixed",NA,0.3,0,0.5,"# Total Unique Patients",NA,NA,NA,NA,NA,19.6928,NA,1999,1999
+3,"BOIN","approx1-r_fixed","approx1","r_fixed",NA,0.3,0,0.5,"% Early Stopping",NA,NA,NA,NA,NA,1.0505,NA,1999,1999
+3,"BOIN","approx1-r_fixed","approx1","r_fixed",NA,0.3,0,0.5,"Duration",NA,NA,NA,NA,NA,NA,66.8425,1999,1999
+3,"BOIN","approx1-r_fixed","approx1","r_fixed",NA,0.6,0,0.5,"True DLT rate",0.15,0.2,0.3,0.35,0.45,NA,NA,1999,1999
+3,"BOIN","approx1-r_fixed","approx1","r_fixed",NA,0.6,0,0.5,"True IPDE DLT rate",0.15,0.29,0.42,0.53,0.66,NA,NA,1999,1999
+3,"BOIN","approx1-r_fixed","approx1","r_fixed",NA,0.6,0,0.5,"Estimated pj_iso",0.0707,0.1721,0.2809,0.357,0.4961,NA,NA,1999,1999
+3,"BOIN","approx1-r_fixed","approx1","r_fixed",NA,0.6,0,0.5,"r_hat raw MLE",NA,NA,NA,NA,NA,NA,NA,1999,1999
+3,"BOIN","approx1-r_fixed","approx1","r_fixed",NA,0.6,0,0.5,"r_cap pooled adjacent",NA,NA,NA,NA,NA,NA,NA,1999,1999
+3,"BOIN","approx1-r_fixed","approx1","r_fixed",NA,0.6,0,0.5,"r_use truncated",0,0,0,0,0,NA,NA,1999,1999
+3,"BOIN","approx1-r_fixed","approx1","r_fixed",NA,0.6,0,0.5,"MTD Selection %",13.7569,46.073,26.1631,11.8059,1.1506,NA,NA,1999,1999
+3,"BOIN","approx1-r_fixed","approx1","r_fixed",NA,0.6,0,0.5,"# Pts Treated",8.6203,11.7404,6.6783,2.2421,0.4742,NA,NA,1999,1999
+3,"BOIN","approx1-r_fixed","approx1","r_fixed",NA,0.6,0,0.5,"# Unique Pts by Dose",8.6203,11.7404,6.6783,2.2421,0.4742,NA,NA,1999,1999
+3,"BOIN","approx1-r_fixed","approx1","r_fixed",NA,0.6,0,0.5,"# IPDE Doses",0,4.7754,3.8989,0.7529,0.3507,NA,NA,1999,1999
+3,"BOIN","approx1-r_fixed","approx1","r_fixed",NA,0.6,0,0.5,"# Total Administrations",NA,NA,NA,NA,NA,29.7554,NA,1999,1999
+3,"BOIN","approx1-r_fixed","approx1","r_fixed",NA,0.6,0,0.5,"# Total Unique Patients",NA,NA,NA,NA,NA,19.9775,NA,1999,1999
+3,"BOIN","approx1-r_fixed","approx1","r_fixed",NA,0.6,0,0.5,"% Early Stopping",NA,NA,NA,NA,NA,1.0505,NA,1999,1999
+3,"BOIN","approx1-r_fixed","approx1","r_fixed",NA,0.6,0,0.5,"Duration",NA,NA,NA,NA,NA,NA,67.5057,1999,1999
+3,"BOIN","approx1-r_fixed","approx1","r_fixed",NA,0.9,0,0.5,"True DLT rate",0.15,0.2,0.3,0.35,0.45,NA,NA,1999,1999
+3,"BOIN","approx1-r_fixed","approx1","r_fixed",NA,0.9,0,0.5,"True IPDE DLT rate",0.15,0.335,0.48,0.62,0.765,NA,NA,1999,1999
+3,"BOIN","approx1-r_fixed","approx1","r_fixed",NA,0.9,0,0.5,"Estimated pj_iso",0.0788,0.1942,0.3161,0.3723,0.5581,NA,NA,1999,1999
+3,"BOIN","approx1-r_fixed","approx1","r_fixed",NA,0.9,0,0.5,"r_hat raw MLE",NA,NA,NA,NA,NA,NA,NA,1999,1999
+3,"BOIN","approx1-r_fixed","approx1","r_fixed",NA,0.9,0,0.5,"r_cap pooled adjacent",NA,NA,NA,NA,NA,NA,NA,1999,1999
+3,"BOIN","approx1-r_fixed","approx1","r_fixed",NA,0.9,0,0.5,"r_use truncated",0,0,0,0,0,NA,NA,1999,1999
+3,"BOIN","approx1-r_fixed","approx1","r_fixed",NA,0.9,0,0.5,"MTD Selection %",19.6098,51.2756,20.5603,7.2036,0.3002,NA,NA,1999,1999
+3,"BOIN","approx1-r_fixed","approx1","r_fixed",NA,0.9,0,0.5,"# Pts Treated",9.6483,12.5388,5.7674,1.5563,0.2446,NA,NA,1999,1999
+3,"BOIN","approx1-r_fixed","approx1","r_fixed",NA,0.9,0,0.5,"# Unique Pts by Dose",9.6483,12.5388,5.7674,1.5563,0.2446,NA,NA,1999,1999
+3,"BOIN","approx1-r_fixed","approx1","r_fixed",NA,0.9,0,0.5,"# IPDE Doses",0,5.046,3.5838,0.5348,0.2061,NA,NA,1999,1999
+3,"BOIN","approx1-r_fixed","approx1","r_fixed",NA,0.9,0,0.5,"# Total Administrations",NA,NA,NA,NA,NA,29.7554,NA,1999,1999
+3,"BOIN","approx1-r_fixed","approx1","r_fixed",NA,0.9,0,0.5,"# Total Unique Patients",NA,NA,NA,NA,NA,20.3847,NA,1999,1999
+3,"BOIN","approx1-r_fixed","approx1","r_fixed",NA,0.9,0,0.5,"% Early Stopping",NA,NA,NA,NA,NA,1.0505,NA,1999,1999
+3,"BOIN","approx1-r_fixed","approx1","r_fixed",NA,0.9,0,0.5,"Duration",NA,NA,NA,NA,NA,NA,68.3144,1999,1999
+4,"BOIN","approx1-r_fixed","approx1","r_fixed",NA,0,0,0.5,"True DLT rate",0.15,0.3,0.38,0.45,0.55,NA,NA,1999,1999
+4,"BOIN","approx1-r_fixed","approx1","r_fixed",NA,0,0,0.5,"True IPDE DLT rate",0.15,0.3,0.38,0.45,0.55,NA,NA,1999,1999
+4,"BOIN","approx1-r_fixed","approx1","r_fixed",NA,0,0,0.5,"Estimated pj_iso",0.0831,0.2213,0.3319,0.4135,0.4997,NA,NA,1999,1999
+4,"BOIN","approx1-r_fixed","approx1","r_fixed",NA,0,0,0.5,"r_hat raw MLE",NA,NA,NA,NA,NA,NA,NA,1999,1999
+4,"BOIN","approx1-r_fixed","approx1","r_fixed",NA,0,0,0.5,"r_cap pooled adjacent",NA,NA,NA,NA,NA,NA,NA,1999,1999
+4,"BOIN","approx1-r_fixed","approx1","r_fixed",NA,0,0,0.5,"r_use truncated",0,0,0,0,0,NA,NA,1999,1999
+4,"BOIN","approx1-r_fixed","approx1","r_fixed",NA,0,0,0.5,"MTD Selection %",19.1596,49.3247,23.0115,6.7034,0.7504,NA,NA,1999,1999
+4,"BOIN","approx1-r_fixed","approx1","r_fixed",NA,0,0,0.5,"# Pts Treated",9.7489,12.0345,5.9265,1.7724,0.2731,NA,NA,1999,1999
+4,"BOIN","approx1-r_fixed","approx1","r_fixed",NA,0,0,0.5,"# Unique Pts by Dose",9.7489,12.0345,5.9265,1.7724,0.2731,NA,NA,1999,1999
+4,"BOIN","approx1-r_fixed","approx1","r_fixed",NA,0,0,0.5,"# IPDE Doses",0,5.1596,3.1411,0.5893,0.1721,NA,NA,1999,1999
+4,"BOIN","approx1-r_fixed","approx1","r_fixed",NA,0,0,0.5,"# Total Administrations",NA,NA,NA,NA,NA,29.7554,NA,1999,1999
+4,"BOIN","approx1-r_fixed","approx1","r_fixed",NA,0,0,0.5,"# Total Unique Patients",NA,NA,NA,NA,NA,20.6933,NA,1999,1999
+4,"BOIN","approx1-r_fixed","approx1","r_fixed",NA,0,0,0.5,"% Early Stopping",NA,NA,NA,NA,NA,1.0505,NA,1999,1999
+4,"BOIN","approx1-r_fixed","approx1","r_fixed",NA,0,0,0.5,"Duration",NA,NA,NA,NA,NA,NA,68.8861,1999,1999
+4,"BOIN","approx1-r_fixed","approx1","r_fixed",NA,0.3,0,0.5,"True DLT rate",0.15,0.3,0.38,0.45,0.55,NA,NA,1999,1999
+4,"BOIN","approx1-r_fixed","approx1","r_fixed",NA,0.3,0,0.5,"True IPDE DLT rate",0.15,0.345,0.47,0.564,0.685,NA,NA,1999,1999
+4,"BOIN","approx1-r_fixed","approx1","r_fixed",NA,0.3,0,0.5,"Estimated pj_iso",0.0925,0.2506,0.3773,0.4383,0.5665,NA,NA,1999,1999
+4,"BOIN","approx1-r_fixed","approx1","r_fixed",NA,0.3,0,0.5,"r_hat raw MLE",NA,NA,NA,NA,NA,NA,NA,1999,1999
+4,"BOIN","approx1-r_fixed","approx1","r_fixed",NA,0.3,0,0.5,"r_cap pooled adjacent",NA,NA,NA,NA,NA,NA,NA,1999,1999
+4,"BOIN","approx1-r_fixed","approx1","r_fixed",NA,0.3,0,0.5,"r_use truncated",0,0,0,0,0,NA,NA,1999,1999
+4,"BOIN","approx1-r_fixed","approx1","r_fixed",NA,0.3,0,0.5,"MTD Selection %",26.4132,54.1771,14.6573,3.5518,0.1001,NA,NA,1999,1999
+4,"BOIN","approx1-r_fixed","approx1","r_fixed",NA,0.3,0,0.5,"# Pts Treated",10.939,12.9605,4.7199,1.016,0.1171,NA,NA,1999,1999
+4,"BOIN","approx1-r_fixed","approx1","r_fixed",NA,0.3,0,0.5,"# Unique Pts by Dose",10.939,12.9605,4.7199,1.016,0.1171,NA,NA,1999,1999
+4,"BOIN","approx1-r_fixed","approx1","r_fixed",NA,0.3,0,0.5,"# IPDE Doses",0,5.4732,2.8594,0.3417,0.092,NA,NA,1999,1999
+4,"BOIN","approx1-r_fixed","approx1","r_fixed",NA,0.3,0,0.5,"# Total Administrations",NA,NA,NA,NA,NA,29.7524,NA,1999,1999
+4,"BOIN","approx1-r_fixed","approx1","r_fixed",NA,0.3,0,0.5,"# Total Unique Patients",NA,NA,NA,NA,NA,20.986,NA,1999,1999
+4,"BOIN","approx1-r_fixed","approx1","r_fixed",NA,0.3,0,0.5,"% Early Stopping",NA,NA,NA,NA,NA,1.1006,NA,1999,1999
+4,"BOIN","approx1-r_fixed","approx1","r_fixed",NA,0.3,0,0.5,"Duration",NA,NA,NA,NA,NA,NA,69.5558,1999,1999
+4,"BOIN","approx1-r_fixed","approx1","r_fixed",NA,0.6,0,0.5,"True DLT rate",0.15,0.3,0.38,0.45,0.55,NA,NA,1999,1999
+4,"BOIN","approx1-r_fixed","approx1","r_fixed",NA,0.6,0,0.5,"True IPDE DLT rate",0.15,0.39,0.56,0.678,0.82,NA,NA,1999,1999
+4,"BOIN","approx1-r_fixed","approx1","r_fixed",NA,0.6,0,0.5,"Estimated pj_iso",0.1007,0.276,0.4064,0.5013,0.6046,NA,NA,1999,1999
+4,"BOIN","approx1-r_fixed","approx1","r_fixed",NA,0.6,0,0.5,"r_hat raw MLE",NA,NA,NA,NA,NA,NA,NA,1999,1999
+4,"BOIN","approx1-r_fixed","approx1","r_fixed",NA,0.6,0,0.5,"r_cap pooled adjacent",NA,NA,NA,NA,NA,NA,NA,1999,1999
+4,"BOIN","approx1-r_fixed","approx1","r_fixed",NA,0.6,0,0.5,"r_use truncated",0,0,0,0,0,NA,NA,1999,1999
+4,"BOIN","approx1-r_fixed","approx1","r_fixed",NA,0.6,0,0.5,"MTD Selection %",35.0175,52.7764,9.8049,1.3507,0,NA,NA,1999,1999
+4,"BOIN","approx1-r_fixed","approx1","r_fixed",NA,0.6,0,0.5,"# Pts Treated",12.3587,13.0865,3.7684,0.4997,0.042,NA,NA,1999,1999
+4,"BOIN","approx1-r_fixed","approx1","r_fixed",NA,0.6,0,0.5,"# Unique Pts by Dose",12.3587,13.0865,3.7684,0.4997,0.042,NA,NA,1999,1999
+4,"BOIN","approx1-r_fixed","approx1","r_fixed",NA,0.6,0,0.5,"# IPDE Doses",0,5.7354,2.4062,0.2271,0.035,NA,NA,1999,1999
+4,"BOIN","approx1-r_fixed","approx1","r_fixed",NA,0.6,0,0.5,"# Total Administrations",NA,NA,NA,NA,NA,29.7554,NA,1999,1999
+4,"BOIN","approx1-r_fixed","approx1","r_fixed",NA,0.6,0,0.5,"# Total Unique Patients",NA,NA,NA,NA,NA,21.3517,NA,1999,1999
+4,"BOIN","approx1-r_fixed","approx1","r_fixed",NA,0.6,0,0.5,"% Early Stopping",NA,NA,NA,NA,NA,1.0505,NA,1999,1999
+4,"BOIN","approx1-r_fixed","approx1","r_fixed",NA,0.6,0,0.5,"Duration",NA,NA,NA,NA,NA,NA,70.3214,1999,1999
+4,"BOIN","approx1-r_fixed","approx1","r_fixed",NA,0.9,0,0.5,"True DLT rate",0.15,0.3,0.38,0.45,0.55,NA,NA,1999,1999
+4,"BOIN","approx1-r_fixed","approx1","r_fixed",NA,0.9,0,0.5,"True IPDE DLT rate",0.15,0.435,0.65,0.792,0.955,NA,NA,1999,1999
+4,"BOIN","approx1-r_fixed","approx1","r_fixed",NA,0.9,0,0.5,"Estimated pj_iso",0.11,0.2967,0.4541,0.5584,0.6661,NA,NA,1999,1999
+4,"BOIN","approx1-r_fixed","approx1","r_fixed",NA,0.9,0,0.5,"r_hat raw MLE",NA,NA,NA,NA,NA,NA,NA,1999,1999
+4,"BOIN","approx1-r_fixed","approx1","r_fixed",NA,0.9,0,0.5,"r_cap pooled adjacent",NA,NA,NA,NA,NA,NA,NA,1999,1999
+4,"BOIN","approx1-r_fixed","approx1","r_fixed",NA,0.9,0,0.5,"r_use truncated",0,0,0,0,0,NA,NA,1999,1999
+4,"BOIN","approx1-r_fixed","approx1","r_fixed",NA,0.9,0,0.5,"MTD Selection %",44.7724,49.0745,4.6523,0.4502,0,NA,NA,1999,1999
+4,"BOIN","approx1-r_fixed","approx1","r_fixed",NA,0.9,0,0.5,"# Pts Treated",13.8834,12.9695,2.6683,0.2221,0.012,NA,NA,1999,1999
+4,"BOIN","approx1-r_fixed","approx1","r_fixed",NA,0.9,0,0.5,"# Unique Pts by Dose",13.8834,12.9695,2.6683,0.2221,0.012,NA,NA,1999,1999
+4,"BOIN","approx1-r_fixed","approx1","r_fixed",NA,0.9,0,0.5,"# IPDE Doses",0,5.8189,1.9025,0.1161,0.012,NA,NA,1999,1999
+4,"BOIN","approx1-r_fixed","approx1","r_fixed",NA,0.9,0,0.5,"# Total Administrations",NA,NA,NA,NA,NA,29.7554,NA,1999,1999
+4,"BOIN","approx1-r_fixed","approx1","r_fixed",NA,0.9,0,0.5,"# Total Unique Patients",NA,NA,NA,NA,NA,21.906,NA,1999,1999
+4,"BOIN","approx1-r_fixed","approx1","r_fixed",NA,0.9,0,0.5,"% Early Stopping",NA,NA,NA,NA,NA,1.0505,NA,1999,1999
+4,"BOIN","approx1-r_fixed","approx1","r_fixed",NA,0.9,0,0.5,"Duration",NA,NA,NA,NA,NA,NA,71.4602,1999,1999
+5,"BOIN","approx1-r_fixed","approx1","r_fixed",NA,0,0,0.5,"True DLT rate",0.3,0.35,0.4,0.45,0.5,NA,NA,1999,1999
+5,"BOIN","approx1-r_fixed","approx1","r_fixed",NA,0,0,0.5,"True IPDE DLT rate",0.3,0.35,0.4,0.45,0.5,NA,NA,1999,1999
+5,"BOIN","approx1-r_fixed","approx1","r_fixed",NA,0,0,0.5,"Estimated pj_iso",0.1914,0.2859,0.3476,0.3902,0.4948,NA,NA,1999,1999
+5,"BOIN","approx1-r_fixed","approx1","r_fixed",NA,0,0,0.5,"r_hat raw MLE",NA,NA,NA,NA,NA,NA,NA,1999,1999
+5,"BOIN","approx1-r_fixed","approx1","r_fixed",NA,0,0,0.5,"r_cap pooled adjacent",NA,NA,NA,NA,NA,NA,NA,1999,1999
+5,"BOIN","approx1-r_fixed","approx1","r_fixed",NA,0,0,0.5,"r_use truncated",0,0,0,0,0,NA,NA,1999,1999
+5,"BOIN","approx1-r_fixed","approx1","r_fixed",NA,0,0,0.5,"MTD Selection %",45.2226,22.8114,10.8054,3.0015,0.7504,NA,NA,1999,1999
+5,"BOIN","approx1-r_fixed","approx1","r_fixed",NA,0,0,0.5,"# Pts Treated",15.6513,7.1286,2.8439,0.8494,0.1591,NA,NA,1999,1999
+5,"BOIN","approx1-r_fixed","approx1","r_fixed",NA,0,0,0.5,"# Unique Pts by Dose",15.6513,7.1286,2.8439,0.8494,0.1591,NA,NA,1999,1999
+5,"BOIN","approx1-r_fixed","approx1","r_fixed",NA,0,0,0.5,"# IPDE Doses",0,3.5233,1.5623,0.2721,0.1026,NA,NA,1999,1999
+5,"BOIN","approx1-r_fixed","approx1","r_fixed",NA,0,0,0.5,"# Total Administrations",NA,NA,NA,NA,NA,26.6323,NA,1999,1999
+5,"BOIN","approx1-r_fixed","approx1","r_fixed",NA,0,0,0.5,"# Total Unique Patients",NA,NA,NA,NA,NA,21.1721,NA,1999,1999
+5,"BOIN","approx1-r_fixed","approx1","r_fixed",NA,0,0,0.5,"% Early Stopping",NA,NA,NA,NA,NA,17.4087,NA,1999,1999
+5,"BOIN","approx1-r_fixed","approx1","r_fixed",NA,0,0,0.5,"Duration",NA,NA,NA,NA,NA,NA,66.7052,1999,1999
+5,"BOIN","approx1-r_fixed","approx1","r_fixed",NA,0.3,0,0.5,"True DLT rate",0.3,0.35,0.4,0.45,0.5,NA,NA,1999,1999
+5,"BOIN","approx1-r_fixed","approx1","r_fixed",NA,0.3,0,0.5,"True IPDE DLT rate",0.3,0.44,0.505,0.57,0.635,NA,NA,1999,1999
+5,"BOIN","approx1-r_fixed","approx1","r_fixed",NA,0.3,0,0.5,"Estimated pj_iso",0.2147,0.3422,0.4169,0.4708,0.6107,NA,NA,1999,1999
+5,"BOIN","approx1-r_fixed","approx1","r_fixed",NA,0.3,0,0.5,"r_hat raw MLE",NA,NA,NA,NA,NA,NA,NA,1999,1999
+5,"BOIN","approx1-r_fixed","approx1","r_fixed",NA,0.3,0,0.5,"r_cap pooled adjacent",NA,NA,NA,NA,NA,NA,NA,1999,1999
+5,"BOIN","approx1-r_fixed","approx1","r_fixed",NA,0.3,0,0.5,"r_use truncated",0,0,0,0,0,NA,NA,1999,1999
+5,"BOIN","approx1-r_fixed","approx1","r_fixed",NA,0.3,0,0.5,"MTD Selection %",56.3282,20.06,4.9525,0.9505,0,NA,NA,1999,1999
+5,"BOIN","approx1-r_fixed","approx1","r_fixed",NA,0.3,0,0.5,"# Pts Treated",17.5423,7.016,1.7289,0.2806,0.027,NA,NA,1999,1999
+5,"BOIN","approx1-r_fixed","approx1","r_fixed",NA,0.3,0,0.5,"# Unique Pts by Dose",17.5423,7.016,1.7289,0.2806,0.027,NA,NA,1999,1999
+5,"BOIN","approx1-r_fixed","approx1","r_fixed",NA,0.3,0,0.5,"# IPDE Doses",0,3.6278,1.051,0.1106,0.021,NA,NA,1999,1999
+5,"BOIN","approx1-r_fixed","approx1","r_fixed",NA,0.3,0,0.5,"# Total Administrations",NA,NA,NA,NA,NA,26.5948,NA,1999,1999
+5,"BOIN","approx1-r_fixed","approx1","r_fixed",NA,0.3,0,0.5,"# Total Unique Patients",NA,NA,NA,NA,NA,21.7844,NA,1999,1999
+5,"BOIN","approx1-r_fixed","approx1","r_fixed",NA,0.3,0,0.5,"% Early Stopping",NA,NA,NA,NA,NA,17.7089,NA,1999,1999
+5,"BOIN","approx1-r_fixed","approx1","r_fixed",NA,0.3,0,0.5,"Duration",NA,NA,NA,NA,NA,NA,68.0971,1999,1999
+5,"BOIN","approx1-r_fixed","approx1","r_fixed",NA,0.6,0,0.5,"True DLT rate",0.3,0.35,0.4,0.45,0.5,NA,NA,1999,1999
+5,"BOIN","approx1-r_fixed","approx1","r_fixed",NA,0.6,0,0.5,"True IPDE DLT rate",0.3,0.53,0.61,0.69,0.77,NA,NA,1999,1999
+5,"BOIN","approx1-r_fixed","approx1","r_fixed",NA,0.6,0,0.5,"Estimated pj_iso",0.2305,0.3711,0.4664,0.4341,0.5275,NA,NA,1999,1999
+5,"BOIN","approx1-r_fixed","approx1","r_fixed",NA,0.6,0,0.5,"r_hat raw MLE",NA,NA,NA,NA,NA,NA,NA,1999,1999
+5,"BOIN","approx1-r_fixed","approx1","r_fixed",NA,0.6,0,0.5,"r_cap pooled adjacent",NA,NA,NA,NA,NA,NA,NA,1999,1999
+5,"BOIN","approx1-r_fixed","approx1","r_fixed",NA,0.6,0,0.5,"r_use truncated",0,0,0,0,0,NA,NA,1999,1999
+5,"BOIN","approx1-r_fixed","approx1","r_fixed",NA,0.6,0,0.5,"MTD Selection %",64.3322,15.5578,2.001,0.4002,0.05,NA,NA,1999,1999
+5,"BOIN","approx1-r_fixed","approx1","r_fixed",NA,0.6,0,0.5,"# Pts Treated",18.9185,6.5403,1.0175,0.1306,0.0165,NA,NA,1999,1999
+5,"BOIN","approx1-r_fixed","approx1","r_fixed",NA,0.6,0,0.5,"# Unique Pts by Dose",18.9185,6.5403,1.0175,0.1306,0.0165,NA,NA,1999,1999
+5,"BOIN","approx1-r_fixed","approx1","r_fixed",NA,0.6,0,0.5,"# IPDE Doses",0,3.6183,0.7289,0.042,0.012,NA,NA,1999,1999
+5,"BOIN","approx1-r_fixed","approx1","r_fixed",NA,0.6,0,0.5,"# Total Administrations",NA,NA,NA,NA,NA,26.6233,NA,1999,1999
+5,"BOIN","approx1-r_fixed","approx1","r_fixed",NA,0.6,0,0.5,"# Total Unique Patients",NA,NA,NA,NA,NA,22.2221,NA,1999,1999
+5,"BOIN","approx1-r_fixed","approx1","r_fixed",NA,0.6,0,0.5,"% Early Stopping",NA,NA,NA,NA,NA,17.6588,NA,1999,1999
+5,"BOIN","approx1-r_fixed","approx1","r_fixed",NA,0.6,0,0.5,"Duration",NA,NA,NA,NA,NA,NA,68.9195,1999,1999
+5,"BOIN","approx1-r_fixed","approx1","r_fixed",NA,0.9,0,0.5,"True DLT rate",0.3,0.35,0.4,0.45,0.5,NA,NA,1999,1999
+5,"BOIN","approx1-r_fixed","approx1","r_fixed",NA,0.9,0,0.5,"True IPDE DLT rate",0.3,0.62,0.715,0.81,0.905,NA,NA,1999,1999
+5,"BOIN","approx1-r_fixed","approx1","r_fixed",NA,0.9,0,0.5,"Estimated pj_iso",0.2452,0.4153,0.5029,0.4376,NA,NA,NA,1999,1999
+5,"BOIN","approx1-r_fixed","approx1","r_fixed",NA,0.9,0,0.5,"r_hat raw MLE",NA,NA,NA,NA,NA,NA,NA,1999,1999
+5,"BOIN","approx1-r_fixed","approx1","r_fixed",NA,0.9,0,0.5,"r_cap pooled adjacent",NA,NA,NA,NA,NA,NA,NA,1999,1999
+5,"BOIN","approx1-r_fixed","approx1","r_fixed",NA,0.9,0,0.5,"r_use truncated",0,0,0,0,0,NA,NA,1999,1999
+5,"BOIN","approx1-r_fixed","approx1","r_fixed",NA,0.9,0,0.5,"MTD Selection %",71.0355,10.055,0.4502,0.1001,0,NA,NA,1999,1999
+5,"BOIN","approx1-r_fixed","approx1","r_fixed",NA,0.9,0,0.5,"# Pts Treated",20.5993,5.4132,0.5193,0.039,0.0015,NA,NA,1999,1999
+5,"BOIN","approx1-r_fixed","approx1","r_fixed",NA,0.9,0,0.5,"# Unique Pts by Dose",20.5993,5.4132,0.5193,0.039,0.0015,NA,NA,1999,1999
+5,"BOIN","approx1-r_fixed","approx1","r_fixed",NA,0.9,0,0.5,"# IPDE Doses",0,3.3567,0.4162,0.016,0.0015,NA,NA,1999,1999
+5,"BOIN","approx1-r_fixed","approx1","r_fixed",NA,0.9,0,0.5,"# Total Administrations",NA,NA,NA,NA,NA,26.5723,NA,1999,1999
+5,"BOIN","approx1-r_fixed","approx1","r_fixed",NA,0.9,0,0.5,"# Total Unique Patients",NA,NA,NA,NA,NA,22.7819,NA,1999,1999
+5,"BOIN","approx1-r_fixed","approx1","r_fixed",NA,0.9,0,0.5,"% Early Stopping",NA,NA,NA,NA,NA,18.3592,NA,1999,1999
+5,"BOIN","approx1-r_fixed","approx1","r_fixed",NA,0.9,0,0.5,"Duration",NA,NA,NA,NA,NA,NA,69.9997,1999,1999
+6,"BOIN","approx1-r_fixed","approx1","r_fixed",NA,0,0,0.5,"True DLT rate",0.5,0.55,0.6,0.65,0.7,NA,NA,1999,1999
+6,"BOIN","approx1-r_fixed","approx1","r_fixed",NA,0,0,0.5,"True IPDE DLT rate",0.5,0.55,0.6,0.65,0.7,NA,NA,1999,1999
+6,"BOIN","approx1-r_fixed","approx1","r_fixed",NA,0,0,0.5,"Estimated pj_iso",0.3361,0.4672,0.5204,0.5553,NA,NA,NA,1999,1999
+6,"BOIN","approx1-r_fixed","approx1","r_fixed",NA,0,0,0.5,"r_hat raw MLE",NA,NA,NA,NA,NA,NA,NA,1999,1999
+6,"BOIN","approx1-r_fixed","approx1","r_fixed",NA,0,0,0.5,"r_cap pooled adjacent",NA,NA,NA,NA,NA,NA,NA,1999,1999
+6,"BOIN","approx1-r_fixed","approx1","r_fixed",NA,0,0,0.5,"r_use truncated",0,0,0,0,NA,NA,NA,1999,1999
+6,"BOIN","approx1-r_fixed","approx1","r_fixed",NA,0,0,0.5,"MTD Selection %",17.4087,1.1506,0.2001,0,0,NA,NA,1999,1999
+6,"BOIN","approx1-r_fixed","approx1","r_fixed",NA,0,0,0.5,"# Pts Treated",13.1436,1.4167,0.1981,0.0165,0,NA,NA,1999,1999
+6,"BOIN","approx1-r_fixed","approx1","r_fixed",NA,0,0,0.5,"# Unique Pts by Dose",13.1436,1.4167,0.1981,0.0165,0,NA,NA,1999,1999
+6,"BOIN","approx1-r_fixed","approx1","r_fixed",NA,0,0,0.5,"# IPDE Doses",0,0.8844,0.1316,0.005,0,NA,NA,1999,1999
+6,"BOIN","approx1-r_fixed","approx1","r_fixed",NA,0,0,0.5,"# Total Administrations",NA,NA,NA,NA,NA,14.7749,NA,1999,1999
+6,"BOIN","approx1-r_fixed","approx1","r_fixed",NA,0,0,0.5,"# Total Unique Patients",NA,NA,NA,NA,NA,13.7539,NA,1999,1999
+6,"BOIN","approx1-r_fixed","approx1","r_fixed",NA,0,0,0.5,"% Early Stopping",NA,NA,NA,NA,NA,81.2406,NA,1999,1999
+6,"BOIN","approx1-r_fixed","approx1","r_fixed",NA,0,0,0.5,"Duration",NA,NA,NA,NA,NA,NA,40.1368,1999,1999
+6,"BOIN","approx1-r_fixed","approx1","r_fixed",NA,0.3,0,0.5,"True DLT rate",0.5,0.55,0.6,0.65,0.7,NA,NA,1999,1999
+6,"BOIN","approx1-r_fixed","approx1","r_fixed",NA,0.3,0,0.5,"True IPDE DLT rate",0.5,0.7,0.765,0.83,0.895,NA,NA,1999,1999
+6,"BOIN","approx1-r_fixed","approx1","r_fixed",NA,0.3,0,0.5,"Estimated pj_iso",0.3569,0.5391,0.4497,NA,NA,NA,NA,1999,1999
+6,"BOIN","approx1-r_fixed","approx1","r_fixed",NA,0.3,0,0.5,"r_hat raw MLE",NA,NA,NA,NA,NA,NA,NA,1999,1999
+6,"BOIN","approx1-r_fixed","approx1","r_fixed",NA,0.3,0,0.5,"r_cap pooled adjacent",NA,NA,NA,NA,NA,NA,NA,1999,1999
+6,"BOIN","approx1-r_fixed","approx1","r_fixed",NA,0.3,0,0.5,"r_use truncated",0,0,0,0,NA,NA,NA,1999,1999
+6,"BOIN","approx1-r_fixed","approx1","r_fixed",NA,0.3,0,0.5,"MTD Selection %",16.6583,0.2001,0.05,0,0,NA,NA,1999,1999
+6,"BOIN","approx1-r_fixed","approx1","r_fixed",NA,0.3,0,0.5,"# Pts Treated",13.6103,1.025,0.027,0.0015,0,NA,NA,1999,1999
+6,"BOIN","approx1-r_fixed","approx1","r_fixed",NA,0.3,0,0.5,"# Unique Pts by Dose",13.6103,1.025,0.027,0.0015,0,NA,NA,1999,1999
+6,"BOIN","approx1-r_fixed","approx1","r_fixed",NA,0.3,0,0.5,"# IPDE Doses",0,0.7869,0.0225,0,0,NA,NA,1999,1999
+6,"BOIN","approx1-r_fixed","approx1","r_fixed",NA,0.3,0,0.5,"# Total Administrations",NA,NA,NA,NA,NA,14.6638,NA,1999,1999
+6,"BOIN","approx1-r_fixed","approx1","r_fixed",NA,0.3,0,0.5,"# Total Unique Patients",NA,NA,NA,NA,NA,13.8544,NA,1999,1999
+6,"BOIN","approx1-r_fixed","approx1","r_fixed",NA,0.3,0,0.5,"% Early Stopping",NA,NA,NA,NA,NA,83.0915,NA,1999,1999
+6,"BOIN","approx1-r_fixed","approx1","r_fixed",NA,0.3,0,0.5,"Duration",NA,NA,NA,NA,NA,NA,40.1928,1999,1999
+6,"BOIN","approx1-r_fixed","approx1","r_fixed",NA,0.6,0,0.5,"True DLT rate",0.5,0.55,0.6,0.65,0.7,NA,NA,1999,1999
+6,"BOIN","approx1-r_fixed","approx1","r_fixed",NA,0.6,0,0.5,"True IPDE DLT rate",0.5,0.85,0.93,1,1,NA,NA,1999,1999
+6,"BOIN","approx1-r_fixed","approx1","r_fixed",NA,0.6,0,0.5,"Estimated pj_iso",0.3652,0.6096,NA,NA,NA,NA,NA,1999,1999
+6,"BOIN","approx1-r_fixed","approx1","r_fixed",NA,0.6,0,0.5,"r_hat raw MLE",NA,NA,NA,NA,NA,NA,NA,1999,1999
+6,"BOIN","approx1-r_fixed","approx1","r_fixed",NA,0.6,0,0.5,"r_cap pooled adjacent",NA,NA,NA,NA,NA,NA,NA,1999,1999
+6,"BOIN","approx1-r_fixed","approx1","r_fixed",NA,0.6,0,0.5,"r_use truncated",0,0,0,NA,NA,NA,NA,1999,1999
+6,"BOIN","approx1-r_fixed","approx1","r_fixed",NA,0.6,0,0.5,"MTD Selection %",15.6078,0,0,0,0,NA,NA,1999,1999
+6,"BOIN","approx1-r_fixed","approx1","r_fixed",NA,0.6,0,0.5,"# Pts Treated",13.7919,0.7579,0.003,0,0,NA,NA,1999,1999
+6,"BOIN","approx1-r_fixed","approx1","r_fixed",NA,0.6,0,0.5,"# Unique Pts by Dose",13.7919,0.7579,0.003,0,0,NA,NA,1999,1999
+6,"BOIN","approx1-r_fixed","approx1","r_fixed",NA,0.6,0,0.5,"# IPDE Doses",0,0.6808,0.003,0,0,NA,NA,1999,1999
+6,"BOIN","approx1-r_fixed","approx1","r_fixed",NA,0.6,0,0.5,"# Total Administrations",NA,NA,NA,NA,NA,14.5528,NA,1999,1999
+6,"BOIN","approx1-r_fixed","approx1","r_fixed",NA,0.6,0,0.5,"# Total Unique Patients",NA,NA,NA,NA,NA,13.8689,NA,1999,1999
+6,"BOIN","approx1-r_fixed","approx1","r_fixed",NA,0.6,0,0.5,"% Early Stopping",NA,NA,NA,NA,NA,84.3922,NA,1999,1999
+6,"BOIN","approx1-r_fixed","approx1","r_fixed",NA,0.6,0,0.5,"Duration",NA,NA,NA,NA,NA,NA,40.2032,1999,1999
+6,"BOIN","approx1-r_fixed","approx1","r_fixed",NA,0.9,0,0.5,"True DLT rate",0.5,0.55,0.6,0.65,0.7,NA,NA,1999,1999
+6,"BOIN","approx1-r_fixed","approx1","r_fixed",NA,0.9,0,0.5,"True IPDE DLT rate",0.5,1,1,1,1,NA,NA,1999,1999
+6,"BOIN","approx1-r_fixed","approx1","r_fixed",NA,0.9,0,0.5,"Estimated pj_iso",0.3603,NA,NA,NA,NA,NA,NA,1999,1999
+6,"BOIN","approx1-r_fixed","approx1","r_fixed",NA,0.9,0,0.5,"r_hat raw MLE",NA,NA,NA,NA,NA,NA,NA,1999,1999
+6,"BOIN","approx1-r_fixed","approx1","r_fixed",NA,0.9,0,0.5,"r_cap pooled adjacent",NA,NA,NA,NA,NA,NA,NA,1999,1999
+6,"BOIN","approx1-r_fixed","approx1","r_fixed",NA,0.9,0,0.5,"r_use truncated",0,0,NA,NA,NA,NA,NA,1999,1999
+6,"BOIN","approx1-r_fixed","approx1","r_fixed",NA,0.9,0,0.5,"MTD Selection %",15.5578,0,0,0,0,NA,NA,1999,1999
+6,"BOIN","approx1-r_fixed","approx1","r_fixed",NA,0.9,0,0.5,"# Pts Treated",13.8999,0.5943,0,0,0,NA,NA,1999,1999
+6,"BOIN","approx1-r_fixed","approx1","r_fixed",NA,0.9,0,0.5,"# Unique Pts by Dose",13.8999,0.5943,0,0,0,NA,NA,1999,1999
+6,"BOIN","approx1-r_fixed","approx1","r_fixed",NA,0.9,0,0.5,"# IPDE Doses",0,0.5943,0,0,0,NA,NA,1999,1999
+6,"BOIN","approx1-r_fixed","approx1","r_fixed",NA,0.9,0,0.5,"# Total Administrations",NA,NA,NA,NA,NA,14.4942,NA,1999,1999
+6,"BOIN","approx1-r_fixed","approx1","r_fixed",NA,0.9,0,0.5,"# Total Unique Patients",NA,NA,NA,NA,NA,13.8999,NA,1999,1999
+6,"BOIN","approx1-r_fixed","approx1","r_fixed",NA,0.9,0,0.5,"% Early Stopping",NA,NA,NA,NA,NA,84.4422,NA,1999,1999
+6,"BOIN","approx1-r_fixed","approx1","r_fixed",NA,0.9,0,0.5,"Duration",NA,NA,NA,NA,NA,NA,39.9699,1999,1999

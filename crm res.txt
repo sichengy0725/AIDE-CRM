@@ -1,0 +1,71 @@
+====================================
+Scenario 1 
+True PI: 0.07, 0.12, 0.17, 0.22, 0.3 
+Skeleton: 0.15, 0.2, 0.3, 0.35, 0.45 
+====================================
+selection probability:  0.075 1.825 8.075 25.175 64.775 
+number of toxicity:     0.2805 0.481 0.91275 1.3615 3.13475 0 
+number of treated:      4.00425 3.9615 5.367 6.15375 10.494 0 
+percentage of stop:     0.075 
+duration:   10 
+Time difference of 1.303455 mins
+
+====================================
+Scenario 2 
+True PI: 0.05, 0.1, 0.18, 0.3, 0.4 
+Skeleton: 0.15, 0.2, 0.3, 0.35, 0.45 
+====================================
+selection probability:  0.025 1.625 18.35 39.4 40.6 
+number of toxicity:     0.18225 0.3785 1.2045 2.34 3.234 3.234 
+number of treated:      3.6615 3.82275 6.5505 7.803 8.16225 8.16225 
+percentage of stop:     0 
+duration:   10 
+Time difference of 1.171462 mins
+
+====================================
+Scenario 3 
+True PI: 0.15, 0.2, 0.3, 0.35, 0.45 
+Skeleton: 0.15, 0.2, 0.3, 0.35, 0.45 
+====================================
+selection probability:  5.175 20.625 34.975 25.5 12.8 
+number of toxicity:     1.03775 1.409 2.38475 1.72375 1.32675 3.0505 
+number of treated:      6.834 7.065 7.94175 4.956 2.97975 7.93575 
+percentage of stop:     0.925 
+duration:   10 
+Time difference of 1.051773 mins
+
+====================================
+Scenario 4 
+True PI: 0.15, 0.3, 0.38, 0.45, 0.55 
+Skeleton: 0.15, 0.2, 0.3, 0.35, 0.45 
+====================================
+selection probability:  16.05 43.825 27.75 9.775 1.65 
+number of toxicity:     1.383 2.99525 2.6305 1.2605 0.5105 4.4015 
+number of treated:      9.13725 9.95175 6.951 2.82 0.9165 10.6875 
+percentage of stop:     0.95 
+duration:   10 
+Time difference of 1.070435 mins
+
+====================================
+Scenario 5 
+True PI: 0.3, 0.35, 0.4, 0.45, 0.5 
+Skeleton: 0.15, 0.2, 0.3, 0.35, 0.45 
+====================================
+selection probability:  43.35 24.025 11.625 3.975 1.475 
+number of toxicity:     4.69425 2.2095 1.33275 0.5405 0.2455 4.32825 
+number of treated:      15.64125 6.252 3.38475 1.2045 0.5085 11.34975 
+percentage of stop:     15.55 
+duration:   10 
+Time difference of 1.202805 mins
+
+====================================
+Scenario 6 
+True PI: 0.5, 0.55, 0.6, 0.65, 0.7 
+Skeleton: 0.15, 0.2, 0.3, 0.35, 0.45 
+====================================
+selection probability:  18.175 0.775 0.125 0.025 0 
+number of toxicity:     6.73 0.68325 0.22075 0.0295 0.00775 7.67125 
+number of treated:      13.47975 1.26 0.36975 0.05025 0.00975 15.1695 
+percentage of stop:     80.9 
+duration:   10 
+Time difference of 53.13525 secs

@@ -44,8 +44,6 @@ simulate_AIDE_design <- function(
   crm_alpha_sd = 2,
   crm_a_r = 1,
   crm_b_r = 9,
-  crm_fixed_model_file = "fix_CRM.bug",
-  crm_random_model_file = "random_CRM.bug",
   crm_n_chains = 2,
   crm_n_adapt = 500,
   crm_n_burnin = 500,
@@ -70,7 +68,7 @@ simulate_AIDE_design <- function(
   }
   
   if (model == "CRM") {
-    crm_r_model <- match.arg(crm_r_model)
+    # crm_r_model <- match.arg(crm_r_model)
     
     if (is.null(crm_skeleton)) {
       stop("For model = 'CRM', provide crm_skeleton.")
@@ -383,9 +381,6 @@ simulate_AIDE_design <- function(
           
           alpha_sd = crm_alpha_sd,
           
-          fixed_model_file = crm_fixed_model_file,
-          random_model_file = crm_random_model_file,
-          
           n_chains = crm_n_chains,
           n_adapt = crm_n_adapt,
           n_burnin = crm_n_burnin,
@@ -630,9 +625,6 @@ simulate_AIDE_design <- function(
         b_r = crm_b_r,
         alpha_sd = crm_alpha_sd,
         
-        fixed_model_file = crm_fixed_model_file,
-        random_model_file = crm_random_model_file,
-        
         n_chains = crm_n_chains,
         n_adapt = crm_n_adapt,
         n_burnin = crm_n_burnin,
@@ -721,8 +713,6 @@ get_oc_sim_AIDE <- function(
     crm_alpha_sd = 2,
     crm_a_r = 1,
     crm_b_r = 9,
-    crm_fixed_model_file = "fix_CRM.bug",
-    crm_random_model_file = "random_CRM.bug",
     crm_n_chains = 2,
     crm_n_adapt = 500,
     crm_n_burnin = 500,
@@ -748,7 +738,7 @@ get_oc_sim_AIDE <- function(
   }
   
   if (model == "CRM") {
-    crm_r_model <- match.arg(crm_r_model)
+    # crm_r_model <- match.arg(crm_r_model)
     
     if (is.null(crm_skeleton)) {
       stop("For model = 'CRM', provide crm_skeleton.")
