@@ -1,9 +1,11 @@
 ## ============================================================
-## AIDE-BOIN runner and OC table printer
+## AIDE-BOIN / AIDE-CFO runner and OC table printer
 ## Source this after defining scenarios / global simulation settings,
 ## or edit the fallback settings below.
 ## ============================================================
-source("AIDE.R")
+source("AIDE_BOIN_helper.R")
+source("AIDE_CRM_helper_final.R")
+source("AIDE_modified.R")
 
 ## ------------------------------------------------------------
 ## Helper functions
@@ -93,6 +95,7 @@ print_oc_table_aide <- function(
   cat("AIDE design:", design, "\n")
   cat("Decision method:", x$decision_method, "\n")
   cat("Final MTD method:", x$mtd_method, "\n")
+  cat("Restrict to tried:", x$restrict_to_tried, "\n")
   cat("True IPDE alpha:", true_ipde_alpha, "\n")
   cat("Discount alpha:", discount_alpha, "\n")
   cat("r_carry:", x$r_carry, "\n")
@@ -156,7 +159,33 @@ if (!dir.exists(outdir_aide)) dir.create(outdir_aide, recursive = TRUE)
 
 all_res_aide <- list()
 
-model_aide <- "BOIN"
+## Prior settings aligned with methods_prior.R.
+q_skeleton_prior <- c(0.15, 0.20, 0.30, 0.35, 0.45)
+dose_alpha_mg_prior <- c(15, 20, 30, 35, 45)
+dose_ipcrm_prior <- c(15, 20, 30, 35, 45)
+dose_ipcrm_prior <- dose_ipcrm_prior / (2 * stats::sd(dose_ipcrm_prior))
+
+crm_skeleton_aide <- q_skeleton_prior
+crm_dose_values_aide <- dose_alpha_mg_prior
+crm_dose_scores_aide <- dose_ipcrm_prior
+crm_theta_prior_mean_aide <- 0
+crm_theta_prior_sd_aide <- sqrt(2)
+crm_cumu_beta0_mean_aide <- -2.8
+crm_cumu_beta0_prec_aide <- 2
+crm_cumu_beta0_df_aide <- 1
+crm_cumu_beta1_shape_aide <- 2.5
+crm_cumu_beta1_rate_aide <- 1.6
+crm_cumu_beta2_rate_aide <- 1
+
+cfo_skeleton_aide <- c(0.005, 0.01, 0.05, 0.1, 0.3)
+cfo_sigma2_beta_aide <- 30
+cfo_eta_aide <- 1
+cfo_model_file_aide <- "PRIDE.bug"
+cfo_pk_method_aide <- "approx"
+cfo_n_mc_w_aide <- 200
+cfo_m_use_aide <- 1000
+
+model_list_aide <- c("BOIN", "CFO")
 
 ## old cap used in your original AIDE code
 d_cap_aide <- 100
@@ -164,27 +193,50 @@ d_cap_aide <- 100
 ## new escalation gate: no escalation until current dose has >= 3 treated
 dose_cap_aide <- 3L
 
-## Run all three versions.
-## If you only want one method, set method_list_aide <- c("boin"), c("approx1"), or c("approx2").
-method_list_aide <- c("approx1", "approx2")
+## Final MTD selection gate.
+## TRUE: select among tried/non-eliminated doses.
+## FALSE: allow all non-eliminated doses to enter final selection.
+restrict_to_tried_aide <- TRUE
+
+## If you only want one method, edit these vectors.
+## BOIN options: c("boin", "approx1", "approx2")
+method_list_boin_aide <- c("approx1", "approx2")
+## CFO options: c("empirical", "pride")
+cfo_method_list_aide <- c("empirical", "pride")
 alpha_true_list <- c(0)
 ## Discount value used by approx1 / approx2.
 ## Set to 0.1 for your usual working setting.
 r_carry_aide <- 0
 ntrial = 3000
-for (decision_method_aide in method_list_aide) {
-  for (accrual in accrual_list) {
-    for (alpha_true in alpha_true_list) {
-      mtd_method_aide <- decision_method_aide
+for (model_aide in model_list_aide) {
+  method_loop_aide <- if (model_aide == "BOIN") method_list_boin_aide else cfo_method_list_aide
+
+  for (method_aide in method_loop_aide) {
+    for (accrual in accrual_list) {
+      for (alpha_true in alpha_true_list) {
+        if (model_aide == "BOIN") {
+          decision_method_aide <- method_aide
+          mtd_method_aide <- method_aide
+          cfo_method_aide <- "empirical"
+          method_tag_aide <- method_aide
+          method_family_aide <- "AIDE-BOIN"
+        } else {
+          decision_method_aide <- "boin"
+          mtd_method_aide <- NULL
+          cfo_method_aide <- method_aide
+          method_tag_aide <- paste0("cfo_", cfo_method_aide)
+          method_family_aide <- "AIDE-CFO"
+        }
 
       method_label_aide <- paste0(
         "AIDE-equiv",
-        "-", decision_method_aide,
+        "-", method_tag_aide,
         "-w", T_assess_equiv,
         "-c", C_equiv,
         "-cyc", cycle_max_equiv,
         "-rate", accrual,
         "-dosecap", dose_cap_aide,
+        "-tried", as.integer(restrict_to_tried_aide),
         "-rcarry", r_carry_aide
       )
 
@@ -192,13 +244,15 @@ for (decision_method_aide in method_list_aide) {
         outdir_aide,
         paste0(
           "aide_equiv",
-          "_method", decision_method_aide,
+          "_model", model_aide,
+          "_method", method_tag_aide,
           "_a", fmt_param(alpha_true),
           "_w", T_assess_equiv,
           "_c", C_equiv,
           "_cyc", cycle_max_equiv,
           "_rate", fmt_param(accrual),
           "_dosecap", dose_cap_aide,
+          "_tried", as.integer(restrict_to_tried_aide),
           "_rcarry", fmt_param(r_carry_aide),
           "_n", ntrial,
           ".txt"
@@ -208,11 +262,12 @@ for (decision_method_aide in method_list_aide) {
       with_sink(outfile, {
 
         cat("========================================\n")
-        cat("AIDE-BOIN equivalence check\n")
+        cat(method_family_aide, "equivalence check\n")
         cat("========================================\n")
+        cat("model =", model_aide, "\n")
         cat("method =", method_label_aide, "\n")
-        cat("decision_method =", decision_method_aide, "\n")
-        cat("mtd_method =", mtd_method_aide, "\n")
+        cat("decision_method =", ifelse(model_aide == "BOIN", decision_method_aide, method_tag_aide), "\n")
+        cat("mtd_method =", ifelse(is.null(mtd_method_aide), method_tag_aide, mtd_method_aide), "\n")
         cat("target =", target_BOIN, "\n")
         cat("alpha_true =", alpha_true, "\n")
         cat("r_carry =", r_carry_aide, "\n")
@@ -227,8 +282,17 @@ for (decision_method_aide in method_list_aide) {
             "rate=", accrual,
             "d.cap=", d_cap_aide,
             "dose_cap=", dose_cap_aide,
+            "restrict_to_tried=", restrict_to_tried_aide,
             "design=", ipde_design_equiv,
             "\n")
+        if (model_aide == "CFO") {
+          cat("CFO skeleton:", paste(cfo_skeleton_aide, collapse = ", "), "\n")
+          cat("CFO sigma2_beta:", cfo_sigma2_beta_aide, "\n")
+          cat("CFO eta:", cfo_eta_aide, "\n")
+          cat("CFO model file:", cfo_model_file_aide, "\n")
+          cat("CFO pk method:", cfo_pk_method_aide, "\n")
+          cat("CFO m_use:", cfo_m_use_aide, "\n")
+        }
         cat("outfile =", outfile, "\n")
         cat("========================================\n\n")
 
@@ -279,14 +343,34 @@ for (decision_method_aide in method_list_aide) {
 
             decision_method = decision_method_aide,
             mtd_method = mtd_method_aide,
+            restrict_to_tried = restrict_to_tried_aide,
             r_carry = r_carry_aide,
-
             store_raw = store_raw,
-            verbose = verbose
+            verbose = verbose,
+            crm_skeleton = crm_skeleton_aide,
+            crm_dose_values = crm_dose_values_aide,
+            crm_dose_scores = crm_dose_scores_aide,
+            crm_theta_prior_mean = crm_theta_prior_mean_aide,
+            crm_theta_prior_sd = crm_theta_prior_sd_aide,
+            crm_cumu_beta0_mean = crm_cumu_beta0_mean_aide,
+            crm_cumu_beta0_prec = crm_cumu_beta0_prec_aide,
+            crm_cumu_beta0_df = crm_cumu_beta0_df_aide,
+            crm_cumu_beta1_shape = crm_cumu_beta1_shape_aide,
+            crm_cumu_beta1_rate = crm_cumu_beta1_rate_aide,
+            crm_cumu_beta2_rate = crm_cumu_beta2_rate_aide,
+            cfo_method = cfo_method_aide,
+            cfo_skeleton = cfo_skeleton_aide,
+            cfo_model_file = cfo_model_file_aide,
+            cfo_sigma2_beta = cfo_sigma2_beta_aide,
+            cfo_eta = cfo_eta_aide,
+            cfo_pk_method = cfo_pk_method_aide,
+            cfo_n_mc_w = cfo_n_mc_w_aide,
+            cfo_m_use = cfo_m_use_aide
           )
 
           key <- paste(
-            decision_method_aide,
+            model_aide,
+            method_tag_aide,
             "alpha", alpha_true,
             "accrual", accrual,
             "scenario", i,
@@ -300,7 +384,7 @@ for (decision_method_aide in method_list_aide) {
             design = ipde_design_equiv,
             method = method_label_aide,
             true_ipde_alpha = alpha_true,
-            discount_alpha = ifelse(decision_method_aide == "boin", 0, r_carry_aide),
+            discount_alpha = ifelse(model_aide == "BOIN" && decision_method_aide != "boin", r_carry_aide, 0),
             allow_suspend = allow_suspend_equiv,
             accrual = accrual,
             digits = 2
@@ -311,6 +395,7 @@ for (decision_method_aide in method_list_aide) {
       cat("Finished AIDE:", outfile, "\n")
     }
   }
+}
 }
 
 saveRDS(

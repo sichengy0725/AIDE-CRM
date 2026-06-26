@@ -43,6 +43,7 @@ simulate_AIDE_design <- function(
   # --- BOIN decision / final selection method ---
   decision_method = c("boin", "approx1", "approx2"),
   mtd_method = NULL,
+  restrict_to_tried = TRUE,
   r_carry = 0.1,
   r_estimator = c("r_fixed", "r_mle"),
 
@@ -108,6 +109,7 @@ simulate_AIDE_design <- function(
   if (!is.null(seed)) set.seed(seed)
 
   model <- match.arg(model)
+  restrict_to_tried <- isTRUE(restrict_to_tried)
 
   if (model == "BOIN") {
     decision_method <- match.arg(decision_method)
@@ -1077,7 +1079,8 @@ simulate_AIDE_design <- function(
         y_new = y_new_final,
         n_new = n_new_final,
         y_recycle = y_recycle_final,
-        n_recycle = n_recycle_final
+        n_recycle = n_recycle_final,
+        restrict_to_tried = restrict_to_tried
       )
 
     } else if (model == "CRM") {
@@ -1104,7 +1107,7 @@ simulate_AIDE_design <- function(
         n_iter = max(5000, crm_n_iter),
         thin = crm_thin,
         seed = seed,
-        restrict_to_tried = TRUE,
+        restrict_to_tried = restrict_to_tried,
 
         dose_values = crm_dose_values,
         dose_scores = crm_dose_scores,
@@ -1132,7 +1135,8 @@ simulate_AIDE_design <- function(
         y = y_final,
         n = n_final,
         cutoff.eli = cutoff,
-        approx = "boin"
+        approx = "boin",
+        restrict_to_tried = restrict_to_tried
       )
       final_fit$approx <- paste0("cfo_", cfo_method)
       final_fit$model_file <- if (cfo_method == "pride") cfo_model_file else NA_character_
@@ -1165,6 +1169,7 @@ simulate_AIDE_design <- function(
       r_estimator = if (model == "BOIN") r_estimator else NA_character_,
       r_model = if (model == "CRM") crm_r_model else NA_character_,
       cfo_method = if (model == "CFO") cfo_method else NA_character_,
+      restrict_to_tried = restrict_to_tried,
       r_hat = if (!is.null(final_fit$r_hat)) final_fit$r_hat else r_hat,
       r_use = if (model == "BOIN") r_use else rep(NA_real_, K),
       r_cap = if (model == "BOIN") r_cap else rep(NA_real_, K),
@@ -1219,6 +1224,7 @@ get_oc_sim_AIDE <- function(
     ## BOIN decision / final MTD method
     decision_method = c("boin", "approx1", "approx2"),
     mtd_method = NULL,
+    restrict_to_tried = TRUE,
     r_carry = 0.1,
     r_estimator = c("r_fixed", "r_mle"),
 
@@ -1280,6 +1286,7 @@ get_oc_sim_AIDE <- function(
     verbose = FALSE
 ) {
   model <- match.arg(model)
+  restrict_to_tried <- isTRUE(restrict_to_tried)
 
   if (model == "BOIN") {
     decision_method <- match.arg(decision_method)
@@ -1405,6 +1412,7 @@ get_oc_sim_AIDE <- function(
       day_obs = day_obs,
       decision_method = decision_method,
       mtd_method = mtd_method,
+      restrict_to_tried = restrict_to_tried,
       r_carry = r_carry,
       r_estimator = r_estimator,
       crm_r_model = crm_r_model,
@@ -1588,6 +1596,7 @@ get_oc_sim_AIDE <- function(
     cfo_sigma2_beta = if (model == "CFO") cfo_sigma2_beta else NA_real_,
     cfo_eta = if (model == "CFO") cfo_eta else NA_real_,
     cfo_pk_method = if (model == "CFO") cfo_pk_method else NA_character_,
+    restrict_to_tried = restrict_to_tried,
     sel_count = sel_count,
     stop_count = stop_count,
     na_count = na_count,

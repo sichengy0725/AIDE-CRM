@@ -817,7 +817,8 @@ select.mtd <- function(target,
                        y_new = NULL,
                        n_new = NULL,
                        y_recycle = NULL,
-                       n_recycle = NULL) {
+                       n_recycle = NULL,
+                       restrict_to_tried = TRUE) {
 
   approx <- match.arg(approx)
   r_estimator <- match.arg(r_estimator)
@@ -907,6 +908,8 @@ select.mtd <- function(target,
     ))
   }
 
+  restrict_to_tried <- isTRUE(restrict_to_tried)
+
   if (!any(n > 0L)) {
     return(list(
       MTD = 99L,
@@ -931,6 +934,9 @@ select.mtd <- function(target,
       if (n[j] > 0) {
         mu_hat[j] <- y[j] / n[j]
         n_eff[j] <- n[j]
+      } else if (!restrict_to_tried) {
+        mu_hat[j] <- 0.5
+        n_eff[j] <- 0
       }
 
     } else {
@@ -999,19 +1005,27 @@ select.mtd <- function(target,
             (YR + (YI - r_use[j] * NI) / (1 - r_use[j])) / N_star
           )
         }
+      } else if (!restrict_to_tried) {
+        mu_hat[j] <- 0.5
+        n_eff[j] <- 0
       }
     }
   }
 
-  nadmis <- min(
-    max(which(elimi == 0L)),
-    max(which(n != 0L))
-  )
+  highest_uneliminated <- max(which(elimi == 0L))
+  highest_tried <- max(which(n != 0L))
+
+  nadmis <- if (restrict_to_tried) {
+    min(highest_uneliminated, highest_tried)
+  } else {
+    highest_uneliminated
+  }
 
   mu_use <- mu_hat[seq_len(nadmis)]
   neff_use <- n_eff[seq_len(nadmis)]
 
-  valid <- is.finite(mu_use) & is.finite(neff_use) & neff_use > 0
+  valid <- is.finite(mu_use) & is.finite(neff_use)
+  if (restrict_to_tried) valid <- valid & neff_use > 0
 
   if (!any(valid)) {
     return(list(
