@@ -1,7 +1,13 @@
 ## ============================================================
+<<<<<<< HEAD
 ## run_oc_AIDE.R
 ## Cluster runner for AIDE-BOIN / AIDE-CRM / AIDE-CFO
 ## Uses the prior settings from methods_prior.R
+=======
+## run_oc_AIDE_cluster_SetB_8dose.R
+## Cluster runner for AIDE-BOIN / AIDE-CRM
+## Updated for Set B eight-dose scenarios, continuous enrollment, and five CRM backends
+>>>>>>> 5cae07988e201ac76a1887bdf8a38fdc791e846f
 ## Compatible with job_01 to job_02000.lsf
 ## ============================================================
 
@@ -24,16 +30,29 @@ if (dir.exists(lib_path)) {
 
 ## Newest pooled-r_mle BOIN code.
 ## Required files in this working directory:
+<<<<<<< HEAD
 ##   AIDE_CRM_helper_final.R
 ##   AIDE_BOIN_helper.R
 ##   AIDE_modified.R
 source("AIDE_BOIN_helper.R")
 source("AIDE_CRM_helper_final.R")
+=======
+##   AIDE_modified_pooled_r_mle.R
+##   AIDE_BOIN_helper_pooled_r_mle.R
+##   AIDE_CRM_helper_final.R
+##   AIDE_modified_continuous.R
+source("AIDE_BOIN_helper.R")
+source("AIDE_CRM_helper_modified.R")
+>>>>>>> 5cae07988e201ac76a1887bdf8a38fdc791e846f
 source("AIDE_modified.R")
 
 library(parallel)
 
+<<<<<<< HEAD
 ## If CRM or PRIDE-backed CFO is used, workers need rjags/coda.
+=======
+## If CRM is used, workers need rjags/coda.
+>>>>>>> 5cae07988e201ac76a1887bdf8a38fdc791e846f
 ## Loading here is safe even for BOIN if installed.
 if (requireNamespace("rjags", quietly = TRUE)) library(rjags)
 if (requireNamespace("coda", quietly = TRUE)) library(coda)
@@ -137,10 +156,15 @@ make_p_ipde <- function(p_base, alpha_true) {
 make_aide_folder <- function(task) {
   method_tag <- if (task$model == "BOIN") {
     paste0(task$decision_method, "-", task$r_estimator)
+<<<<<<< HEAD
   } else if (task$model == "CRM") {
     paste0("crm_", task$crm_r_model)
   } else {
     paste0("cfo_", task$cfo_method)
+=======
+  } else {
+    paste0("crm_", task$crm_r_model)
+>>>>>>> 5cae07988e201ac76a1887bdf8a38fdc791e846f
   }
   
   ## Keep folder names short to avoid filesystem path limits on the cluster.
@@ -155,8 +179,12 @@ make_aide_folder <- function(task) {
     "-c-", fmt_short(task$C),
     "-cyc-", fmt_short(task$cycle_max),
     "-rate-", fmt_short(task$arrival_rate),
+<<<<<<< HEAD
     "-Nmax-", fmt_short(task$Nmax_eff),
     "-tried-", as.integer(isTRUE(task$restrict_to_tried))
+=======
+    "-Nmax-", fmt_short(task$Nmax_eff)
+>>>>>>> 5cae07988e201ac76a1887bdf8a38fdc791e846f
   )
 }
 
@@ -311,6 +339,7 @@ dose_cap_aide <- 3L
 store_raw <- FALSE
 verbose <- FALSE
 
+<<<<<<< HEAD
 ## Choose AIDE models here.
 model_list_aide <- c("BOIN", "CFO")
 ## model_list_aide <- c("BOIN", "CRM", "CFO")
@@ -319,6 +348,16 @@ model_list_aide <- c("BOIN", "CFO")
 
 ## BOIN methods and r estimator.
 method_list_boin <- c("approx1", "approx2")
+=======
+## Choose BOIN or CRM here.
+## r_mle is a BOIN-only option, so this script defaults to BOIN.
+# model_list_aide <- c("BOIN")
+# model_list_aide <- c("BOIN")
+model_list_aide <- c("CRM")
+
+## BOIN methods and r estimator.
+method_list_boin <- c("approx1")
+>>>>>>> 5cae07988e201ac76a1887bdf8a38fdc791e846f
 ## method_list_boin <- c("boin", "approx1", "approx2")
 
 ## Newest BOIN option:
@@ -334,24 +373,36 @@ r_estimator_list_boin <- c("r_fixed")
 ##   level         : discount CRM with level-specific random r
 ##   alpha_crm     : alpha-CRM effective-dose model
 ##   cumu_crm      : logistic cumulative-dose CRM/IPCRM
+<<<<<<< HEAD
 crm_r_model_list <- c("fixed", "random", "level", "alpha_crm", "cumu_crm")
+=======
+crm_r_model_list <- c("fixed","random", "alpha_crm", "cumu_crm")
+>>>>>>> 5cae07988e201ac76a1887bdf8a38fdc791e846f
 ## For quick tests, use for example:
 ## crm_r_model_list <- c("alpha_crm")
 ## crm_r_model_list <- c("cumu_crm")
 ## crm_r_model_list <- c("fixed")
 
+<<<<<<< HEAD
 ## Final MTD selection gate.
 ## TRUE: select among tried/non-eliminated doses.
 ## FALSE: allow all non-eliminated doses to enter final selection.
 restrict_to_tried_aide <- TRUE
 
 ## CRM settings from methods_prior.R.
+=======
+## CRM settings for Set B eight-dose scenarios.
+>>>>>>> 5cae07988e201ac76a1887bdf8a38fdc791e846f
 ## Power CRM / alpha-CRM prior: theta ~ N(0, 2).
 theta_mean <- 0
 theta_sd <- sqrt(2)
 
 ## Skeleton for power CRM and alpha-CRM.
+<<<<<<< HEAD
 q_skeleton <- c(0.15, 0.20, 0.30, 0.35, 0.45)
+=======
+q_skeleton <- c(0.04, 0.08, 0.12, 0.16, 0.30, 0.47, 0.54, 0.60)
+>>>>>>> 5cae07988e201ac76a1887bdf8a38fdc791e846f
 
 crm_skeleton_default <- q_skeleton
 crm_alpha_sd_default <- theta_sd
@@ -372,7 +423,11 @@ crm_level_model_file_default <- "random_CRM_level.bug"
 ## Baseline model: p_j = S(d_j)^exp(theta), with S(d_j)=skeleton_j.
 ## For IPDE observations, effective dose uses actual dose amounts and
 ## calendar-time gaps based on crm_time_col_default.
+<<<<<<< HEAD
 dose_alpha_mg <- c(15, 20, 30, 35, 45)
+=======
+dose_alpha_mg <- c(10, 20, 30, 40, 50, 60, 70, 80)
+>>>>>>> 5cae07988e201ac76a1887bdf8a38fdc791e846f
 
 crm_dose_values_alpha_default <- dose_alpha_mg
 crm_time_col_default <- "t_start"
@@ -389,6 +444,7 @@ crm_alpha_n_draw_prior_default <- 5000
 ## beta0 ~ t(fixed_intercept, precision = beta0_prec, df = beta0_df)
 ## beta1 ~ Gamma(beta1_shape, beta1_rate)
 ## beta2 ~ Exp(1), but beta2 drops out at baseline because cumu.d = 0.
+<<<<<<< HEAD
 fixed_intercept <- -2.8
 beta0_prec <- 2
 beta0_df <- 1
@@ -399,6 +455,17 @@ beta1_rate <- 1.6
 ## These values are passed directly to the cumulative CRM helper.
 dose_ipcrm <- c(15, 20, 30, 35, 45)
 dose_ipcrm <- dose_ipcrm / (2 * stats::sd(dose_ipcrm))
+=======
+fixed_intercept <- -3
+beta0_prec <- 2
+beta0_df <- 1
+beta1_shape <- 2.83
+beta1_rate <- 1.21
+
+## IPCRM / cumulative CRM current dose scores.
+## These values are passed directly to the cumulative CRM helper.
+dose_ipcrm <- c(0.1, 0.3, 0.5, 0.7, 0.9, 1.1, 1.3, 1.5)
+>>>>>>> 5cae07988e201ac76a1887bdf8a38fdc791e846f
 
 crm_dose_scores_cumu_default <- dose_ipcrm
 crm_cumu_model_file_default <- NULL
@@ -410,6 +477,7 @@ crm_cumu_beta1_rate_default <- beta1_rate
 crm_cumu_beta2_rate_default <- 1
 crm_cumu_include_current_default <- FALSE
 
+<<<<<<< HEAD
 ## CFO / PRIDE settings from methods_prior.R.
 cfo_method_list_aide <- c("empirical", "pride")
 cfo_skeleton_default <- c(0.005, 0.01, 0.05, 0.1, 0.3)
@@ -422,18 +490,23 @@ cfo_m_use_default <- 1000
 cfo_use_monotone_pair_default <- FALSE
 cfo_restrict_to_tried_default <- restrict_to_tried_aide
 
+=======
+>>>>>>> 5cae07988e201ac76a1887bdf8a38fdc791e846f
 crm_n_chains <- 2
 crm_n_adapt <- 500
 crm_n_burnin <- 500
 crm_n_iter <- 2000
 crm_thin <- 1
 
+<<<<<<< HEAD
 cfo_n_chains <- 3
 cfo_n_adapt <- 1000
 cfo_n_burnin <- 2000
 cfo_n_iter <- 5000
 cfo_thin <- 2
 
+=======
+>>>>>>> 5cae07988e201ac76a1887bdf8a38fdc791e846f
 alpha_true_list <- c(0, 0.3, 0.6, 0.9)
 accrual_list <- c(1 / 14)
 ## For BOIN with r_estimator = "r_mle", r_carry is not used.
@@ -445,6 +518,7 @@ r_carry_list_crm <- c(0)
 r_carry_list_fixed_boin <- c(0)
 
 ## Scenario set.
+<<<<<<< HEAD
 ## Five-dose scenarios aligned with methods_prior.R.
 scenario_set_name <- "Set_5dose_methods_prior"
 
@@ -455,11 +529,30 @@ scenarios <- rbind(
   c(0.15, 0.30, 0.38, 0.45, 0.55),
   c(0.30, 0.35, 0.40, 0.45, 0.50),
   c(0.50, 0.55, 0.60, 0.65, 0.70)
+=======
+## Set B: eight-dose scenarios. Always overwrite any sourced `scenarios`
+## object so this runner cannot accidentally use the old five-dose set.
+scenario_set_name <- "SetB_8dose"
+
+scenarios <- rbind(
+  c(0.07, 0.10, 0.12, 0.14, 0.17, 0.19, 0.22, 0.26),
+  c(0.05, 0.08, 0.10, 0.15, 0.20, 0.22, 0.30, 0.45),
+  c(0.05, 0.10, 0.12, 0.15, 0.20, 0.30, 0.50, 0.60),
+  c(0.02, 0.10, 0.15, 0.18, 0.30, 0.44, 0.52, 0.60),
+  c(0.05, 0.10, 0.22, 0.30, 0.46, 0.53, 0.59, 0.66),
+  c(0.20, 0.30, 0.47, 0.51, 0.56, 0.60, 0.64, 0.69),
+  c(0.30, 0.35, 0.50, 0.55, 0.60, 0.65, 0.70, 0.80),
+  c(0.40, 0.41, 0.43, 0.45, 0.47, 0.49, 0.52, 0.56)
+>>>>>>> 5cae07988e201ac76a1887bdf8a38fdc791e846f
 )
 
 scenario_id_list <- seq_len(nrow(scenarios))
 if (ncol(scenarios) != length(crm_skeleton_default)) {
+<<<<<<< HEAD
   stop("Scenarios and CRM skeleton have different lengths.")
+=======
+  stop("Set B scenarios and CRM skeleton have different lengths.")
+>>>>>>> 5cae07988e201ac76a1887bdf8a38fdc791e846f
 }
 
 if (length(crm_dose_values_alpha_default) != length(crm_skeleton_default)) {
@@ -519,19 +612,27 @@ cat("Models:", paste(model_list_aide, collapse = ", "), "\n")
 cat("BOIN methods:", paste(method_list_boin, collapse = ", "), "\n")
 cat("BOIN r estimators:", paste(r_estimator_list_boin, collapse = ", "), "\n")
 cat("CRM r models:", paste(crm_r_model_list, collapse = ", "), "\n")
+<<<<<<< HEAD
 cat("CFO methods:", paste(cfo_method_list_aide, collapse = ", "), "\n")
 cat("restrict_to_tried:", restrict_to_tried_aide, "\n")
 cat("Continuous enrollment:", continuous_enrollment_equiv, "\n")
 cat("Cycle max list:", paste(cycle_max_list_equiv, collapse = ", "), "\n")
 cat("CRM skeleton:", paste(crm_skeleton_default, collapse = ", "), "\n")
+=======
+cat("Continuous enrollment:", continuous_enrollment_equiv, "\n")
+cat("Cycle max list:", paste(cycle_max_list_equiv, collapse = ", "), "\n")
+>>>>>>> 5cae07988e201ac76a1887bdf8a38fdc791e846f
 cat("alpha-CRM dose values:", paste(crm_dose_values_alpha_default, collapse = ", "), "\n")
 cat("alpha-CRM theta prior mean/sd:", crm_theta_prior_mean_default, crm_theta_prior_sd_default, "\n")
 cat("cumu CRM dose scores:", paste(round(crm_dose_scores_cumu_default, 6), collapse = ", "), "\n")
 cat("cumu CRM beta0 mean/prec/df:", crm_cumu_beta0_mean_default, crm_cumu_beta0_prec_default, crm_cumu_beta0_df_default, "\n")
 cat("cumu CRM beta1 shape/rate:", crm_cumu_beta1_shape_default, crm_cumu_beta1_rate_default, "\n")
+<<<<<<< HEAD
 cat("CFO skeleton:", paste(cfo_skeleton_default, collapse = ", "), "\n")
 cat("CFO sigma2_beta / eta:", cfo_sigma2_beta_default, cfo_eta_default, "\n")
 cat("CFO model file:", cfo_model_file_default, "\n")
+=======
+>>>>>>> 5cae07988e201ac76a1887bdf8a38fdc791e846f
 cat("Scenario set:", scenario_set_name, "\n")
 cat("Scenario IDs:", paste(scenario_id_list, collapse = ", "), "\n")
 
@@ -553,7 +654,11 @@ run_one_aide_task <- function(task) {
   }
   
   source("AIDE_BOIN_helper.R")
+<<<<<<< HEAD
   source("AIDE_CRM_helper_final.R")
+=======
+  source("AIDE_CRM_helper_modified.R")
+>>>>>>> 5cae07988e201ac76a1887bdf8a38fdc791e846f
   source("AIDE_modified.R")
   
   if (requireNamespace("rjags", quietly = TRUE)) library(rjags)
@@ -568,10 +673,15 @@ run_one_aide_task <- function(task) {
   
   method_tag <- if (task$model == "BOIN") {
     paste0(task$decision_method, "-", task$r_estimator)
+<<<<<<< HEAD
   } else if (task$model == "CRM") {
     paste0("crm_", task$crm_r_model)
   } else {
     paste0("cfo_", task$cfo_method)
+=======
+  } else {
+    paste0("crm_", task$crm_r_model)
+>>>>>>> 5cae07988e201ac76a1887bdf8a38fdc791e846f
   }
   
   scenario_name <- paste0(task$scenario_set, "_SC", task$scenario_id)
@@ -583,7 +693,10 @@ run_one_aide_task <- function(task) {
     "-a", fmt_short(task$alpha_true),
     "-r", fmt_short(task$r_carry),
     "-cyc", fmt_short(task$cycle_max),
+<<<<<<< HEAD
     "-tried", as.integer(isTRUE(task$restrict_to_tried)),
+=======
+>>>>>>> 5cae07988e201ac76a1887bdf8a38fdc791e846f
     "-j", task$job_i,
     "-b", task$block_id,
     "-s", task$seed.block,
@@ -600,7 +713,10 @@ run_one_aide_task <- function(task) {
       "-", task$model,
       "-", method_tag,
       "-cyc", fmt_short(task$cycle_max),
+<<<<<<< HEAD
       "-tried", as.integer(isTRUE(task$restrict_to_tried)),
+=======
+>>>>>>> 5cae07988e201ac76a1887bdf8a38fdc791e846f
       "-j", task$job_i,
       "-b", task$block_id,
       ".log"
@@ -628,7 +744,10 @@ run_one_aide_task <- function(task) {
     cat("cycle_max:", task$cycle_max, "\n")
     cat("Nmax_eff:", task$Nmax_eff, "\n")
     cat("dose_cap:", task$dose_cap, "\n")
+<<<<<<< HEAD
     cat("restrict_to_tried:", task$restrict_to_tried, "\n")
+=======
+>>>>>>> 5cae07988e201ac76a1887bdf8a38fdc791e846f
     cat("continuous_enrollment:", task$continuous_enrollment, "\n")
     cat("p.true:", paste(task$p.true, collapse = ", "), "\n")
     cat("p.true_ipde:", paste(task$p.true_ipde, collapse = ", "), "\n")
@@ -662,6 +781,7 @@ run_one_aide_task <- function(task) {
         cat("cumu CRM include current:", task$crm_cumu_include_current, "\n")
       }
     }
+<<<<<<< HEAD
 
     if (task$model == "CFO") {
       cat("CFO method:", task$cfo_method, "\n")
@@ -674,6 +794,8 @@ run_one_aide_task <- function(task) {
       cat("CFO m_use:", task$cfo_m_use, "\n")
       cat("CFO use monotone pair:", task$cfo_use_monotone_pair, "\n")
     }
+=======
+>>>>>>> 5cae07988e201ac76a1887bdf8a38fdc791e846f
     
     cat("====================================\n\n")
     
@@ -709,7 +831,10 @@ run_one_aide_task <- function(task) {
       
       decision_method = task$decision_method,
       mtd_method = task$mtd_method,
+<<<<<<< HEAD
       restrict_to_tried = task$restrict_to_tried,
+=======
+>>>>>>> 5cae07988e201ac76a1887bdf8a38fdc791e846f
       r_carry = task$r_carry,
       r_estimator = task$r_estimator,
       
@@ -749,6 +874,7 @@ run_one_aide_task <- function(task) {
       crm_n_burnin = task$crm_n_burnin,
       crm_n_iter = task$crm_n_iter,
       crm_thin = task$crm_thin,
+<<<<<<< HEAD
 
       cfo_method = task$cfo_method,
       cfo_skeleton = task$cfo_skeleton,
@@ -765,6 +891,8 @@ run_one_aide_task <- function(task) {
       cfo_n_burnin = task$cfo_n_burnin,
       cfo_n_iter = task$cfo_n_iter,
       cfo_thin = task$cfo_thin,
+=======
+>>>>>>> 5cae07988e201ac76a1887bdf8a38fdc791e846f
       
       store_raw = task$store_raw,
       verbose = task$verbose
@@ -790,8 +918,11 @@ run_one_aide_task <- function(task) {
     mtd_method = task$mtd_method,
     r_estimator = task$r_estimator,
     crm_r_model = task$crm_r_model,
+<<<<<<< HEAD
     cfo_method = task$cfo_method,
     restrict_to_tried = task$restrict_to_tried,
+=======
+>>>>>>> 5cae07988e201ac76a1887bdf8a38fdc791e846f
     alpha_true = task$alpha_true,
     r_carry = task$r_carry,
     arrival_rate = task$arrival_rate,
@@ -809,7 +940,11 @@ run_one_aide_task <- function(task) {
 
 workdir <- getwd()
 
+<<<<<<< HEAD
 ## Save runs under a scenario-specific output root so old files are not overwritten.
+=======
+## Save Set B runs under a new output root so old scenario files are not overwritten.
+>>>>>>> 5cae07988e201ac76a1887bdf8a38fdc791e846f
 outdir_root <- paste0("oc_results_cluster_AIDE_", scenario_set_name)
 if (!dir.exists(outdir_root)) {
   dir.create(outdir_root, recursive = TRUE)
@@ -836,6 +971,7 @@ for (model_aide in model_list_aide) {
             method_loop <- method_list_boin
             r_estimator_loop <- r_estimator_list_boin
             crm_loop <- NA_character_
+<<<<<<< HEAD
             cfo_loop <- NA_character_
           } else if (model_aide == "CRM") {
             method_loop <- "crm"
@@ -847,11 +983,18 @@ for (model_aide in model_list_aide) {
             r_estimator_loop <- NA_character_
             crm_loop <- NA_character_
             cfo_loop <- cfo_method_list_aide
+=======
+          } else {
+            method_loop <- "crm"
+            r_estimator_loop <- NA_character_
+            crm_loop <- crm_r_model_list
+>>>>>>> 5cae07988e201ac76a1887bdf8a38fdc791e846f
           }
           
           for (decision_method_aide in method_loop) {
             for (r_estimator_aide in r_estimator_loop) {
               for (crm_r_model_aide in crm_loop) {
+<<<<<<< HEAD
                 for (cfo_method_aide in cfo_loop) {
                   
                   if (model_aide == "BOIN") {
@@ -877,6 +1020,29 @@ for (model_aide in model_list_aide) {
                       seed.block <- job_seed_offset + block_start[block_id] - 1L
                       
                       tasks[[task_id]] <- list(
+=======
+                
+                if (model_aide == "BOIN") {
+                  mtd_method_aide <- decision_method_aide
+                  r_carry_loop <- if (identical(r_estimator_aide, "r_fixed")) {
+                    r_carry_list_fixed_boin
+                  } else {
+                    r_carry_list_boin
+                  }
+                } else {
+                  mtd_method_aide <- paste0("crm_", crm_r_model_aide)
+                  r_carry_loop <- r_carry_list_crm
+                }
+                
+                for (r_carry_aide in r_carry_loop) {
+                  for (block_id in seq_along(trial_blocks)) {
+                    ntrial.block <- trial_blocks[block_id]
+                    
+                    ## Non-overlapping seed for each block and each job.
+                    seed.block <- job_seed_offset + block_start[block_id] - 1L
+                    
+                    tasks[[task_id]] <- list(
+>>>>>>> 5cae07988e201ac76a1887bdf8a38fdc791e846f
                       workdir = workdir,
                       lib_path = lib_path,
                       outdir_root = outdir_root,
@@ -916,7 +1082,10 @@ for (model_aide in model_list_aide) {
                       
                       decision_method = if (model_aide == "BOIN") decision_method_aide else "boin",
                       mtd_method = if (model_aide == "BOIN") mtd_method_aide else NULL,
+<<<<<<< HEAD
                       restrict_to_tried = restrict_to_tried_aide,
+=======
+>>>>>>> 5cae07988e201ac76a1887bdf8a38fdc791e846f
                       r_carry = r_carry_aide,
                       r_estimator = if (model_aide == "BOIN") r_estimator_aide else "r_fixed",
                       
@@ -958,6 +1127,7 @@ for (model_aide in model_list_aide) {
                       crm_n_burnin = crm_n_burnin,
                       crm_n_iter = crm_n_iter,
                       crm_thin = crm_thin,
+<<<<<<< HEAD
 
                       ## CFO / PRIDE inputs
                       cfo_method = if (model_aide == "CFO") cfo_method_aide else "empirical",
@@ -975,6 +1145,8 @@ for (model_aide in model_list_aide) {
                       cfo_n_burnin = cfo_n_burnin,
                       cfo_n_iter = cfo_n_iter,
                       cfo_thin = cfo_thin,
+=======
+>>>>>>> 5cae07988e201ac76a1887bdf8a38fdc791e846f
                       
                       alpha_true = alpha_true,
                       
@@ -982,8 +1154,12 @@ for (model_aide in model_list_aide) {
                       verbose = verbose
                     )
                     
+<<<<<<< HEAD
                       task_id <- task_id + 1L
                     }
+=======
+                    task_id <- task_id + 1L
+>>>>>>> 5cae07988e201ac76a1887bdf8a38fdc791e846f
                   }
                 }
               }
@@ -1041,10 +1217,15 @@ group_key <- vapply(
   function(z) {
     method_tag <- if (z$model == "BOIN") {
       paste0(z$decision_method, "-", z$r_estimator)
+<<<<<<< HEAD
     } else if (z$model == "CRM") {
       paste0("crm_", z$crm_r_model)
     } else {
       paste0("cfo_", z$cfo_method)
+=======
+    } else {
+      paste0("crm_", z$crm_r_model)
+>>>>>>> 5cae07988e201ac76a1887bdf8a38fdc791e846f
     }
     
     paste(
@@ -1056,7 +1237,10 @@ group_key <- vapply(
       paste0("rate", fmt_short(z$arrival_rate)),
       paste0("cyc", fmt_short(z$cycle_max)),
       paste0("cont", as.integer(isTRUE(z$continuous_enrollment))),
+<<<<<<< HEAD
       paste0("tried", as.integer(isTRUE(z$restrict_to_tried))),
+=======
+>>>>>>> 5cae07988e201ac76a1887bdf8a38fdc791e846f
       sep = "_"
     )
   },
@@ -1082,4 +1266,8 @@ for (g in names(groups)) {
   cat("  ntrial.total =", combined$ntrial, "\n")
 }
 
+<<<<<<< HEAD
 cat("\nAll AIDE cluster runs completed.\n")
+=======
+cat("\nAll AIDE cluster runs completed.\n")
+>>>>>>> 5cae07988e201ac76a1887bdf8a38fdc791e846f
