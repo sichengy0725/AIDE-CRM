@@ -351,7 +351,7 @@ theta_mean <- 0
 theta_sd <- sqrt(2)
 
 ## Skeleton for power CRM and alpha-CRM.
-q_skeleton <- c(0.15, 0.20, 0.30, 0.35, 0.45)
+q_skeleton <- c(0.12, 0.16, 0.20, 0.25, 0.30, 0.35, 0.40, 0.45)
 
 crm_skeleton_default <- q_skeleton
 crm_alpha_sd_default <- theta_sd
@@ -372,7 +372,7 @@ crm_level_model_file_default <- "random_CRM_level.bug"
 ## Baseline model: p_j = S(d_j)^exp(theta), with S(d_j)=skeleton_j.
 ## For IPDE observations, effective dose uses actual dose amounts and
 ## calendar-time gaps based on crm_time_col_default.
-dose_alpha_mg <- c(15, 20, 30, 35, 45)
+dose_alpha_mg <- c(10, 20, 30, 40, 50, 60, 70, 80)
 
 crm_dose_values_alpha_default <- dose_alpha_mg
 crm_time_col_default <- "t_start"
@@ -389,15 +389,15 @@ crm_alpha_n_draw_prior_default <- 5000
 ## beta0 ~ t(fixed_intercept, precision = beta0_prec, df = beta0_df)
 ## beta1 ~ Gamma(beta1_shape, beta1_rate)
 ## beta2 ~ Exp(1), but beta2 drops out at baseline because cumu.d = 0.
-fixed_intercept <- -2.8
+fixed_intercept <- -2.2
 beta0_prec <- 2
 beta0_df <- 1
-beta1_shape <- 2.5
+beta1_shape <- 2.3
 beta1_rate <- 1.6
 
 ## IPCRM / cumulative CRM current dose scores.
 ## These values are passed directly to the cumulative CRM helper.
-dose_ipcrm <- c(15, 20, 30, 35, 45)
+dose_ipcrm <- c(10, 20, 30, 40, 50, 60, 70, 80)
 dose_ipcrm <- dose_ipcrm / (2 * stats::sd(dose_ipcrm))
 
 crm_dose_scores_cumu_default <- dose_ipcrm
@@ -412,7 +412,7 @@ crm_cumu_include_current_default <- FALSE
 
 ## CFO / PRIDE settings from methods_prior.R.
 cfo_method_list_aide <- c("empirical", "pride")
-cfo_skeleton_default <- c(0.005, 0.01, 0.05, 0.1, 0.3)
+cfo_skeleton_default <- c(0.002, 0.008, 0.012, 0.04, 0.08, 0.10, 0.20, 0.35)
 cfo_model_file_default <- "PRIDE.bug"
 cfo_sigma2_beta_default <- 30
 cfo_eta_default <- 1
@@ -444,62 +444,81 @@ r_carry_list_crm <- c(0)
 r_carry_list_fixed_boin <- c(0)
 
 ## Scenario set.
-## Twenty new five-dose scenarios.
-scenario_set_name <- "S20_5d"
+## Twenty new eight-dose scenarios from "8 scenarios.txt".
+scenario_set_name <- "S20_8d"
 
 scenario_meta <- data.frame(
   Scenario = seq_len(20L),
-  Source_Scenario = c(
-    1L, 2L, 3L, 4L, 5L,
-    1L, 2L, 3L, 4L, 5L,
-    1L, 2L, 3L, 4L, 5L,
-    1L, 2L, 3L, 4L, 5L
-  ),
+  Source_Scenario = rep(seq_len(5L), times = 4L),
   True_MTD = c(
-    1L, 4L, 1L, 5L, 2L,
-    2L, 4L, 3L, 4L, 3L,
-    5L, 2L, 5L, 2L, 3L,
-    1L, 2L, 1L, 5L, 3L
+    5L, 2L, 4L, 8L, 8L,
+    8L, 4L, 1L, 4L, 5L,
+    8L, 3L, 8L, 5L, 4L,
+    6L, 1L, 2L, 8L, 1L
   ),
   Attempt = c(
     1L, 1L, 1L, 1L, 1L,
-    1L, 3L, 1L, 1L, 1L,
-    1L, 1L, 1L, 1L, 1L,
-    1L, 1L, 1L, 1L, 2L
+    1L, 1L, 1L, 1L, 2L,
+    9L, 1L, 13L, 1L, 1L,
+    3L, 2L, 1L, 67L, 2L
   ),
   Dose1 = c(
-    0.29, 0.16, 0.32, 0.15, 0.23,
-    0.22, 0.06, 0.21, 0.09, 0.13,
-    0.02, 0.11, 0.02, 0.11, 0.07,
-    0.37, 0.07, 0.32, 0.01, 0.09
+    0.11, 0.24, 0.13, 0.07, 0.07,
+    0.02, 0.12, 0.35, 0.09, 0.05,
+    0.00, 0.09, 0.00, 0.04, 0.06,
+    0.00, 0.32, 0.12, 0.00, 0.21
   ),
   Dose2 = c(
-    0.34, 0.20, 0.37, 0.18, 0.28,
-    0.32, 0.09, 0.29, 0.15, 0.20,
-    0.06, 0.23, 0.04, 0.26, 0.14,
-    0.56, 0.27, 0.55, 0.02, 0.18
+    0.14, 0.28, 0.17, 0.09, 0.08,
+    0.03, 0.17, 0.40, 0.14, 0.09,
+    0.01, 0.17, 0.01, 0.07, 0.08,
+    0.01, 0.51, 0.30, 0.01, 0.39
   ),
   Dose3 = c(
-    0.38, 0.26, 0.42, 0.22, 0.32,
-    0.44, 0.18, 0.30, 0.23, 0.32,
-    0.09, 0.39, 0.10, 0.39, 0.31,
-    0.69, 0.50, 0.80, 0.05, 0.37
+    0.19, 0.34, 0.23, 0.10, 0.10,
+    0.04, 0.21, 0.51, 0.18, 0.13,
+    0.02, 0.27, 0.02, 0.13, 0.17,
+    0.02, 0.67, 0.40, 0.02, 0.59
   ),
   Dose4 = c(
-    0.43, 0.31, 0.48, 0.26, 0.39,
-    0.59, 0.29, 0.39, 0.28, 0.39,
-    0.14, 0.58, 0.20, 0.60, 0.41,
-    0.83, 0.56, 0.94, 0.10, 0.63
+    0.24, 0.39, 0.29, 0.13, 0.13,
+    0.07, 0.30, 0.66, 0.34, 0.19,
+    0.04, 0.48, 0.03, 0.19, 0.31,
+    0.03, 0.80, 0.59, 0.04, 0.78
   ),
   Dose5 = c(
-    0.52, 0.36, 0.52, 0.29, 0.43,
-    0.67, 0.44, 0.46, 0.39, 0.46,
-    0.26, 0.76, 0.35, 0.77, 0.52,
-    0.88, 0.78, 0.97, 0.25, 0.77
+    0.30, 0.46, 0.36, 0.18, 0.16,
+    0.10, 0.43, 0.69, 0.45, 0.32,
+    0.06, 0.66, 0.05, 0.31, 0.54,
+    0.16, 0.94, 0.76, 0.09, 0.90
+  ),
+  Dose6 = c(
+    0.34, 0.52, 0.40, 0.20, 0.20,
+    0.16, 0.67, 0.80, 0.58, 0.37,
+    0.08, 0.77, 0.07, 0.49, 0.75,
+    0.36, 0.98, 0.90, 0.12, 0.96
+  ),
+  Dose7 = c(
+    0.37, 0.56, 0.47, 0.27, 0.24,
+    0.26, 0.80, 0.88, 0.75, 0.47,
+    0.17, 0.90, 0.13, 0.68, 0.92,
+    0.71, 0.99, 0.95, 0.17, 0.99
+  ),
+  Dose8 = c(
+    0.41, 0.61, 0.52, 0.32, 0.31,
+    0.32, 0.84, 0.91, 0.81, 0.60,
+    0.28, 0.97, 0.28, 0.83, 0.96,
+    0.84, 1.00, 0.98, 0.40, 1.00
   )
 )
 
-scenarios <- as.matrix(scenario_meta[paste0("Dose", seq_len(5L))])
+dose_col_names <- paste0("Dose", seq_along(crm_skeleton_default))
+if (!all(dose_col_names %in% names(scenario_meta))) {
+  stop("scenario_meta is missing required dose columns: ",
+       paste(setdiff(dose_col_names, names(scenario_meta)), collapse = ", "))
+}
+
+scenarios <- as.matrix(scenario_meta[dose_col_names])
 rownames(scenarios) <- as.character(scenario_meta$Scenario)
 
 scenario_id_list <- seq_len(nrow(scenarios))

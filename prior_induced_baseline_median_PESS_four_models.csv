@@ -1,0 +1,33 @@
+"model","dose","median","PESS"
+"power_crm","dose1",0.1195,1.38
+"power_crm","dose2",0.1594,1.38
+"power_crm","dose3",0.1994,1.37
+"power_crm","dose4",0.2493,1.38
+"power_crm","dose5",0.2993,1.38
+"power_crm","dose6",0.3493,1.39
+"power_crm","dose7",0.3993,1.41
+"power_crm","dose8",0.4493,1.42
+"alpha_crm_baseline","10 mg",0.1195,1.38
+"alpha_crm_baseline","20 mg",0.1594,1.38
+"alpha_crm_baseline","30 mg",0.1994,1.37
+"alpha_crm_baseline","40 mg",0.2493,1.38
+"alpha_crm_baseline","50 mg",0.2993,1.38
+"alpha_crm_baseline","60 mg",0.3493,1.39
+"alpha_crm_baseline","70 mg",0.3993,1.41
+"alpha_crm_baseline","80 mg",0.4493,1.42
+"ipcrm_logistic_baseline","x=0.204124145231932",0.1289,1.71
+"ipcrm_logistic_baseline","x=0.408248290463863",0.1632,1.82
+"ipcrm_logistic_baseline","x=0.612372435695795",0.2032,1.82
+"ipcrm_logistic_baseline","x=0.816496580927726",0.2489,1.75
+"ipcrm_logistic_baseline","x=1.02062072615966",0.3007,1.64
+"ipcrm_logistic_baseline","x=1.22474487139159",0.3572,1.52
+"ipcrm_logistic_baseline","x=1.42886901662352",0.4181,1.41
+"ipcrm_logistic_baseline","x=1.63299316185545",0.4813,1.32
+"cfo_pride","dose1",0.1028,1.83
+"cfo_pride","dose2",0.1629,1.67
+"cfo_pride","dose3",0.1845,1.63
+"cfo_pride","dose4",0.2617,1.53
+"cfo_pride","dose5",0.3121,1.49
+"cfo_pride","dose6",0.3326,1.48
+"cfo_pride","dose7",0.396,1.45
+"cfo_pride","dose8",0.4537,1.44

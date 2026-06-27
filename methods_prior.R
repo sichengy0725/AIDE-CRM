@@ -16,17 +16,17 @@ set.seed(20260617)
 ## -----------------------------
 ## User-specified inputs
 ## -----------------------------
-K <- 5
+K <- 8
 
 ## skeleton for power CRM and alpha-CRM
-# q_skeleton <- c()
-q_skeleton <- c(0.15, 0.20, 0.30, 0.35, 0.45)
+q_skeleton <- c(0.12,0.16,0.20,0.25,0.30,0.35,0.40,0.45)
+# q_skeleton <- c(0.15, 0.20, 0.30, 0.35, 0.45)
 ## alpha-CRM actual dose amounts, mg
-# dose_alpha_mg <- c(10, 20, 30, 40, 50, 60, 70, 80)
-dose_alpha_mg <- c(15, 20, 30, 35, 45)
+dose_alpha_mg <- c(10, 20, 30, 40, 50, 60, 70, 80)
+# dose_alpha_mg <- c(15, 20, 30, 35, 45)
 ## IPCRM / cumulative CRM current dose scores
-# dose_ipcrm <- c(0.1, 0.3, 0.5, 0.7, 0.9)
-dose_ipcrm <- c(15, 20, 30, 35, 45)
+dose_ipcrm <- c(10, 20, 30, 40, 50, 60, 70, 80)
+# dose_ipcrm <- c(15, 20, 30, 35, 45)
 # dose_ipcrm <- c(0.1, 0.3, 0.5, 0.7, 0.9, 1.1, 1.3, 1.5)
 dose_ipcrm <- dose_ipcrm / (2 * sd(dose_ipcrm))
 
@@ -46,17 +46,17 @@ theta_sd   <- sqrt(2)
 ## beta0 ~ t(fixed.intercept, precision = 4, df = 1)
 ## beta1 ~ Gamma(5.83, 1.21)
 ## beta2 ~ Exp(1), but beta2 drops out at baseline because cumu.d = 0
-fixed_intercept <- -2.8
+fixed_intercept <- -2.2
 beta0_prec <- 2
 beta0_df   <- 1
 
-beta1_shape <- 2.5
+beta1_shape <- 2.3
 beta1_rate  <- 1.6
 
 ## CFO / PRIDE priors:
 ## beta_j ~ N(mu_j, sigma2_beta), mu_j = logit(c_j)
 ## inv_sigma2_w ~ Gamma(eta, eta), W_i ~ N(0, sigma2_w)
-cfo_skeleton <- c(0.005, 0.01, 0.05, 0.1, 0.3)
+cfo_skeleton <- c(0.002, 0.008, 0.012, 0.04, 0.08, 0.1, 0.2, 0.35)
 cfo_sigma2_beta <- 30
 cfo_eta <- 1
 
