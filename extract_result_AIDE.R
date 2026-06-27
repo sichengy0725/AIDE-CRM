@@ -5,13 +5,14 @@
 ## Newest runner naming rules:
 ##
 ## Folder:
-##   oc_results_cluster_AIDE_Set_5dose_methods_prior/
-##   Set_5dose_methods_prior-model-{model}-opt-{method_tag}-w-{T_assess}-c-{C}-
+##   oc_results_cluster_AIDE_S20_5d/
+##   S20_5d-model-{model}-opt-{method_tag}-w-{T_assess}-c-{C}-
 ##   cyc-{cycle_max}-rate-{arrival_rate}-Nmax-{Nmax_eff}-tried-{0/1}/
 ##
 ## Combined file:
-##   Set_5dose_methods_prior_SC{sc}_{model}_{method_tag}_a{alpha_true}_r{r_carry}_
-##   rate{arrival_rate}_cyc{cycle_max}_cont{0/1}_tried{0/1}-job-{job}-combined.rds
+##   S20_5d_SC{sc}_{model}_{method_tag}_a{alpha_true}_r{r_carry}_
+##   rate{arrival_rate}_cyc{cycle_max}_Nmax{Nmax_eff}_cont{0/1}_tried{0/1}-
+##   job-{job}-combined.rds
 ##
 ## Supports:
 ##   BOIN: boin / approx1 / approx2 with r_fixed or r_mle
@@ -27,18 +28,63 @@ rm(list = ls())
 
 ## setwd("/rsrch8/home/biostatistics/syang10/AIDE")
 
-scenario_set_name <- "Set_5dose_methods_prior"
+scenario_set_name <- "S20_5d"
 results_root <- paste0("oc_results_cluster_AIDE_", scenario_set_name)
 
-## Five-dose true DLT scenarios used by run_oc_AIDE.R.
-p_true_scenarios <- rbind(
-  `1` = c(0.07, 0.12, 0.17, 0.22, 0.30),
-  `2` = c(0.05, 0.10, 0.18, 0.30, 0.40),
-  `3` = c(0.15, 0.20, 0.30, 0.35, 0.45),
-  `4` = c(0.15, 0.30, 0.38, 0.45, 0.55),
-  `5` = c(0.30, 0.35, 0.40, 0.45, 0.50),
-  `6` = c(0.50, 0.55, 0.60, 0.65, 0.70)
+## Twenty new five-dose true DLT scenarios used by run_oc_AIDE.R.
+scenario_meta <- data.frame(
+  Scenario = seq_len(20L),
+  Source_Scenario = c(
+    1L, 2L, 3L, 4L, 5L,
+    1L, 2L, 3L, 4L, 5L,
+    1L, 2L, 3L, 4L, 5L,
+    1L, 2L, 3L, 4L, 5L
+  ),
+  True_MTD = c(
+    1L, 4L, 1L, 5L, 2L,
+    2L, 4L, 3L, 4L, 3L,
+    5L, 2L, 5L, 2L, 3L,
+    1L, 2L, 1L, 5L, 3L
+  ),
+  Attempt = c(
+    1L, 1L, 1L, 1L, 1L,
+    1L, 3L, 1L, 1L, 1L,
+    1L, 1L, 1L, 1L, 1L,
+    1L, 1L, 1L, 1L, 2L
+  ),
+  Dose1 = c(
+    0.29, 0.16, 0.32, 0.15, 0.23,
+    0.22, 0.06, 0.21, 0.09, 0.13,
+    0.02, 0.11, 0.02, 0.11, 0.07,
+    0.37, 0.07, 0.32, 0.01, 0.09
+  ),
+  Dose2 = c(
+    0.34, 0.20, 0.37, 0.18, 0.28,
+    0.32, 0.09, 0.29, 0.15, 0.20,
+    0.06, 0.23, 0.04, 0.26, 0.14,
+    0.56, 0.27, 0.55, 0.02, 0.18
+  ),
+  Dose3 = c(
+    0.38, 0.26, 0.42, 0.22, 0.32,
+    0.44, 0.18, 0.30, 0.23, 0.32,
+    0.09, 0.39, 0.10, 0.39, 0.31,
+    0.69, 0.50, 0.80, 0.05, 0.37
+  ),
+  Dose4 = c(
+    0.43, 0.31, 0.48, 0.26, 0.39,
+    0.59, 0.29, 0.39, 0.28, 0.39,
+    0.14, 0.58, 0.20, 0.60, 0.41,
+    0.83, 0.56, 0.94, 0.10, 0.63
+  ),
+  Dose5 = c(
+    0.52, 0.36, 0.52, 0.29, 0.43,
+    0.67, 0.44, 0.46, 0.39, 0.46,
+    0.26, 0.76, 0.35, 0.77, 0.52,
+    0.88, 0.78, 0.97, 0.25, 0.77
+  )
 )
+p_true_scenarios <- as.matrix(scenario_meta[paste0("Dose", seq_len(5L))])
+rownames(p_true_scenarios) <- as.character(scenario_meta$Scenario)
 scenario_id_list <- as.integer(rownames(p_true_scenarios))
 ndose_expected <- ncol(p_true_scenarios)
 
@@ -54,10 +100,10 @@ target <- 0.30
 T_assess <- 28
 C <- 3L
 cycle_max_list <- c(1L, 2L, 3L)
-Nmax_eff <- 45L
+Nmax_eff_list <- c(30L, 45L)
 dose_cap <- 3L
 continuous_enrollment <- TRUE
-restrict_to_tried <- TRUE
+restrict_to_tried_list <- c(TRUE, FALSE)
 
 alpha_true_list <- c(0, 0.3, 0.6, 0.9)
 arrival_rate_list <- c(1 / 14)
@@ -212,6 +258,7 @@ make_foldername <- function(model,
                             method_tag,
                             cycle_max,
                             arrival_rate,
+                            Nmax_eff,
                             restrict_to_tried,
                             scenario_set = scenario_set_name) {
   paste0(
@@ -234,6 +281,7 @@ make_group_key <- function(sc,
                            r_carry,
                            arrival_rate,
                            cycle_max,
+                           Nmax_eff,
                            continuous_enrollment,
                            restrict_to_tried,
                            scenario_set = scenario_set_name) {
@@ -245,6 +293,7 @@ make_group_key <- function(sc,
     paste0("r", fmt_short(r_carry)),
     paste0("rate", fmt_short(arrival_rate)),
     paste0("cyc", fmt_short(cycle_max)),
+    paste0("Nmax", fmt_short(Nmax_eff)),
     paste0("cont", as.integer(isTRUE(continuous_enrollment))),
     paste0("tried", as.integer(isTRUE(restrict_to_tried))),
     sep = "_"
@@ -258,6 +307,7 @@ make_filename <- function(sc,
                           r_carry,
                           arrival_rate,
                           cycle_max,
+                          Nmax_eff,
                           continuous_enrollment,
                           restrict_to_tried,
                           job) {
@@ -270,6 +320,7 @@ make_filename <- function(sc,
       r_carry = r_carry,
       arrival_rate = arrival_rate,
       cycle_max = cycle_max,
+      Nmax_eff = Nmax_eff,
       continuous_enrollment = continuous_enrollment,
       restrict_to_tried = restrict_to_tried
     ),
@@ -420,6 +471,7 @@ summarize_aide_files <- function(files.use,
                                  alpha_true,
                                  r_carry,
                                  arrival_rate,
+                                 Nmax_eff,
                                  cycle_max,
                                  continuous_enrollment,
                                  restrict_to_tried) {
@@ -445,6 +497,24 @@ summarize_aide_files <- function(files.use,
       )
     }
   }
+
+  source_scenario <- get_field(res.list[[1]], c("source_scenario"), required = FALSE)
+  if (is.null(source_scenario) && sc %in% scenario_meta$Scenario) {
+    source_scenario <- scenario_meta$Source_Scenario[match(sc, scenario_meta$Scenario)]
+  }
+  if (is.null(source_scenario)) source_scenario <- NA_integer_
+
+  true_mtd <- get_field(res.list[[1]], c("true_mtd"), required = FALSE)
+  if (is.null(true_mtd) && sc %in% scenario_meta$Scenario) {
+    true_mtd <- scenario_meta$True_MTD[match(sc, scenario_meta$Scenario)]
+  }
+  if (is.null(true_mtd)) true_mtd <- NA_integer_
+
+  scenario_attempt <- get_field(res.list[[1]], c("scenario_attempt"), required = FALSE)
+  if (is.null(scenario_attempt) && sc %in% scenario_meta$Scenario) {
+    scenario_attempt <- scenario_meta$Attempt[match(sc, scenario_meta$Scenario)]
+  }
+  if (is.null(scenario_attempt)) scenario_attempt <- NA_integer_
 
   final_MTD <- safe_unlist_field(res.list, c("final_MTD"))
 
@@ -499,6 +569,9 @@ summarize_aide_files <- function(files.use,
     Scenario_Set = scenario_set_name,
     Scenario_Name = paste0(scenario_set_name, "_SC", sc),
     Scenario = sc,
+    Source_Scenario = source_scenario,
+    True_MTD = true_mtd,
+    Scenario_Attempt = scenario_attempt,
     Model = model,
     Method = method_tag,
     BOIN_Method = ifelse(model == "BOIN", boin_method, NA_character_),
@@ -509,6 +582,7 @@ summarize_aide_files <- function(files.use,
     r_carry = r_carry,
     Accrual = arrival_rate,
     T_assess = T_assess,
+    Nmax_eff = Nmax_eff,
     Cycle_Max = cycle_max,
     Continuous_Enrollment = as.integer(isTRUE(continuous_enrollment)),
     Restrict_To_Tried = as.integer(isTRUE(restrict_to_tried)),
@@ -611,6 +685,9 @@ summarize_aide_files <- function(files.use,
     Scenario_Set = scenario_set_name,
     Scenario_Name = paste0(scenario_set_name, "_SC", sc),
     Scenario = sc,
+    Source_Scenario = source_scenario,
+    True_MTD = true_mtd,
+    Scenario_Attempt = scenario_attempt,
     Model = model,
     Method = method_tag,
     BOIN_Method = ifelse(model == "BOIN", boin_method, NA_character_),
@@ -621,6 +698,7 @@ summarize_aide_files <- function(files.use,
     r_carry = r_carry,
     Accrual = arrival_rate,
     T_assess = T_assess,
+    Nmax_eff = Nmax_eff,
     Cycle_Max = cycle_max,
     Continuous_Enrollment = as.integer(isTRUE(continuous_enrollment)),
     Restrict_To_Tried = as.integer(isTRUE(restrict_to_tried)),
@@ -668,23 +746,25 @@ missing.log <- list()
 
 miss.idx <- 1L
 
-for (model in model_list) {
-  if (model == "BOIN") {
-    method_loop <- boin_method_list
-    boin_r_estimator_loop <- boin_r_estimator_list
-    crm_loop <- NA_character_
-    cfo_loop <- NA_character_
-  } else if (model == "CRM") {
-    method_loop <- NA_character_
-    boin_r_estimator_loop <- NA_character_
-    crm_loop <- crm_r_model_list
-    cfo_loop <- NA_character_
-  } else {
-    method_loop <- NA_character_
-    boin_r_estimator_loop <- NA_character_
-    crm_loop <- NA_character_
-    cfo_loop <- cfo_method_list
-  }
+for (Nmax_eff in Nmax_eff_list) {
+  for (restrict_to_tried in restrict_to_tried_list) {
+    for (model in model_list) {
+      if (model == "BOIN") {
+        method_loop <- boin_method_list
+        boin_r_estimator_loop <- boin_r_estimator_list
+        crm_loop <- NA_character_
+        cfo_loop <- NA_character_
+      } else if (model == "CRM") {
+        method_loop <- NA_character_
+        boin_r_estimator_loop <- NA_character_
+        crm_loop <- crm_r_model_list
+        cfo_loop <- NA_character_
+      } else {
+        method_loop <- NA_character_
+        boin_r_estimator_loop <- NA_character_
+        crm_loop <- NA_character_
+        cfo_loop <- cfo_method_list
+      }
 
   for (sc in scenario_id_list) {
     for (alpha_true in alpha_true_list) {
@@ -721,6 +801,7 @@ for (model in model_list) {
                       method_tag = method_tag,
                       cycle_max = cycle_max,
                       arrival_rate = arrival_rate,
+                      Nmax_eff = Nmax_eff,
                       restrict_to_tried = restrict_to_tried
                     )
 
@@ -739,6 +820,7 @@ for (model in model_list) {
                             r_carry = r_carry,
                             arrival_rate = arrival_rate,
                             cycle_max = cycle_max,
+                            Nmax_eff = Nmax_eff,
                             continuous_enrollment = continuous_enrollment,
                             restrict_to_tried = restrict_to_tried,
                             job = j
@@ -764,6 +846,7 @@ for (model in model_list) {
                         r_carry = r_carry,
                         arrival_rate = arrival_rate,
                         cycle_max = cycle_max,
+                        Nmax_eff = Nmax_eff,
                         continuous_enrollment = continuous_enrollment,
                         restrict_to_tried = restrict_to_tried
                       )
@@ -796,6 +879,7 @@ for (model in model_list) {
                     cat("r_carry:", r_carry, "\n")
                     cat("Accrual:", arrival_rate, "\n")
                     cat("Cycle max:", cycle_max, "\n")
+                    cat("Nmax eff:", Nmax_eff, "\n")
                     cat("Continuous:", continuous_enrollment, "\n")
                     cat("Restrict to tried:", restrict_to_tried, "\n")
                     cat("Folder:", folderpath, "\n")
@@ -807,6 +891,9 @@ for (model in model_list) {
                       Scenario_Set = scenario_set_name,
                       Scenario_Name = paste0(scenario_set_name, "_SC", sc),
                       Scenario = sc,
+                      Source_Scenario = scenario_meta$Source_Scenario[match(sc, scenario_meta$Scenario)],
+                      True_MTD = scenario_meta$True_MTD[match(sc, scenario_meta$Scenario)],
+                      Scenario_Attempt = scenario_meta$Attempt[match(sc, scenario_meta$Scenario)],
                       Model = model,
                       Method = method_tag,
                       BOIN_Method = ifelse(model == "BOIN", method0, NA_character_),
@@ -817,6 +904,7 @@ for (model in model_list) {
                       r_carry = r_carry,
                       Accrual = arrival_rate,
                       T_assess = T_assess,
+                      Nmax_eff = Nmax_eff,
                       Cycle_Max = cycle_max,
                       Continuous_Enrollment = as.integer(isTRUE(continuous_enrollment)),
                       Restrict_To_Tried = as.integer(isTRUE(restrict_to_tried)),
@@ -848,6 +936,7 @@ for (model in model_list) {
                       alpha_true = alpha_true,
                       r_carry = r_carry,
                       arrival_rate = arrival_rate,
+                      Nmax_eff = Nmax_eff,
                       cycle_max = cycle_max,
                       continuous_enrollment = continuous_enrollment,
                       restrict_to_tried = restrict_to_tried
@@ -874,6 +963,7 @@ for (model in model_list) {
                       r_carry = r_carry,
                       arrival_rate = arrival_rate,
                       cycle_max = cycle_max,
+                      Nmax_eff = Nmax_eff,
                       continuous_enrollment = continuous_enrollment,
                       restrict_to_tried = restrict_to_tried
                     )
@@ -888,6 +978,8 @@ for (model in model_list) {
         }
       }
     }
+  }
+}
   }
 }
 
@@ -920,10 +1012,10 @@ out.tag <- paste0(
   "_c", fmt_short(C),
   "_cyc", paste(fmt_short(cycle_max_list), collapse = "_"),
   "_rate", paste(fmt_short(arrival_rate_list), collapse = "_"),
-  "_Nmax", fmt_short(Nmax_eff),
+  "_Nmax", paste(fmt_short(Nmax_eff_list), collapse = "_"),
   "_dosecap", fmt_short(dose_cap),
   "_cont", as.integer(isTRUE(continuous_enrollment)),
-  "_tried", as.integer(isTRUE(restrict_to_tried)),
+  "_tried", paste(as.integer(restrict_to_tried_list), collapse = "_"),
   "_jobs", min(jobs.expected), "to", max(jobs.expected)
 )
 
