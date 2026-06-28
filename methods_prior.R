@@ -51,10 +51,10 @@ fixed_intercept <- -2.8
 beta0_prec <- 2
 beta0_df   <- 1
 
-# beta1_shape <- 2.3
+# beta1_shape <- 2.2
 beta1_shape <- 2.5
-beta1_rate  <- 1.6
 # beta1_rate  <- 1.6
+beta1_rate  <- 1.6
 
 ## CFO / PRIDE priors:
 ## beta_j ~ N(mu_j, sigma2_beta), mu_j = logit(c_j)

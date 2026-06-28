@@ -364,7 +364,7 @@ crm_level_model_file_default <- "random_CRM_level.bug"
 ## Baseline model: p_j = S(d_j)^exp(theta), with S(d_j)=skeleton_j.
 ## For IPDE observations, effective dose uses actual dose amounts and
 ## calendar-time gaps based on crm_time_col_default.
-dose_alpha_mg <- c(10, 20, 30, 40, 50)
+dose_alpha_mg <- c(15, 20, 30, 35, 45)
 
 crm_dose_values_alpha_default <- dose_alpha_mg
 crm_time_col_default <- "t_start"
@@ -381,15 +381,15 @@ crm_alpha_n_draw_prior_default <- 5000
 ## beta0 ~ t(fixed_intercept, precision = beta0_prec, df = beta0_df)
 ## beta1 ~ Gamma(beta1_shape, beta1_rate)
 ## beta2 ~ Exp(1), but beta2 drops out at baseline because cumu.d = 0.
-fixed_intercept <- -2.2
+fixed_intercept <- -2.8
 beta0_prec <- 2
 beta0_df <- 1
-beta1_shape <- 2.3
+beta1_shape <- 2.5
 beta1_rate <- 1.6
 
 ## IPCRM / cumulative CRM current dose scores.
 ## These values are passed directly to the cumulative CRM helper.
-dose_ipcrm <- c(10, 20, 30, 40, 50)
+dose_ipcrm <- c(15, 20, 30, 35, 45)
 dose_ipcrm <- dose_ipcrm / (2 * stats::sd(dose_ipcrm))
 
 crm_dose_scores_cumu_default <- dose_ipcrm
@@ -444,18 +444,62 @@ r_adaptive_plug_in_default <- "mean"
 r_adaptive_rel_tol_default <- 1e-6
 
 ## Scenario set.
-scenario_set_name <- "Set_5dose_adaptive_r"
+## First 5 rows are the user-specified examples; rows 6-25 are from
+## "5 scenarios.txt" in row order.
+scenario_set_name <- "Set_5dose_adaptive_r_25"
 
 scenario_meta <- data.frame(
-  Scenario = seq_len(5L),
-  Source_Scenario = seq_len(5L),
-  True_MTD = c(1L, 3L, 3L, 4L, 5L),
-  Attempt = rep(1L, 5L),
-  Dose1 = c(0.30, 0.15, 0.15, 0.05, 0.07),
-  Dose2 = c(0.35, 0.20, 0.20, 0.10, 0.12),
-  Dose3 = c(0.40, 0.30, 0.30, 0.18, 0.17),
-  Dose4 = c(0.45, 0.35, 0.35, 0.30, 0.22),
-  Dose5 = c(0.50, 0.45, 0.45, 0.40, 0.30)
+  Scenario = seq_len(25L),
+  Source_Scenario = c(seq_len(5L), rep(seq_len(5L), times = 4L)),
+  True_MTD = c(
+    1L, 3L, 3L, 4L, 5L,
+    1L, 4L, 1L, 5L, 2L,
+    2L, 4L, 3L, 4L, 3L,
+    5L, 2L, 5L, 2L, 3L,
+    1L, 2L, 1L, 5L, 3L
+  ),
+  Attempt = c(
+    rep(1L, 5L),
+    1L, 1L, 1L, 1L, 1L,
+    1L, 3L, 1L, 1L, 1L,
+    1L, 1L, 1L, 1L, 1L,
+    1L, 1L, 1L, 1L, 2L
+  ),
+  Dose1 = c(
+    0.30, 0.15, 0.15, 0.05, 0.07,
+    0.29, 0.16, 0.32, 0.15, 0.23,
+    0.22, 0.06, 0.21, 0.09, 0.13,
+    0.02, 0.11, 0.02, 0.11, 0.07,
+    0.37, 0.07, 0.32, 0.01, 0.09
+  ),
+  Dose2 = c(
+    0.35, 0.20, 0.20, 0.10, 0.12,
+    0.34, 0.20, 0.37, 0.18, 0.28,
+    0.32, 0.09, 0.29, 0.15, 0.20,
+    0.06, 0.23, 0.04, 0.26, 0.14,
+    0.56, 0.27, 0.55, 0.02, 0.18
+  ),
+  Dose3 = c(
+    0.40, 0.30, 0.30, 0.18, 0.17,
+    0.38, 0.26, 0.42, 0.22, 0.32,
+    0.44, 0.18, 0.30, 0.23, 0.32,
+    0.09, 0.39, 0.10, 0.39, 0.31,
+    0.69, 0.50, 0.80, 0.05, 0.37
+  ),
+  Dose4 = c(
+    0.45, 0.35, 0.35, 0.30, 0.22,
+    0.43, 0.31, 0.48, 0.26, 0.39,
+    0.59, 0.29, 0.39, 0.28, 0.39,
+    0.14, 0.58, 0.20, 0.60, 0.41,
+    0.83, 0.56, 0.94, 0.10, 0.63
+  ),
+  Dose5 = c(
+    0.50, 0.45, 0.45, 0.40, 0.30,
+    0.52, 0.36, 0.52, 0.29, 0.43,
+    0.67, 0.44, 0.46, 0.39, 0.46,
+    0.26, 0.76, 0.35, 0.77, 0.52,
+    0.88, 0.78, 0.97, 0.25, 0.77
+  )
 )
 
 dose_col_names <- paste0("Dose", seq_along(crm_skeleton_default))
