@@ -122,16 +122,7 @@ get_job_index <- function(args) {
 }
 
 make_p_ipde <- function(p_base, alpha_true) {
-  p_ipde <- p_base
-
-  if (length(p_ipde) >= 2) {
-    p_ipde[-1] <- pmin(
-      p_base[-1] + alpha_true * p_base[-length(p_base)],
-      1
-    )
-  }
-
-  p_ipde
+  pmin(alpha_true + (1 - alpha_true) * p_base, 1)
 }
 
 make_aide_folder <- function(task) {
@@ -293,7 +284,7 @@ C_equiv <- 3L
 ## Set to c(1L, 2L, 3L) to compare no-IPDE vs 2-dose vs 3-dose IPDE.
 cycle_max_list_equiv <- c(1L, 2L, 3L)
 
-Nmax_eff_list_equiv <- c(30L, 45L)
+Nmax_eff_list_equiv <- c(30L)
 ipde_design_equiv <- 2L
 
 t0 <- 0
@@ -312,7 +303,7 @@ store_raw <- FALSE
 verbose <- FALSE
 
 ## Choose AIDE models here.
-model_list_aide <- c("BOIN", "CFO")
+model_list_aide <- c("BOIN")
 ## model_list_aide <- c("BOIN", "CRM", "CFO")
 ## model_list_aide <- c("CRM")
 ## model_list_aide <- c("CFO")
@@ -321,11 +312,12 @@ model_list_aide <- c("BOIN", "CFO")
 method_list_boin <- c("approx1", "approx2")
 ## method_list_boin <- c("boin", "approx1", "approx2")
 
-## Newest BOIN option:
-##   r_estimator = "r_mle" uses raw smoothed MLE truncated by
-##   pooled adjacent regular-patient toxicity.
-r_estimator_list_boin <- c("r_fixed")
-## r_estimator_list_boin <- c("r_fixed", "r_mle")
+## BOIN r options:
+##   r_fixed    : use fixed r_carry
+##   r_mle      : local smoothed MLE truncated by adjacent regular toxicity
+##   r_adaptive : global posterior estimator of r, integrating p_k out
+r_estimator_list_boin <- c("r_adaptive")
+## r_estimator_list_boin <- c("r_fixed", "r_mle", "r_adaptive")
 
 ## CRM versions.
 ## Five supported AIDE-CRM methods:
@@ -343,7 +335,7 @@ crm_r_model_list <- c("fixed", "random", "level", "alpha_crm", "cumu_crm")
 ## Final MTD selection gate.
 ## TRUE: select among tried/non-eliminated doses.
 ## FALSE: allow all non-eliminated doses to enter final selection.
-restrict_to_tried_list_aide <- c(TRUE, FALSE)
+restrict_to_tried_list_aide <- c(TRUE)
 
 ## CRM settings from methods_prior.R.
 ## Power CRM / alpha-CRM prior: theta ~ N(0, 2).
@@ -351,7 +343,7 @@ theta_mean <- 0
 theta_sd <- sqrt(2)
 
 ## Skeleton for power CRM and alpha-CRM.
-q_skeleton <- c(0.12, 0.16, 0.20, 0.25, 0.30, 0.35, 0.40, 0.45)
+q_skeleton <- c(0.15, 0.20, 0.30, 0.35, 0.45)
 
 crm_skeleton_default <- q_skeleton
 crm_alpha_sd_default <- theta_sd
@@ -372,7 +364,7 @@ crm_level_model_file_default <- "random_CRM_level.bug"
 ## Baseline model: p_j = S(d_j)^exp(theta), with S(d_j)=skeleton_j.
 ## For IPDE observations, effective dose uses actual dose amounts and
 ## calendar-time gaps based on crm_time_col_default.
-dose_alpha_mg <- c(10, 20, 30, 40, 50, 60, 70, 80)
+dose_alpha_mg <- c(10, 20, 30, 40, 50)
 
 crm_dose_values_alpha_default <- dose_alpha_mg
 crm_time_col_default <- "t_start"
@@ -397,7 +389,7 @@ beta1_rate <- 1.6
 
 ## IPCRM / cumulative CRM current dose scores.
 ## These values are passed directly to the cumulative CRM helper.
-dose_ipcrm <- c(10, 20, 30, 40, 50, 60, 70, 80)
+dose_ipcrm <- c(10, 20, 30, 40, 50)
 dose_ipcrm <- dose_ipcrm / (2 * stats::sd(dose_ipcrm))
 
 crm_dose_scores_cumu_default <- dose_ipcrm
@@ -412,7 +404,7 @@ crm_cumu_include_current_default <- FALSE
 
 ## CFO / PRIDE settings from methods_prior.R.
 cfo_method_list_aide <- c("empirical", "pride")
-cfo_skeleton_default <- c(0.002, 0.008, 0.012, 0.04, 0.08, 0.10, 0.20, 0.35)
+cfo_skeleton_default <- c(0.005, 0.01, 0.05, 0.10, 0.30)
 cfo_model_file_default <- "PRIDE.bug"
 cfo_sigma2_beta_default <- 30
 cfo_eta_default <- 1
@@ -443,73 +435,27 @@ r_carry_list_boin <- c(0)
 r_carry_list_crm <- c(0)
 r_carry_list_fixed_boin <- c(0)
 
+## Adaptive/global r estimator settings.  These match the carryover
+## estimator demo and use posterior mean r as the plug-in value.
+r_adaptive_prior_default <- c(target_BOIN / 2, 1 - target_BOIN / 2)
+p_adaptive_prior_default <- c(target_BOIN / 2, 1 - target_BOIN / 2)
+r_adaptive_max_default <- 0.99
+r_adaptive_plug_in_default <- "mean"
+r_adaptive_rel_tol_default <- 1e-6
+
 ## Scenario set.
-## Twenty new eight-dose scenarios from "8 scenarios.txt".
-scenario_set_name <- "S20_8d"
+scenario_set_name <- "Set_5dose_adaptive_r"
 
 scenario_meta <- data.frame(
-  Scenario = seq_len(20L),
-  Source_Scenario = rep(seq_len(5L), times = 4L),
-  True_MTD = c(
-    5L, 2L, 4L, 8L, 8L,
-    8L, 4L, 1L, 4L, 5L,
-    8L, 3L, 8L, 5L, 4L,
-    6L, 1L, 2L, 8L, 1L
-  ),
-  Attempt = c(
-    1L, 1L, 1L, 1L, 1L,
-    1L, 1L, 1L, 1L, 2L,
-    9L, 1L, 13L, 1L, 1L,
-    3L, 2L, 1L, 67L, 2L
-  ),
-  Dose1 = c(
-    0.11, 0.24, 0.13, 0.07, 0.07,
-    0.02, 0.12, 0.35, 0.09, 0.05,
-    0.00, 0.09, 0.00, 0.04, 0.06,
-    0.00, 0.32, 0.12, 0.00, 0.21
-  ),
-  Dose2 = c(
-    0.14, 0.28, 0.17, 0.09, 0.08,
-    0.03, 0.17, 0.40, 0.14, 0.09,
-    0.01, 0.17, 0.01, 0.07, 0.08,
-    0.01, 0.51, 0.30, 0.01, 0.39
-  ),
-  Dose3 = c(
-    0.19, 0.34, 0.23, 0.10, 0.10,
-    0.04, 0.21, 0.51, 0.18, 0.13,
-    0.02, 0.27, 0.02, 0.13, 0.17,
-    0.02, 0.67, 0.40, 0.02, 0.59
-  ),
-  Dose4 = c(
-    0.24, 0.39, 0.29, 0.13, 0.13,
-    0.07, 0.30, 0.66, 0.34, 0.19,
-    0.04, 0.48, 0.03, 0.19, 0.31,
-    0.03, 0.80, 0.59, 0.04, 0.78
-  ),
-  Dose5 = c(
-    0.30, 0.46, 0.36, 0.18, 0.16,
-    0.10, 0.43, 0.69, 0.45, 0.32,
-    0.06, 0.66, 0.05, 0.31, 0.54,
-    0.16, 0.94, 0.76, 0.09, 0.90
-  ),
-  Dose6 = c(
-    0.34, 0.52, 0.40, 0.20, 0.20,
-    0.16, 0.67, 0.80, 0.58, 0.37,
-    0.08, 0.77, 0.07, 0.49, 0.75,
-    0.36, 0.98, 0.90, 0.12, 0.96
-  ),
-  Dose7 = c(
-    0.37, 0.56, 0.47, 0.27, 0.24,
-    0.26, 0.80, 0.88, 0.75, 0.47,
-    0.17, 0.90, 0.13, 0.68, 0.92,
-    0.71, 0.99, 0.95, 0.17, 0.99
-  ),
-  Dose8 = c(
-    0.41, 0.61, 0.52, 0.32, 0.31,
-    0.32, 0.84, 0.91, 0.81, 0.60,
-    0.28, 0.97, 0.28, 0.83, 0.96,
-    0.84, 1.00, 0.98, 0.40, 1.00
-  )
+  Scenario = seq_len(5L),
+  Source_Scenario = seq_len(5L),
+  True_MTD = c(1L, 3L, 3L, 4L, 5L),
+  Attempt = rep(1L, 5L),
+  Dose1 = c(0.30, 0.15, 0.15, 0.05, 0.07),
+  Dose2 = c(0.35, 0.20, 0.20, 0.10, 0.12),
+  Dose3 = c(0.40, 0.30, 0.30, 0.18, 0.17),
+  Dose4 = c(0.45, 0.35, 0.35, 0.30, 0.22),
+  Dose5 = c(0.50, 0.45, 0.45, 0.40, 0.30)
 )
 
 dose_col_names <- paste0("Dose", seq_along(crm_skeleton_default))
@@ -582,6 +528,10 @@ cat("Trials per setting in this job:", ntrial.total, "\n")
 cat("Models:", paste(model_list_aide, collapse = ", "), "\n")
 cat("BOIN methods:", paste(method_list_boin, collapse = ", "), "\n")
 cat("BOIN r estimators:", paste(r_estimator_list_boin, collapse = ", "), "\n")
+cat("BOIN adaptive r prior:", paste(r_adaptive_prior_default, collapse = ", "), "\n")
+cat("BOIN adaptive p prior:", paste(p_adaptive_prior_default, collapse = ", "), "\n")
+cat("BOIN adaptive r max:", r_adaptive_max_default, "\n")
+cat("BOIN adaptive r plug-in:", r_adaptive_plug_in_default, "\n")
 cat("CRM r models:", paste(crm_r_model_list, collapse = ", "), "\n")
 cat("CFO methods:", paste(cfo_method_list_aide, collapse = ", "), "\n")
 cat("Nmax_eff list:", paste(Nmax_eff_list_equiv, collapse = ", "), "\n")
@@ -700,6 +650,13 @@ run_one_aide_task <- function(task) {
 
     if (task$model == "BOIN") {
       cat("BOIN r estimator:", task$r_estimator, "\n")
+      if (identical(task$r_estimator, "r_adaptive")) {
+        cat("BOIN adaptive r prior:", paste(task$r_adaptive_prior, collapse = ", "), "\n")
+        cat("BOIN adaptive p prior:", paste(task$p_adaptive_prior, collapse = ", "), "\n")
+        cat("BOIN adaptive r max:", task$r_adaptive_max, "\n")
+        cat("BOIN adaptive r plug-in:", task$r_adaptive_plug_in, "\n")
+        cat("BOIN adaptive rel.tol:", task$r_adaptive_rel_tol, "\n")
+      }
     }
 
     if (task$model == "CRM") {
@@ -777,6 +734,11 @@ run_one_aide_task <- function(task) {
       restrict_to_tried = task$restrict_to_tried,
       r_carry = task$r_carry,
       r_estimator = task$r_estimator,
+      r_adaptive_prior = task$r_adaptive_prior,
+      p_adaptive_prior = task$p_adaptive_prior,
+      r_adaptive_max = task$r_adaptive_max,
+      r_adaptive_plug_in = task$r_adaptive_plug_in,
+      r_adaptive_rel_tol = task$r_adaptive_rel_tol,
 
       crm_r_model = task$crm_r_model,
       crm_skeleton = task$crm_skeleton,
@@ -998,6 +960,11 @@ for (Nmax_eff_aide in Nmax_eff_list_equiv) {
                         restrict_to_tried = restrict_to_tried_aide,
                         r_carry = r_carry_aide,
                         r_estimator = if (model_aide == "BOIN") r_estimator_aide else "r_fixed",
+                        r_adaptive_prior = r_adaptive_prior_default,
+                        p_adaptive_prior = p_adaptive_prior_default,
+                        r_adaptive_max = r_adaptive_max_default,
+                        r_adaptive_plug_in = r_adaptive_plug_in_default,
+                        r_adaptive_rel_tol = r_adaptive_rel_tol_default,
 
                         crm_r_model = if (model_aide == "CRM") crm_r_model_aide else "fixed",
                         crm_skeleton = crm_skeleton_default,

@@ -45,7 +45,12 @@ simulate_AIDE_design <- function(
   mtd_method = NULL,
   restrict_to_tried = TRUE,
   r_carry = 0.1,
-  r_estimator = c("r_fixed", "r_mle"),
+  r_estimator = c("r_fixed", "r_mle", "r_adaptive"),
+  r_adaptive_prior = c(1, 9),
+  p_adaptive_prior = c(1, 1),
+  r_adaptive_max = 0.6,
+  r_adaptive_plug_in = c("mean", "map"),
+  r_adaptive_rel_tol = 1e-6,
 
   # --- CRM model options ---
   crm_r_model = c("fixed", "r_fixed", "random", "level", "alpha_crm", "cumu_crm"),
@@ -114,6 +119,7 @@ simulate_AIDE_design <- function(
   if (model == "BOIN") {
     decision_method <- match.arg(decision_method)
     r_estimator <- match.arg(r_estimator)
+    r_adaptive_plug_in <- match.arg(r_adaptive_plug_in)
 
     if (is.null(mtd_method)) {
       mtd_method <- decision_method
@@ -593,9 +599,22 @@ simulate_AIDE_design <- function(
           phi = TARGET,
           r_carry = r_carry,
           r_estimator = r_estimator,
+          r_adaptive_prior = r_adaptive_prior,
+          p_adaptive_prior = p_adaptive_prior,
+          r_adaptive_max = r_adaptive_max,
+          r_adaptive_plug_in = r_adaptive_plug_in,
+          r_adaptive_rel_tol = r_adaptive_rel_tol,
 
           y_regular_all = y_regular_all_dec,
           n_regular_all = n_regular_all_dec,
+          y_recycle_all = tabulate(
+            dat_dec$dose[dat_dec$type == "retreat" & dat_dec$y == 1L],
+            nbins = K
+          ),
+          n_recycle_all = tabulate(
+            dat_dec$dose[dat_dec$type == "retreat"],
+            nbins = K
+          ),
 
           elimi = elimi,
           n_trt_curr = n_trt_curr,
@@ -1080,6 +1099,11 @@ simulate_AIDE_design <- function(
         n_new = n_new_final,
         y_recycle = y_recycle_final,
         n_recycle = n_recycle_final,
+        r_adaptive_prior = r_adaptive_prior,
+        p_adaptive_prior = p_adaptive_prior,
+        r_adaptive_max = r_adaptive_max,
+        r_adaptive_plug_in = r_adaptive_plug_in,
+        r_adaptive_rel_tol = r_adaptive_rel_tol,
         restrict_to_tried = restrict_to_tried
       )
 
@@ -1226,7 +1250,12 @@ get_oc_sim_AIDE <- function(
     mtd_method = NULL,
     restrict_to_tried = TRUE,
     r_carry = 0.1,
-    r_estimator = c("r_fixed", "r_mle"),
+    r_estimator = c("r_fixed", "r_mle", "r_adaptive"),
+    r_adaptive_prior = c(1, 9),
+    p_adaptive_prior = c(1, 1),
+    r_adaptive_max = 0.6,
+    r_adaptive_plug_in = c("mean", "map"),
+    r_adaptive_rel_tol = 1e-6,
 
     ## CRM options
     crm_r_model = c("fixed", "r_fixed", "random", "level", "alpha_crm", "cumu_crm"),
@@ -1291,6 +1320,7 @@ get_oc_sim_AIDE <- function(
   if (model == "BOIN") {
     decision_method <- match.arg(decision_method)
     r_estimator <- match.arg(r_estimator)
+    r_adaptive_plug_in <- match.arg(r_adaptive_plug_in)
 
     if (is.null(mtd_method)) {
       mtd_method <- decision_method
@@ -1415,6 +1445,11 @@ get_oc_sim_AIDE <- function(
       restrict_to_tried = restrict_to_tried,
       r_carry = r_carry,
       r_estimator = r_estimator,
+      r_adaptive_prior = r_adaptive_prior,
+      p_adaptive_prior = p_adaptive_prior,
+      r_adaptive_max = r_adaptive_max,
+      r_adaptive_plug_in = r_adaptive_plug_in,
+      r_adaptive_rel_tol = r_adaptive_rel_tol,
       crm_r_model = crm_r_model,
       crm_skeleton = crm_skeleton,
       crm_model_file = crm_model_file,
@@ -1581,6 +1616,11 @@ get_oc_sim_AIDE <- function(
     mtd_method = mtd_method,
     r_carry = r_carry,
     r_estimator = if (model == "BOIN") r_estimator else NA_character_,
+    r_adaptive_prior = if (model == "BOIN" && r_estimator == "r_adaptive") r_adaptive_prior else c(NA_real_, NA_real_),
+    p_adaptive_prior = if (model == "BOIN" && r_estimator == "r_adaptive") p_adaptive_prior else c(NA_real_, NA_real_),
+    r_adaptive_max = if (model == "BOIN" && r_estimator == "r_adaptive") r_adaptive_max else NA_real_,
+    r_adaptive_plug_in = if (model == "BOIN" && r_estimator == "r_adaptive") r_adaptive_plug_in else NA_character_,
+    r_adaptive_rel_tol = if (model == "BOIN" && r_estimator == "r_adaptive") r_adaptive_rel_tol else NA_real_,
     crm_r_model = if (model == "CRM") crm_r_model else NA_character_,
     crm_skeleton = if (model == "CRM") crm_skeleton else NULL,
     crm_alpha_sd = if (model == "CRM") crm_alpha_sd else NA_real_,

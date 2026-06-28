@@ -8,6 +8,7 @@
 ## For approx1/approx2, r can be handled in two ways:
 ##   r_estimator = "r_fixed": use the user-specified fixed r_carry
 ##   r_estimator = "r_mle"  : estimate r by the smoothed MLE and plug it in
+##   r_estimator = "r_adaptive": estimate one global r by posterior integration
 ##
 ## Smoothed r_MLE uses posterior means under Beta(phi/2, 1 - phi/2):
 ##   pR_tilde = (YR + phi/2) / (NR + 1)
@@ -21,6 +22,18 @@ clip01 <- function(x) {
 
 xlogy <- function(x, y) {
   ifelse(x == 0, 0, x * log(y))
+}
+
+log_pow <- function(x, a) {
+  if (a == 0) return(0)
+  if (x <= 0) return(-Inf)
+  a * log(x)
+}
+
+logsumexp <- function(x) {
+  m <- max(x)
+  if (!is.finite(m)) return(m)
+  m + log(sum(exp(x - m)))
 }
 
 ## ------------------------------------------------------------
@@ -246,6 +259,273 @@ estimate_r_mle_beta_binom <- function(yR,
     r_cap = if (is.finite(r_cap)) as.numeric(r_cap) else NA_real_,
     pR_post = as.numeric(pR_post),
     pI_post = as.numeric(pI_post)
+  )
+}
+
+## ------------------------------------------------------------
+## Adaptive/global posterior estimator of r
+##
+## Model:
+##   Y_Rk ~ Bin(N_Rk, p_k)
+##   Y_Ik ~ Bin(N_Ik, r + (1-r)p_k)
+##
+## For a candidate r, p_k is integrated out analytically under
+## p_k ~ Beta(p_prior[1], p_prior[2]).  The global posterior for r is
+## then integrated numerically on [0, r_max], with a transformation that
+## stabilizes Beta priors whose density is singular at r = 0.
+## ------------------------------------------------------------
+check_adaptive_counts <- function(yR, nR, yI, nI) {
+  vals <- list(yR = yR, nR = nR, yI = yI, nI = nI)
+  lens <- unique(vapply(vals, length, integer(1)))
+  if (length(lens) != 1L) {
+    stop("yR, nR, yI, and nI must have the same length.")
+  }
+
+  flat <- unlist(vals)
+  if (any(!is.finite(flat)) || any(flat < 0)) {
+    stop("Counts must be finite and nonnegative.")
+  }
+  if (any(abs(flat - round(flat)) > 1e-8)) {
+    stop("Counts must be integers.")
+  }
+  if (any(yR > nR + 1e-8) || any(yI > nI + 1e-8)) {
+    stop("Toxicity counts cannot exceed sample sizes.")
+  }
+
+  invisible(TRUE)
+}
+
+log_marginal_dose_adaptive <- function(r,
+                                       yR,
+                                       nR,
+                                       yI,
+                                       nI,
+                                       p_prior = c(1, 1)) {
+  if (r < 0 || r >= 1) return(-Inf)
+  if (nR + nI == 0) return(0)
+
+  ap <- p_prior[1]
+  bp <- p_prior[2]
+  if (ap <= 0 || bp <= 0) stop("p_prior must be positive.")
+
+  yI <- as.integer(round(yI))
+  failures <- nR - yR + nI - yI
+  j <- 0:yI
+
+  terms <- vapply(
+    j,
+    function(jj) {
+      lchoose(yI, jj) +
+        log_pow(r, yI - jj) +
+        log_pow(1 - r, nI - yI + jj) +
+        lbeta(yR + jj + ap, failures + bp) -
+        lbeta(ap, bp)
+    },
+    numeric(1)
+  )
+
+  logsumexp(terms)
+}
+
+log_posterior_r_adaptive <- function(r,
+                                     yR,
+                                     nR,
+                                     yI,
+                                     nI,
+                                     r_prior = c(1, 9),
+                                     p_prior = c(1, 1),
+                                     r_max = 0.6) {
+  if (r < 0 || r > r_max || r >= 1) return(-Inf)
+
+  ar <- r_prior[1]
+  br <- r_prior[2]
+  if (ar <= 0 || br <= 0) stop("r_prior must be positive.")
+  if (r_max <= 0 || r_max >= 1) stop("r_max must be in (0, 1).")
+
+  log_prior <- stats::dbeta(r, ar, br, log = TRUE) -
+    log(stats::pbeta(r_max, ar, br))
+
+  log_m <- vapply(
+    seq_along(yR),
+    function(k) {
+      log_marginal_dose_adaptive(
+        r = r,
+        yR = yR[k],
+        nR = nR[k],
+        yI = yI[k],
+        nI = nI[k],
+        p_prior = p_prior
+      )
+    },
+    numeric(1)
+  )
+
+  log_prior + sum(log_m)
+}
+
+estimate_global_r_adaptive <- function(yR,
+                                       nR,
+                                       yI,
+                                       nI,
+                                       r_prior = c(1, 9),
+                                       p_prior = c(1, 1),
+                                       r_max = 0.6,
+                                       plug_in = c("mean", "map"),
+                                       rel.tol = 1e-6,
+                                       eps = 1e-8) {
+  plug_in <- match.arg(plug_in)
+
+  yR <- as.numeric(yR)
+  nR <- as.numeric(nR)
+  yI <- as.numeric(yI)
+  nI <- as.numeric(nI)
+  check_adaptive_counts(yR, nR, yI, nI)
+
+  ar <- r_prior[1]
+  br <- r_prior[2]
+  if (ar <= 0 || br <= 0) stop("r_prior must be positive.")
+  if (r_max <= 0 || r_max >= 1) stop("r_max must be in (0, 1).")
+
+  logpost_scalar <- function(r) {
+    log_posterior_r_adaptive(
+      r = r,
+      yR = yR,
+      nR = nR,
+      yI = yI,
+      nI = nI,
+      r_prior = r_prior,
+      p_prior = p_prior,
+      r_max = r_max
+    )
+  }
+
+  logpost_vec <- function(r) vapply(r, logpost_scalar, numeric(1))
+
+  opt_r <- stats::optimize(
+    f = logpost_scalar,
+    interval = c(eps, r_max - eps),
+    maximum = TRUE
+  )
+
+  candidate_r <- c(eps, opt_r$maximum, r_max - eps)
+  candidate_lp <- logpost_vec(candidate_r)
+  r_map <- if (ar < 1) 0 else candidate_r[which.max(candidate_lp)]
+
+  if (ar < 1) {
+    r_of_u <- function(u) r_max * u^(1 / ar)
+    log_jacobian <- function(u) log(r_max / ar) + (1 / ar - 1) * log(u)
+  } else {
+    r_of_u <- function(u) r_max * u
+    log_jacobian <- function(u) rep(log(r_max), length(u))
+  }
+
+  u_lower <- eps
+  u_upper <- 1 - eps
+
+  log_denom_u_scalar <- function(u) {
+    if (u <= 0 || u >= 1) return(-Inf)
+    r <- r_of_u(u)
+    logpost_scalar(r) + log_jacobian(u)
+  }
+
+  log_denom_u_vec <- function(u) vapply(u, log_denom_u_scalar, numeric(1))
+
+  opt_u <- stats::optimize(
+    f = log_denom_u_scalar,
+    interval = c(u_lower, u_upper),
+    maximum = TRUE
+  )
+
+  candidate_u <- c(u_lower, opt_u$maximum, u_upper)
+  candidate_lu <- log_denom_u_vec(candidate_u)
+  finite_lu <- is.finite(candidate_lu)
+
+  if (!any(finite_lu)) {
+    r_hat <- if (plug_in == "map") r_map else opt_r$maximum
+    r_hat <- max(0, min(r_max, r_hat))
+    return(list(
+      r_hat = r_hat,
+      r_mean = NA_real_,
+      r_map = r_map,
+      r_sd = NA_real_,
+      r_prior = r_prior,
+      p_prior = p_prior,
+      r_max = r_max,
+      plug_in = plug_in
+    ))
+  }
+
+  lu_scale <- max(candidate_lu[finite_lu])
+
+  denom_integrand_u <- function(u) exp(log_denom_u_vec(u) - lu_scale)
+  numer_integrand_u <- function(u) {
+    r <- r_of_u(u)
+    r * exp(log_denom_u_vec(u) - lu_scale)
+  }
+
+  denom <- tryCatch(
+    stats::integrate(
+      denom_integrand_u,
+      lower = u_lower,
+      upper = u_upper,
+      rel.tol = rel.tol,
+      subdivisions = 250L,
+      stop.on.error = FALSE
+    )$value,
+    error = function(e) NA_real_
+  )
+
+  numer <- tryCatch(
+    stats::integrate(
+      numer_integrand_u,
+      lower = u_lower,
+      upper = u_upper,
+      rel.tol = rel.tol,
+      subdivisions = 250L,
+      stop.on.error = FALSE
+    )$value,
+    error = function(e) NA_real_
+  )
+
+  if (!is.finite(denom) || denom <= 0 || !is.finite(numer)) {
+    r_mean <- NA_real_
+    r_hat <- r_map
+    r_sd <- NA_real_
+  } else {
+    r_mean <- numer / denom
+    r_hat <- if (plug_in == "mean") r_mean else r_map
+
+    var_integrand_u <- function(u) {
+      r <- r_of_u(u)
+      (r - r_mean)^2 * exp(log_denom_u_vec(u) - lu_scale)
+    }
+
+    var_num <- tryCatch(
+      stats::integrate(
+        var_integrand_u,
+        lower = u_lower,
+        upper = u_upper,
+        rel.tol = rel.tol,
+        subdivisions = 250L,
+        stop.on.error = FALSE
+      )$value,
+      error = function(e) NA_real_
+    )
+
+    r_sd <- if (is.finite(var_num)) sqrt(var_num / denom) else NA_real_
+  }
+
+  r_hat <- max(0, min(r_max, r_hat))
+
+  list(
+    r_hat = as.numeric(r_hat),
+    r_mean = as.numeric(r_mean),
+    r_map = as.numeric(r_map),
+    r_sd = as.numeric(r_sd),
+    r_prior = r_prior,
+    p_prior = p_prior,
+    r_max = r_max,
+    plug_in = plug_in
   )
 }
 
@@ -574,12 +854,9 @@ get.boundary <- function(target, ncohort, cohortsize = 3,
 ## ------------------------------------------------------------
 ## Unified dose-move function
 ## ------------------------------------------------------------
-## ------------------------------------------------------------
-## Unified dose-move function
-## ------------------------------------------------------------
 boin_move <- function(current_dose, ndose,
                       method = c("boin", "approx1", "approx2"),
-                      r_estimator = c("r_fixed", "r_mle"),
+                      r_estimator = c("r_fixed", "r_mle", "r_adaptive"),
                       y_curr = NULL,
                       n_curr = NULL,
                       b.e = NULL,
@@ -595,12 +872,20 @@ boin_move <- function(current_dose, ndose,
                       r_carry = 0.1,
                       y_regular_all = NULL,
                       n_regular_all = NULL,
+                      y_recycle_all = NULL,
+                      n_recycle_all = NULL,
+                      r_adaptive_prior = c(1, 9),
+                      p_adaptive_prior = c(1, 1),
+                      r_adaptive_max = 0.6,
+                      r_adaptive_plug_in = c("mean", "map"),
+                      r_adaptive_rel_tol = 1e-6,
                       elimi = rep(0L, ndose),
                       n_trt_curr = n_curr,
                       dose_cap = 3L) {
 
   method <- match.arg(method)
   r_estimator <- match.arg(r_estimator)
+  r_adaptive_plug_in <- match.arg(r_adaptive_plug_in)
 
   next_dose <- current_dose
   action <- "stay"
@@ -730,6 +1015,29 @@ boin_move <- function(current_dose, ndose,
         r_hat <- r_out$r_hat
         r_use <- r_out$r_use
         r_cap <- r_out$r_cap
+
+      } else if (r_estimator == "r_adaptive") {
+
+        if (is.null(y_regular_all) || is.null(n_regular_all) ||
+            is.null(y_recycle_all) || is.null(n_recycle_all)) {
+          stop("For r_estimator = 'r_adaptive', provide regular and IPDE count vectors.")
+        }
+
+        r_out <- estimate_global_r_adaptive(
+          yR = y_regular_all,
+          nR = n_regular_all,
+          yI = y_recycle_all,
+          nI = n_recycle_all,
+          r_prior = r_adaptive_prior,
+          p_prior = p_adaptive_prior,
+          r_max = r_adaptive_max,
+          plug_in = r_adaptive_plug_in,
+          rel.tol = r_adaptive_rel_tol
+        )
+
+        r_hat <- r_out$r_hat
+        r_use <- r_out$r_hat
+        r_cap <- NA_real_
       }
 
       if (method == "approx1") {
@@ -797,13 +1105,14 @@ boin_move <- function(current_dose, ndose,
     r_hat = r_hat,
     r_use = r_use,
     r_cap = r_cap,
-    phi = if (r_estimator == "r_mle") phi else NA_real_
+    phi = if (r_estimator == "r_mle") phi else NA_real_,
+    r_adaptive_prior = if (r_estimator == "r_adaptive") r_adaptive_prior else c(NA_real_, NA_real_),
+    p_adaptive_prior = if (r_estimator == "r_adaptive") p_adaptive_prior else c(NA_real_, NA_real_),
+    r_adaptive_max = if (r_estimator == "r_adaptive") r_adaptive_max else NA_real_,
+    r_adaptive_plug_in = if (r_estimator == "r_adaptive") r_adaptive_plug_in else NA_character_
   )
 }
 
-## ------------------------------------------------------------
-## Final MTD selection supporting boin / approx1 / approx2
-## ------------------------------------------------------------
 ## ------------------------------------------------------------
 ## Final MTD selection supporting boin / approx1 / approx2
 ## ------------------------------------------------------------
@@ -812,16 +1121,22 @@ select.mtd <- function(target,
                        cutoff.eli = 0.95,
                        approx = c("boin", "approx1", "approx2"),
                        r_carry = 0.1,
-                       r_estimator = c("r_fixed", "r_mle"),
+                       r_estimator = c("r_fixed", "r_mle", "r_adaptive"),
                        phi = target,
                        y_new = NULL,
                        n_new = NULL,
                        y_recycle = NULL,
                        n_recycle = NULL,
+                       r_adaptive_prior = c(1, 9),
+                       p_adaptive_prior = c(1, 1),
+                       r_adaptive_max = 0.6,
+                       r_adaptive_plug_in = c("mean", "map"),
+                       r_adaptive_rel_tol = 1e-6,
                        restrict_to_tried = TRUE) {
 
   approx <- match.arg(approx)
   r_estimator <- match.arg(r_estimator)
+  r_adaptive_plug_in <- match.arg(r_adaptive_plug_in)
   ndose <- length(n)
 
   pava <- function(x, wt = rep(1, length(x))) {
@@ -926,6 +1241,22 @@ select.mtd <- function(target,
 
   mu_hat <- rep(NA_real_, ndose)
   n_eff <- rep(0, ndose)
+  adaptive_r_out <- NULL
+
+  if (approx != "boin" && r_estimator == "r_adaptive" &&
+      any((n_new + n_recycle) > 0L)) {
+    adaptive_r_out <- estimate_global_r_adaptive(
+      yR = y_new,
+      nR = n_new,
+      yI = y_recycle,
+      nI = n_recycle,
+      r_prior = r_adaptive_prior,
+      p_prior = p_adaptive_prior,
+      r_max = r_adaptive_max,
+      plug_in = r_adaptive_plug_in,
+      rel.tol = r_adaptive_rel_tol
+    )
+  }
 
   for (j in seq_len(ndose)) {
 
@@ -986,6 +1317,26 @@ select.mtd <- function(target,
           r_hat[j] <- r_out$r_hat
           r_use[j] <- r_out$r_use
           r_cap[j] <- r_out$r_cap
+
+        } else if (r_estimator == "r_adaptive") {
+
+          if (is.null(adaptive_r_out)) {
+            adaptive_r_out <- estimate_global_r_adaptive(
+              yR = y_new,
+              nR = n_new,
+              yI = y_recycle,
+              nI = n_recycle,
+              r_prior = r_adaptive_prior,
+              p_prior = p_adaptive_prior,
+              r_max = r_adaptive_max,
+              plug_in = r_adaptive_plug_in,
+              rel.tol = r_adaptive_rel_tol
+            )
+          }
+
+          r_hat[j] <- adaptive_r_out$r_hat
+          r_use[j] <- adaptive_r_out$r_hat
+          r_cap[j] <- NA_real_
         }
 
         if (approx == "approx1") {
