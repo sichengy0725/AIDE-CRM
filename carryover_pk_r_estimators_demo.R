@@ -614,20 +614,20 @@ simulate_regular_ipde_counts <- function(p_true,
     stop("p_true must contain probabilities in [0, 1].")
   }
   
-  if (alpha_true < 0 || alpha_true >= 1) {
-    stop("alpha_true must be in [0, 1).")
+  if (length(alpha_true) != 1L || !is.finite(alpha_true) || alpha_true < 0) {
+    stop("alpha_true must be a finite nonnegative scalar.")
   }
   
   nR <- expand_n_by_dose(n_regular, K, "n_regular")
   nI <- expand_n_by_dose(n_ipde, K, "n_ipde")
   
   ## In the document model, alpha_true is the simulation truth for r:
-  ## q_k = alpha_true + (1 - alpha_true) p_k.
+  ## q_k = alpha_true + (1 - alpha_true) p_k, capped at 1.
   ##
   ## The optional "aide_alpha" mode matches older AIDE-style simulation:
   ## q_k = p_k + alpha_true p_{k-1}, with dose 1 unchanged.
   if (ipde_model == "document") {
-    q_true <- alpha_true + (1 - alpha_true) * p_true
+    q_true <- pmin(1, alpha_true + (1 - alpha_true) * p_true)
   } else {
     q_true <- p_true
     if (K >= 2L) {
@@ -995,6 +995,160 @@ plot_carryover_average <- function(summary_rows,
   )
 }
 
+plot_carryover_average_by_alpha <- function(summary_rows,
+                                            alpha_true,
+                                            scenario_names = NULL,
+                                            file = NULL,
+                                            ylim = c(0, 1),
+                                            panel_ncol = 3L) {
+  dat <- summary_rows[summary_rows$alpha_true == alpha_true, , drop = FALSE]
+  
+  if (!is.null(scenario_names)) {
+    dat <- dat[dat$scenario %in% scenario_names, , drop = FALSE]
+  } else {
+    scenario_names <- unique(dat$scenario)
+  }
+  
+  if (nrow(dat) == 0L) {
+    stop("No rows to plot for alpha_true = ", alpha_true, ".")
+  }
+  
+  scenario_names <- scenario_names[scenario_names %in% unique(dat$scenario)]
+  panel_ncol <- as.integer(panel_ncol)
+  panel_nrow <- ceiling(length(scenario_names) / panel_ncol)
+  
+  if (!is.null(file)) {
+    grDevices::png(file, width = 1500, height = 900, res = 120)
+    on.exit(grDevices::dev.off(), add = TRUE)
+  }
+  
+  old_par <- graphics::par(no.readonly = TRUE)
+  on.exit(graphics::par(old_par), add = TRUE)
+  
+  graphics::par(
+    mfrow = c(panel_nrow, panel_ncol),
+    mar = c(4, 4, 3, 1),
+    oma = c(0, 0, 3, 0)
+  )
+  
+  for (i in seq_along(scenario_names)) {
+    scenario_name <- scenario_names[i]
+    one <- dat[dat$scenario == scenario_name, , drop = FALSE]
+    one <- one[order(one$dose), ]
+    
+    main <- paste0(
+      scenario_name,
+      ", mean r_hat=",
+      sprintf("%.3f", unique(one$mean_r_hat)[1])
+    )
+    
+    graphics::plot(
+      one$dose,
+      one$p_true,
+      type = "b",
+      pch = 16,
+      lwd = 2,
+      ylim = ylim,
+      xlab = "Dose level",
+      ylab = "DLT probability",
+      main = main
+    )
+    
+    graphics::lines(
+      one$dose,
+      one$mean_obs_pooled,
+      type = "b",
+      pch = 1,
+      lwd = 2,
+      lty = 3,
+      col = "gray35"
+    )
+    
+    graphics::lines(
+      one$dose,
+      one$mean_p_pool_plugin,
+      type = "b",
+      pch = 17,
+      lwd = 2,
+      col = "#0072B2"
+    )
+    
+    graphics::lines(
+      one$dose,
+      one$mean_p_mle_plugin,
+      type = "b",
+      pch = 15,
+      lwd = 2,
+      col = "#D55E00"
+    )
+    
+    graphics::abline(h = 0.30, col = "gray75", lty = 2)
+    
+    if (i == 1L) {
+      graphics::legend(
+        "topleft",
+        bty = "n",
+        cex = 0.75,
+        lwd = 2,
+        pch = c(16, 1, 17, 15),
+        lty = c(1, 3, 1, 1),
+        col = c("black", "gray35", "#0072B2", "#D55E00"),
+        legend = c(
+          "True p_k",
+          "Average observed pooled",
+          "Average pooled moment",
+          "Average exact MLE"
+        )
+      )
+    }
+  }
+  
+  graphics::mtext(
+    paste0("Carryover estimator average curves, alpha = ", alpha_true),
+    outer = TRUE,
+    cex = 1.2,
+    font = 2
+  )
+  
+  invisible(file)
+}
+
+plot_carryover_average_alpha_files <- function(summary_rows,
+                                               alpha_values,
+                                               scenario_names,
+                                               plot_dir = "carryover_pk_r_demo_plots") {
+  if (!dir.exists(plot_dir)) {
+    dir.create(plot_dir, recursive = TRUE)
+  }
+  
+  files <- vapply(
+    alpha_values,
+    function(a) {
+      plot_file <- file.path(
+        plot_dir,
+        paste0(
+          "sce1_to_sce6_alpha_",
+          gsub("\\.", "p", a),
+          "_avg.png"
+        )
+      )
+      
+      plot_carryover_average_by_alpha(
+        summary_rows = summary_rows,
+        alpha_true = a,
+        scenario_names = scenario_names,
+        file = plot_file
+      )
+      
+      plot_file
+    },
+    character(1)
+  )
+  
+  names(files) <- paste0("alpha_", alpha_values)
+  files
+}
+
 run_carryover_estimator_replicates <- function(scenarios,
                                                alpha_values = c(0, 0.1, 0.25, 0.4),
                                                n_reps = 100,
@@ -1131,6 +1285,13 @@ run_carryover_estimator_replicates <- function(scenarios,
     }
   }
   
+  plot_carryover_average_alpha_files(
+    summary_rows = summary_results,
+    alpha_values = alpha_values,
+    scenario_names = scenario_names,
+    plot_dir = plot_dir
+  )
+  
   list(
     replicate_results = replicate_results,
     summary_results = summary_results,
@@ -1145,10 +1306,11 @@ run_carryover_estimator_replicates <- function(scenarios,
 
 example_scenarios <- list(
   sce1 = c(0.30, 0.35, 0.40, 0.45, 0.50),
-  sce2 = c(0.15, 0.20, 0.30, 0.35, 0.45),
+  sce2 = c(0.15, 0.30, 0.38, 0.45, 0.55),
   sce3 = c(0.15, 0.20, 0.30, 0.35, 0.45),
   sce4 = c(0.05, 0.10, 0.18, 0.30, 0.40),
-  sce5 = c(0.07, 0.12, 0.17, 0.22, 0.30)
+  sce5 = c(0.07, 0.12, 0.17, 0.22, 0.30),
+  sce6 = c(0.50, 0.55, 0.60, 0.65, 0.70)
 )
 
 ## Your original prior:
@@ -1163,7 +1325,7 @@ example_scenarios <- list(
 
 demo_results <- run_carryover_estimator_replicates(
   scenarios = example_scenarios,
-  alpha_values = c(0, 0.3, 0.6, 0.9),
+  alpha_values = c(1.2, 1.5),
   n_reps = 1000,
   n_regular = rep(100, 5),
   n_ipde = rep(100, 5),

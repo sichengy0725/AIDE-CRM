@@ -5,12 +5,12 @@
 ## Newest runner naming rules:
 ##
 ## Folder:
-##   oc_results_cluster_AIDE_S20_8d/
-##   S20_8d-model-{model}-opt-{method_tag}-w-{T_assess}-c-{C}-
+##   oc_results_cluster_AIDE_{scenario_set_name}/
+##   {scenario_set_name}-model-{model}-opt-{method_tag}-w-{T_assess}-c-{C}-
 ##   cyc-{cycle_max}-rate-{arrival_rate}-Nmax-{Nmax_eff}-tried-{0/1}/
 ##
 ## Combined file:
-##   S20_8d_SC{sc}_{model}_{method_tag}_a{alpha_true}_r{r_carry}_
+##   {scenario_set_name}_SC{sc}_{model}_{method_tag}_a{alpha_true}_r{r_carry}_
 ##   rate{arrival_rate}_cyc{cycle_max}_Nmax{Nmax_eff}_cont{0/1}_tried{0/1}-
 ##   job-{job}-combined.rds
 ##
@@ -28,74 +28,85 @@ rm(list = ls())
 
 ## setwd("/rsrch8/home/biostatistics/syang10/AIDE")
 
-scenario_set_name <- "S20_8d"
+## Choose one scenario set by commenting/uncommenting one line:
+## scenario_set_name <- "Set_5dose_adaptive_r_25"
+scenario_set_name <- "S20_5d"
 results_root <- paste0("oc_results_cluster_AIDE_", scenario_set_name)
 
-## Twenty eight-dose true DLT scenarios from "8 scenarios.txt".
-scenario_meta <- data.frame(
+## Twenty five-dose true DLT scenarios from "5 scenarios.txt".
+s20_5dose_scenario_meta <- data.frame(
   Scenario = seq_len(20L),
   Source_Scenario = rep(seq_len(5L), times = 4L),
   True_MTD = c(
-    5L, 2L, 4L, 8L, 8L,
-    8L, 4L, 1L, 4L, 5L,
-    8L, 3L, 8L, 5L, 4L,
-    6L, 1L, 2L, 8L, 1L
+    1L, 4L, 1L, 5L, 2L,
+    2L, 4L, 3L, 4L, 3L,
+    5L, 2L, 5L, 2L, 3L,
+    1L, 2L, 1L, 5L, 3L
   ),
   Attempt = c(
     1L, 1L, 1L, 1L, 1L,
-    1L, 1L, 1L, 1L, 2L,
-    9L, 1L, 13L, 1L, 1L,
-    3L, 2L, 1L, 67L, 2L
+    1L, 3L, 1L, 1L, 1L,
+    1L, 1L, 1L, 1L, 1L,
+    1L, 1L, 1L, 1L, 2L
   ),
   Dose1 = c(
-    0.11, 0.24, 0.13, 0.07, 0.07,
-    0.02, 0.12, 0.35, 0.09, 0.05,
-    0.00, 0.09, 0.00, 0.04, 0.06,
-    0.00, 0.32, 0.12, 0.00, 0.21
+    0.29, 0.16, 0.32, 0.15, 0.23,
+    0.22, 0.06, 0.21, 0.09, 0.13,
+    0.02, 0.11, 0.02, 0.11, 0.07,
+    0.37, 0.07, 0.32, 0.01, 0.09
   ),
   Dose2 = c(
-    0.14, 0.28, 0.17, 0.09, 0.08,
-    0.03, 0.17, 0.40, 0.14, 0.09,
-    0.01, 0.17, 0.01, 0.07, 0.08,
-    0.01, 0.51, 0.30, 0.01, 0.39
+    0.34, 0.20, 0.37, 0.18, 0.28,
+    0.32, 0.09, 0.29, 0.15, 0.20,
+    0.06, 0.23, 0.04, 0.26, 0.14,
+    0.56, 0.27, 0.55, 0.02, 0.18
   ),
   Dose3 = c(
-    0.19, 0.34, 0.23, 0.10, 0.10,
-    0.04, 0.21, 0.51, 0.18, 0.13,
-    0.02, 0.27, 0.02, 0.13, 0.17,
-    0.02, 0.67, 0.40, 0.02, 0.59
+    0.38, 0.26, 0.42, 0.22, 0.32,
+    0.44, 0.18, 0.30, 0.23, 0.32,
+    0.09, 0.39, 0.10, 0.39, 0.31,
+    0.69, 0.50, 0.80, 0.05, 0.37
   ),
   Dose4 = c(
-    0.24, 0.39, 0.29, 0.13, 0.13,
-    0.07, 0.30, 0.66, 0.34, 0.19,
-    0.04, 0.48, 0.03, 0.19, 0.31,
-    0.03, 0.80, 0.59, 0.04, 0.78
+    0.43, 0.31, 0.48, 0.26, 0.39,
+    0.59, 0.29, 0.39, 0.28, 0.39,
+    0.14, 0.58, 0.20, 0.60, 0.41,
+    0.83, 0.56, 0.94, 0.10, 0.63
   ),
   Dose5 = c(
-    0.30, 0.46, 0.36, 0.18, 0.16,
-    0.10, 0.43, 0.69, 0.45, 0.32,
-    0.06, 0.66, 0.05, 0.31, 0.54,
-    0.16, 0.94, 0.76, 0.09, 0.90
-  ),
-  Dose6 = c(
-    0.34, 0.52, 0.40, 0.20, 0.20,
-    0.16, 0.67, 0.80, 0.58, 0.37,
-    0.08, 0.77, 0.07, 0.49, 0.75,
-    0.36, 0.98, 0.90, 0.12, 0.96
-  ),
-  Dose7 = c(
-    0.37, 0.56, 0.47, 0.27, 0.24,
-    0.26, 0.80, 0.88, 0.75, 0.47,
-    0.17, 0.90, 0.13, 0.68, 0.92,
-    0.71, 0.99, 0.95, 0.17, 0.99
-  ),
-  Dose8 = c(
-    0.41, 0.61, 0.52, 0.32, 0.31,
-    0.32, 0.84, 0.91, 0.81, 0.60,
-    0.28, 0.97, 0.28, 0.83, 0.96,
-    0.84, 1.00, 0.98, 0.40, 1.00
+    0.52, 0.36, 0.52, 0.29, 0.43,
+    0.67, 0.44, 0.46, 0.39, 0.46,
+    0.26, 0.76, 0.35, 0.77, 0.52,
+    0.88, 0.78, 0.97, 0.25, 0.77
   )
 )
+
+## First five rows used by Set_5dose_adaptive_r_25, followed by the
+## 20 scenarios above with scenario IDs shifted to 6:25.
+added_5dose_scenario_meta <- data.frame(
+  Scenario = seq_len(5L),
+  Source_Scenario = seq_len(5L),
+  True_MTD = c(1L, 3L, 3L, 4L, 5L),
+  Attempt = rep(1L, 5L),
+  Dose1 = c(0.30, 0.15, 0.15, 0.05, 0.07),
+  Dose2 = c(0.35, 0.20, 0.20, 0.10, 0.12),
+  Dose3 = c(0.40, 0.30, 0.30, 0.18, 0.17),
+  Dose4 = c(0.45, 0.35, 0.35, 0.30, 0.22),
+  Dose5 = c(0.50, 0.45, 0.45, 0.40, 0.30)
+)
+
+if (identical(scenario_set_name, "S20_5d")) {
+  scenario_meta <- s20_5dose_scenario_meta
+} else if (identical(scenario_set_name, "Set_5dose_adaptive_r_25")) {
+  scenario_meta <- rbind(
+    added_5dose_scenario_meta,
+    transform(s20_5dose_scenario_meta, Scenario = Scenario + 5L)
+  )
+  rownames(scenario_meta) <- NULL
+} else {
+  stop("Unknown 5-dose scenario_set_name: ", scenario_set_name)
+}
+
 dose_col_names <- grep("^Dose[0-9]+$", names(scenario_meta), value = TRUE)
 p_true_scenarios <- as.matrix(scenario_meta[dose_col_names])
 rownames(p_true_scenarios) <- as.character(scenario_meta$Scenario)
@@ -151,7 +162,7 @@ get_crm_r_loop <- function(crm_r_model) {
 }
 
 ## skeleton for power CRM and alpha-CRM
-crm_skeleton <- c(0.12, 0.16, 0.20, 0.25, 0.30, 0.35, 0.40, 0.45)
+crm_skeleton <- c(0.15, 0.20, 0.30, 0.35, 0.45)
 q_skeleton <- crm_skeleton
 
 ## Power CRM / alpha-CRM prior: theta ~ N(0, 2)
@@ -164,7 +175,7 @@ crm_a_r <- target / 2
 crm_b_r <- 1 - crm_a_r
 
 ## alpha-CRM actual dose amounts, mg
-crm_dose_values_alpha <- c(10, 20, 30, 40, 50, 60, 70, 80)
+crm_dose_values_alpha <- c(15, 20, 30, 35, 45)
 dose_alpha_mg <- crm_dose_values_alpha
 crm_alpha_grid_length <- 61L
 
@@ -172,13 +183,13 @@ crm_alpha_grid_length <- 61L
 ## beta0 ~ t(fixed_intercept, precision = beta0_prec, df = beta0_df)
 ## beta1 ~ Gamma(beta1_shape, beta1_rate)
 ## beta2 ~ Exp(1), but beta2 drops out at baseline when cumu.d = 0
-crm_dose_scores_raw <- c(10, 20, 30, 40, 50, 60, 70, 80)
+crm_dose_scores_raw <- c(15, 20, 30, 35, 45)
 dose_ipcrm <- crm_dose_scores_raw / (2 * stats::sd(crm_dose_scores_raw))
 crm_dose_scores_cumu <- dose_ipcrm
-fixed_intercept <- -2.2
+fixed_intercept <- -2.8
 beta0_prec <- 2
 beta0_df <- 1
-beta1_shape <- 2.2
+beta1_shape <- 2.5
 beta1_rate <- 1.6
 beta2_rate <- 1
 crm_cumu_beta0_mean <- fixed_intercept
@@ -191,7 +202,7 @@ crm_cumu_include_current <- FALSE
 
 ## CFO / PRIDE settings matched to methods_prior.R and run_oc_AIDE.R.
 cfo_method_list <- c("empirical", "pride")
-cfo_skeleton <- c(0.002, 0.008, 0.012, 0.04, 0.08, 0.10, 0.20, 0.35)
+cfo_skeleton <- c(0.005, 0.01, 0.05, 0.10, 0.30)
 cfo_model_file <- "PRIDE.bug"
 cfo_sigma2_beta <- 30
 cfo_eta <- 1
@@ -206,7 +217,7 @@ cfo_n_iter <- 5000
 cfo_thin <- 2
 
 ## Extract these models. Current target folders look like
-## S20_8d-model-CFO-opt-cfo_pride-w-28-c-3-cyc-3-rate-0p07-Nmax-45-tried-1.
+## S20_5d-model-CFO-opt-cfo_pride-w-28-c-3-cyc-3-rate-0p07-Nmax-45-tried-1.
 model_list <- c("BOIN", "CFO")
 ## model_list <- c("CFO")
 ## model_list <- c("BOIN", "CRM", "CFO")

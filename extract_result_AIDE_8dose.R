@@ -5,12 +5,12 @@
 ## Newest runner naming rules:
 ##
 ## Folder:
-##   oc_results_cluster_AIDE_S20_8d/
-##   S20_8d-model-{model}-opt-{method_tag}-w-{T_assess}-c-{C}-
+##   oc_results_cluster_AIDE_{scenario_set_name}/
+##   {scenario_set_name}-model-{model}-opt-{method_tag}-w-{T_assess}-c-{C}-
 ##   cyc-{cycle_max}-rate-{arrival_rate}-Nmax-{Nmax_eff}-tried-{0/1}/
 ##
 ## Combined file:
-##   S20_8d_SC{sc}_{model}_{method_tag}_a{alpha_true}_r{r_carry}_
+##   {scenario_set_name}_SC{sc}_{model}_{method_tag}_a{alpha_true}_r{r_carry}_
 ##   rate{arrival_rate}_cyc{cycle_max}_Nmax{Nmax_eff}_cont{0/1}_tried{0/1}-
 ##   job-{job}-combined.rds
 ##
@@ -28,11 +28,13 @@ rm(list = ls())
 
 ## setwd("/rsrch8/home/biostatistics/syang10/AIDE")
 
+## Choose one scenario set by commenting/uncommenting one line:
+## scenario_set_name <- "Set_8dose_adaptive_r_25"
 scenario_set_name <- "S20_8d"
 results_root <- paste0("oc_results_cluster_AIDE_", scenario_set_name)
 
 ## Twenty eight-dose true DLT scenarios from "8 scenarios.txt".
-scenario_meta <- data.frame(
+s20_8dose_scenario_meta <- data.frame(
   Scenario = seq_len(20L),
   Source_Scenario = rep(seq_len(5L), times = 4L),
   True_MTD = c(
@@ -96,6 +98,36 @@ scenario_meta <- data.frame(
     0.84, 1.00, 0.98, 0.40, 1.00
   )
 )
+
+## First five rows used by Set_8dose_adaptive_r_25, followed by the
+## 20 scenarios above with scenario IDs shifted to 6:25.
+added_8dose_scenario_meta <- data.frame(
+  Scenario = seq_len(5L),
+  Source_Scenario = seq_len(5L),
+  True_MTD = c(8L, 7L, 6L, 5L, 4L),
+  Attempt = rep(1L, 5L),
+  Dose1 = c(0.07, 0.05, 0.05, 0.02, 0.05),
+  Dose2 = c(0.10, 0.08, 0.10, 0.10, 0.10),
+  Dose3 = c(0.12, 0.10, 0.12, 0.15, 0.22),
+  Dose4 = c(0.14, 0.15, 0.15, 0.18, 0.30),
+  Dose5 = c(0.17, 0.20, 0.20, 0.30, 0.46),
+  Dose6 = c(0.19, 0.22, 0.30, 0.44, 0.53),
+  Dose7 = c(0.22, 0.30, 0.50, 0.52, 0.59),
+  Dose8 = c(0.26, 0.45, 0.60, 0.60, 0.66)
+)
+
+if (identical(scenario_set_name, "S20_8d")) {
+  scenario_meta <- s20_8dose_scenario_meta
+} else if (identical(scenario_set_name, "Set_8dose_adaptive_r_25")) {
+  scenario_meta <- rbind(
+    added_8dose_scenario_meta,
+    transform(s20_8dose_scenario_meta, Scenario = Scenario + 5L)
+  )
+  rownames(scenario_meta) <- NULL
+} else {
+  stop("Unknown 8-dose scenario_set_name: ", scenario_set_name)
+}
+
 dose_col_names <- grep("^Dose[0-9]+$", names(scenario_meta), value = TRUE)
 p_true_scenarios <- as.matrix(scenario_meta[dose_col_names])
 rownames(p_true_scenarios) <- as.character(scenario_meta$Scenario)
