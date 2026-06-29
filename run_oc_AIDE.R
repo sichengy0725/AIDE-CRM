@@ -303,7 +303,9 @@ store_raw <- FALSE
 verbose <- FALSE
 
 ## Choose AIDE models here.
-model_list_aide <- c("BOIN")
+## Backfill standard BOIN/CRM for the added first five 8-dose scenarios.
+model_list_aide <- c("BOIN", "CRM")
+## model_list_aide <- c("BOIN")
 ## model_list_aide <- c("BOIN", "CRM", "CFO")
 ## model_list_aide <- c("CRM")
 ## model_list_aide <- c("CFO")
@@ -316,7 +318,8 @@ method_list_boin <- c("approx1", "approx2")
 ##   r_fixed    : use fixed r_carry
 ##   r_mle      : local smoothed MLE truncated by adjacent regular toxicity
 ##   r_adaptive : global posterior estimator of r, integrating p_k out
-r_estimator_list_boin <- c("r_adaptive")
+r_estimator_list_boin <- c("r_fixed")
+## r_estimator_list_boin <- c("r_adaptive")
 ## r_estimator_list_boin <- c("r_fixed", "r_mle", "r_adaptive")
 
 ## CRM versions.
@@ -532,7 +535,11 @@ if (!all(dose_col_names %in% names(scenario_meta))) {
 scenarios <- as.matrix(scenario_meta[dose_col_names])
 rownames(scenarios) <- as.character(scenario_meta$Scenario)
 
-scenario_id_list <- seq_len(nrow(scenarios))
+## Backfill only the first five added 8-dose scenarios.  Keep
+## scenario_set_name as Set_8dose_adaptive_r_25 so output folders/files
+## match the 25-scenario result set.
+scenario_id_list <- seq_len(5L)
+## scenario_id_list <- seq_len(nrow(scenarios))
 if (ncol(scenarios) != length(crm_skeleton_default)) {
   stop("Scenarios and CRM skeleton have different lengths.")
 }
