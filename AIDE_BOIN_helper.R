@@ -1132,7 +1132,8 @@ select.mtd <- function(target,
                        r_adaptive_max = 0.6,
                        r_adaptive_plug_in = c("mean", "map"),
                        r_adaptive_rel_tol = 1e-6,
-                       restrict_to_tried = TRUE) {
+                       restrict_to_tried = TRUE,
+                       restrict_to_target = FALSE) {
 
   approx <- match.arg(approx)
   r_estimator <- match.arg(r_estimator)
@@ -1208,6 +1209,8 @@ select.mtd <- function(target,
   r_hat <- rep(NA_real_, ndose)
   r_use <- rep(NA_real_, ndose)
   r_cap <- rep(NA_real_, ndose)
+  restrict_to_tried <- isTRUE(restrict_to_tried)
+  restrict_to_target <- isTRUE(restrict_to_target)
 
   if (elimi[1L] == 1L) {
     return(list(
@@ -1219,11 +1222,10 @@ select.mtd <- function(target,
       r_estimator = r_estimator,
       r_hat = r_hat,
       r_use = r_use,
-      r_cap = r_cap
+      r_cap = r_cap,
+      restrict_to_target = restrict_to_target
     ))
   }
-
-  restrict_to_tried <- isTRUE(restrict_to_tried)
 
   if (!any(n > 0L)) {
     return(list(
@@ -1235,7 +1237,8 @@ select.mtd <- function(target,
       r_estimator = r_estimator,
       r_hat = r_hat,
       r_use = r_use,
-      r_cap = r_cap
+      r_cap = r_cap,
+      restrict_to_target = restrict_to_target
     ))
   }
 
@@ -1388,7 +1391,8 @@ select.mtd <- function(target,
       r_estimator = r_estimator,
       r_hat = r_hat,
       r_use = r_use,
-      r_cap = r_cap
+      r_cap = r_cap,
+      restrict_to_target = restrict_to_target
     ))
   }
 
@@ -1416,8 +1420,16 @@ select.mtd <- function(target,
 
   dist_to_target <- abs(phat.iso - target)
   dist_to_target[!valid] <- Inf
+  if (restrict_to_target) {
+    target_tol <- sqrt(.Machine$double.eps)
+    dist_to_target[phat.iso > target + target_tol] <- Inf
+  }
 
-  selectdose <- which.min(dist_to_target)
+  selectdose <- if (all(!is.finite(dist_to_target))) {
+    NA_integer_
+  } else {
+    which.min(dist_to_target)
+  }
 
   phat_out[seq_len(nadmis)] <- phat.iso
 
@@ -1429,6 +1441,7 @@ select.mtd <- function(target,
     approx = approx,
     mu_hat = mu_hat,
     n_eff = n_eff,
+    restrict_to_target = restrict_to_target,
     r_estimator = r_estimator,
     r_hat = r_hat,
     r_use = r_use,

@@ -44,6 +44,7 @@ simulate_AIDE_design <- function(
   decision_method = c("boin", "approx1", "approx2"),
   mtd_method = NULL,
   restrict_to_tried = TRUE,
+  restrict_to_target = FALSE,
   r_carry = 0.1,
   r_estimator = c("r_fixed", "r_mle", "r_adaptive"),
   r_adaptive_prior = c(1, 9),
@@ -115,6 +116,7 @@ simulate_AIDE_design <- function(
 
   model <- match.arg(model)
   restrict_to_tried <- isTRUE(restrict_to_tried)
+  restrict_to_target <- isTRUE(restrict_to_target)
 
   if (model == "BOIN") {
     decision_method <- match.arg(decision_method)
@@ -1020,6 +1022,8 @@ simulate_AIDE_design <- function(
         r_estimator = if (model == "BOIN") r_estimator else NA_character_,
         r_model = if (model == "CRM") crm_r_model else NA_character_,
         cfo_method = if (model == "CFO") cfo_method else NA_character_,
+        restrict_to_tried = restrict_to_tried,
+        restrict_to_target = restrict_to_target,
         r_hat = rep(NA_real_, K),
         r_use = rep(NA_real_, K),
         r_cap = rep(NA_real_, K),
@@ -1104,7 +1108,8 @@ simulate_AIDE_design <- function(
         r_adaptive_max = r_adaptive_max,
         r_adaptive_plug_in = r_adaptive_plug_in,
         r_adaptive_rel_tol = r_adaptive_rel_tol,
-        restrict_to_tried = restrict_to_tried
+        restrict_to_tried = restrict_to_tried,
+        restrict_to_target = restrict_to_target
       )
 
     } else if (model == "CRM") {
@@ -1132,6 +1137,7 @@ simulate_AIDE_design <- function(
         thin = crm_thin,
         seed = seed,
         restrict_to_tried = restrict_to_tried,
+        restrict_to_target = restrict_to_target,
 
         dose_values = crm_dose_values,
         dose_scores = crm_dose_scores,
@@ -1194,6 +1200,7 @@ simulate_AIDE_design <- function(
       r_model = if (model == "CRM") crm_r_model else NA_character_,
       cfo_method = if (model == "CFO") cfo_method else NA_character_,
       restrict_to_tried = restrict_to_tried,
+      restrict_to_target = restrict_to_target,
       r_hat = if (!is.null(final_fit$r_hat)) final_fit$r_hat else r_hat,
       r_use = if (model == "BOIN") r_use else rep(NA_real_, K),
       r_cap = if (model == "BOIN") r_cap else rep(NA_real_, K),
@@ -1249,6 +1256,7 @@ get_oc_sim_AIDE <- function(
     decision_method = c("boin", "approx1", "approx2"),
     mtd_method = NULL,
     restrict_to_tried = TRUE,
+    restrict_to_target = FALSE,
     r_carry = 0.1,
     r_estimator = c("r_fixed", "r_mle", "r_adaptive"),
     r_adaptive_prior = c(1, 9),
@@ -1316,6 +1324,7 @@ get_oc_sim_AIDE <- function(
 ) {
   model <- match.arg(model)
   restrict_to_tried <- isTRUE(restrict_to_tried)
+  restrict_to_target <- isTRUE(restrict_to_target)
 
   if (model == "BOIN") {
     decision_method <- match.arg(decision_method)
@@ -1443,6 +1452,7 @@ get_oc_sim_AIDE <- function(
       decision_method = decision_method,
       mtd_method = mtd_method,
       restrict_to_tried = restrict_to_tried,
+      restrict_to_target = restrict_to_target,
       r_carry = r_carry,
       r_estimator = r_estimator,
       r_adaptive_prior = r_adaptive_prior,
@@ -1637,6 +1647,7 @@ get_oc_sim_AIDE <- function(
     cfo_eta = if (model == "CFO") cfo_eta else NA_real_,
     cfo_pk_method = if (model == "CFO") cfo_pk_method else NA_character_,
     restrict_to_tried = restrict_to_tried,
+    restrict_to_target = restrict_to_target,
     sel_count = sel_count,
     stop_count = stop_count,
     na_count = na_count,

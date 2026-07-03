@@ -122,7 +122,17 @@ get_job_index <- function(args) {
 }
 
 make_p_ipde <- function(p_base, alpha_true) {
-  pmin(alpha_true + (1 - alpha_true) * p_base, 1)
+  if (length(alpha_true) != 1L || !is.finite(alpha_true) || alpha_true < 0) {
+    stop("alpha_true must be a single finite nonnegative value.")
+  }
+
+  p_base <- as.numeric(p_base)
+
+  ## IPDE truth: dose j has current-dose toxicity plus carryover from
+  ## the immediately previous dose. Dose 1 has no previous-dose term.
+  prev_dose_p <- c(0, p_base[-length(p_base)])
+
+  pmin(p_base + alpha_true * prev_dose_p, 1)
 }
 
 make_aide_folder <- function(task) {
@@ -147,7 +157,8 @@ make_aide_folder <- function(task) {
     "-cyc-", fmt_short(task$cycle_max),
     "-rate-", fmt_short(task$arrival_rate),
     "-Nmax-", fmt_short(task$Nmax_eff),
-    "-tried-", as.integer(isTRUE(task$restrict_to_tried))
+    "-tried-", as.integer(isTRUE(task$restrict_to_tried)),
+    if (isTRUE(task$restrict_to_target)) "-ptarget-1" else ""
   )
 }
 
@@ -303,7 +314,7 @@ store_raw <- FALSE
 verbose <- FALSE
 
 ## Choose AIDE models here.
-## Backfill standard BOIN/CRM for the added first five 8-dose scenarios.
+## Backfill standard BOIN/CRM for selected 5-dose scenarios.
 model_list_aide <- c("BOIN", "CRM")
 ## model_list_aide <- c("BOIN")
 ## model_list_aide <- c("BOIN", "CRM", "CFO")
@@ -340,13 +351,18 @@ crm_r_model_list <- c("fixed", "random", "level", "alpha_crm", "cumu_crm")
 ## FALSE: allow all non-eliminated doses to enter final selection.
 restrict_to_tried_list_aide <- c(TRUE)
 
+## Final MTD target-safety gate.
+## TRUE: final selected MTD must have estimated p_j <= target.
+## FALSE: select the admissible dose closest to target, as before.
+restrict_to_target_list_aide <- c(FALSE)
+
 ## CRM settings from methods_prior.R.
 ## Power CRM / alpha-CRM prior: theta ~ N(0, 2).
 theta_mean <- 0
 theta_sd <- sqrt(2)
 
 ## Skeleton for power CRM and alpha-CRM.
-q_skeleton <- c(0.12, 0.16, 0.20, 0.25, 0.30, 0.35, 0.40, 0.45)
+q_skeleton <- c(0.15, 0.20, 0.30, 0.35, 0.45)
 
 crm_skeleton_default <- q_skeleton
 crm_alpha_sd_default <- theta_sd
@@ -367,7 +383,7 @@ crm_level_model_file_default <- "random_CRM_level.bug"
 ## Baseline model: p_j = S(d_j)^exp(theta), with S(d_j)=skeleton_j.
 ## For IPDE observations, effective dose uses actual dose amounts and
 ## calendar-time gaps based on crm_time_col_default.
-dose_alpha_mg <- c(10, 20, 30, 40, 50, 60, 70, 80)
+dose_alpha_mg <- c(15, 20, 30, 35, 45)
 
 crm_dose_values_alpha_default <- dose_alpha_mg
 crm_time_col_default <- "t_start"
@@ -384,15 +400,15 @@ crm_alpha_n_draw_prior_default <- 5000
 ## beta0 ~ t(fixed_intercept, precision = beta0_prec, df = beta0_df)
 ## beta1 ~ Gamma(beta1_shape, beta1_rate)
 ## beta2 ~ Exp(1), but beta2 drops out at baseline because cumu.d = 0.
-fixed_intercept <- -2.2
+fixed_intercept <- -2.8
 beta0_prec <- 2
 beta0_df <- 1
-beta1_shape <- 2.2
+beta1_shape <- 2.5
 beta1_rate <- 1.6
 
 ## IPCRM / cumulative CRM current dose scores.
 ## These values are passed directly to the cumulative CRM helper.
-dose_ipcrm <- c(10, 20, 30, 40, 50, 60, 70, 80)
+dose_ipcrm <- c(15, 20, 30, 35, 45)
 dose_ipcrm <- dose_ipcrm / (2 * stats::sd(dose_ipcrm))
 
 crm_dose_scores_cumu_default <- dose_ipcrm
@@ -407,7 +423,7 @@ crm_cumu_include_current_default <- FALSE
 
 ## CFO / PRIDE settings from methods_prior.R.
 cfo_method_list_aide <- c("empirical", "pride")
-cfo_skeleton_default <- c(0.002, 0.008, 0.012, 0.04, 0.08, 0.10, 0.20, 0.35)
+cfo_skeleton_default <- c(0.005, 0.01, 0.05, 0.10, 0.30)
 cfo_model_file_default <- "PRIDE.bug"
 cfo_sigma2_beta_default <- 30
 cfo_eta_default <- 1
@@ -447,82 +463,87 @@ r_adaptive_plug_in_default <- "mean"
 r_adaptive_rel_tol_default <- 1e-6
 
 ## Scenario set.
-## First 5 rows are from the added 8-dose scenario table; rows 6-25
-## are from "8 scenarios.txt" in row order.
-scenario_set_name <- "Set_8dose_adaptive_r_25"
+## Rows 1-5: original 5-dose examples.
+## Rows 6-25: 20 scenarios from "5 scenarios.txt".
+## Rows 26-31: added high-gap-above-MTD scenarios.
+## Rows 32-37: added high-gap-below-MTD scenarios.
+scenario_set_name <- "Set_5dose_adaptive_r_37"
 
 scenario_meta <- data.frame(
-  Scenario = seq_len(25L),
-  Source_Scenario = c(seq_len(5L), rep(seq_len(5L), times = 4L)),
+  Scenario = seq_len(37L),
+  Source_Scenario = c(
+    seq_len(5L),
+    rep(seq_len(5L), times = 4L),
+    seq_len(6L),
+    seq_len(6L)
+  ),
+  Scenario_Group = c(
+    rep("base_example", 5L),
+    rep("five_scenarios_txt", 20L),
+    rep("higher_gap_above_MTD", 6L),
+    rep("higher_gap_below_MTD", 6L)
+  ),
   True_MTD = c(
-    8L, 7L, 6L, 5L, 4L,
-    5L, 2L, 4L, 8L, 8L,
-    8L, 4L, 1L, 4L, 5L,
-    8L, 3L, 8L, 5L, 4L,
-    6L, 1L, 2L, 8L, 1L
+    1L, 3L, 3L, 4L, 5L,
+    1L, 4L, 1L, 5L, 2L,
+    2L, 4L, 3L, 4L, 3L,
+    5L, 2L, 5L, 2L, 3L,
+    1L, 2L, 1L, 5L, 3L,
+    3L, 3L, 2L, 2L, 4L, 4L,
+    4L, 3L, 3L, 3L, 2L, 2L
   ),
   Attempt = c(
     rep(1L, 5L),
     1L, 1L, 1L, 1L, 1L,
+    1L, 3L, 1L, 1L, 1L,
+    1L, 1L, 1L, 1L, 1L,
     1L, 1L, 1L, 1L, 2L,
-    9L, 1L, 13L, 1L, 1L,
-    3L, 2L, 1L, 67L, 2L
+    rep(1L, 12L)
   ),
   Dose1 = c(
-    0.07, 0.05, 0.05, 0.02, 0.05,
-    0.11, 0.24, 0.13, 0.07, 0.07,
-    0.02, 0.12, 0.35, 0.09, 0.05,
-    0.00, 0.09, 0.00, 0.04, 0.06,
-    0.00, 0.32, 0.12, 0.00, 0.21
+    0.30, 0.15, 0.15, 0.05, 0.07,
+    0.29, 0.16, 0.32, 0.15, 0.23,
+    0.22, 0.06, 0.21, 0.09, 0.13,
+    0.02, 0.11, 0.02, 0.11, 0.07,
+    0.37, 0.07, 0.32, 0.01, 0.09,
+    0.15, 0.11, 0.20, 0.19, 0.05, 0.04,
+    0.02, 0.01, 0.05, 0.03, 0.13, 0.08
   ),
   Dose2 = c(
-    0.10, 0.08, 0.10, 0.10, 0.10,
-    0.14, 0.28, 0.17, 0.09, 0.08,
-    0.03, 0.17, 0.40, 0.14, 0.09,
-    0.01, 0.17, 0.01, 0.07, 0.08,
-    0.01, 0.51, 0.30, 0.01, 0.39
+    0.35, 0.20, 0.20, 0.10, 0.12,
+    0.34, 0.20, 0.37, 0.18, 0.28,
+    0.32, 0.09, 0.29, 0.15, 0.20,
+    0.06, 0.23, 0.04, 0.26, 0.14,
+    0.56, 0.27, 0.55, 0.02, 0.18,
+    0.22, 0.17, 0.30, 0.30, 0.08, 0.06,
+    0.05, 0.02, 0.13, 0.09, 0.29, 0.30
   ),
   Dose3 = c(
-    0.12, 0.10, 0.12, 0.15, 0.22,
-    0.19, 0.34, 0.23, 0.10, 0.10,
-    0.04, 0.21, 0.51, 0.18, 0.13,
-    0.02, 0.27, 0.02, 0.13, 0.17,
-    0.02, 0.67, 0.40, 0.02, 0.59
+    0.40, 0.30, 0.30, 0.18, 0.17,
+    0.38, 0.26, 0.42, 0.22, 0.32,
+    0.44, 0.18, 0.30, 0.23, 0.32,
+    0.09, 0.39, 0.10, 0.39, 0.31,
+    0.69, 0.50, 0.80, 0.05, 0.37,
+    0.30, 0.30, 0.50, 0.56, 0.17, 0.10,
+    0.11, 0.09, 0.30, 0.30, 0.35, 0.40
   ),
   Dose4 = c(
-    0.14, 0.15, 0.15, 0.18, 0.30,
-    0.24, 0.39, 0.29, 0.13, 0.13,
-    0.07, 0.30, 0.66, 0.34, 0.19,
-    0.04, 0.48, 0.03, 0.19, 0.31,
-    0.03, 0.80, 0.59, 0.04, 0.78
+    0.45, 0.35, 0.35, 0.30, 0.22,
+    0.43, 0.31, 0.48, 0.26, 0.39,
+    0.59, 0.29, 0.39, 0.28, 0.39,
+    0.14, 0.58, 0.20, 0.60, 0.41,
+    0.83, 0.56, 0.94, 0.10, 0.63,
+    0.62, 0.50, 0.60, 0.74, 0.27, 0.20,
+    0.30, 0.32, 0.36, 0.40, 0.40, 0.45
   ),
   Dose5 = c(
-    0.17, 0.20, 0.20, 0.30, 0.46,
-    0.30, 0.46, 0.36, 0.18, 0.16,
-    0.10, 0.43, 0.69, 0.45, 0.32,
-    0.06, 0.66, 0.05, 0.31, 0.54,
-    0.16, 0.94, 0.76, 0.09, 0.90
-  ),
-  Dose6 = c(
-    0.19, 0.22, 0.30, 0.44, 0.53,
-    0.34, 0.52, 0.40, 0.20, 0.20,
-    0.16, 0.67, 0.80, 0.58, 0.37,
-    0.08, 0.77, 0.07, 0.49, 0.75,
-    0.36, 0.98, 0.90, 0.12, 0.96
-  ),
-  Dose7 = c(
-    0.22, 0.30, 0.50, 0.52, 0.59,
-    0.37, 0.56, 0.47, 0.27, 0.24,
-    0.26, 0.80, 0.88, 0.75, 0.47,
-    0.17, 0.90, 0.13, 0.68, 0.92,
-    0.71, 0.99, 0.95, 0.17, 0.99
-  ),
-  Dose8 = c(
-    0.26, 0.45, 0.60, 0.60, 0.66,
-    0.41, 0.61, 0.52, 0.32, 0.31,
-    0.32, 0.84, 0.91, 0.81, 0.60,
-    0.28, 0.97, 0.28, 0.83, 0.96,
-    0.84, 1.00, 0.98, 0.40, 1.00
+    0.50, 0.45, 0.45, 0.40, 0.30,
+    0.52, 0.36, 0.52, 0.29, 0.43,
+    0.67, 0.44, 0.46, 0.39, 0.46,
+    0.26, 0.76, 0.35, 0.77, 0.52,
+    0.88, 0.78, 0.97, 0.25, 0.77,
+    0.80, 0.62, 0.77, 0.86, 0.54, 0.60,
+    0.36, 0.38, 0.42, 0.45, 0.43, 0.50
   )
 )
 
@@ -532,15 +553,21 @@ if (!all(dose_col_names %in% names(scenario_meta))) {
        paste(setdiff(dose_col_names, names(scenario_meta)), collapse = ", "))
 }
 
-scenarios <- as.matrix(scenario_meta[dose_col_names])
-rownames(scenarios) <- as.character(scenario_meta$Scenario)
+scenario_matrix <- as.matrix(scenario_meta[dose_col_names])
+rownames(scenario_matrix) <- as.character(scenario_meta$Scenario)
 
-## Backfill only the first five added 8-dose scenarios.  Keep
-## scenario_set_name as Set_8dose_adaptive_r_25 so output folders/files
-## match the 25-scenario result set.
-scenario_id_list <- seq_len(5L)
-## scenario_id_list <- seq_len(nrow(scenarios))
-if (ncol(scenarios) != length(crm_skeleton_default)) {
+## Choose which scenario indexes to run.
+## The newly added high-gap scenarios are 26:37.
+## Example: scenarios <- 26:37 runs all newly added high-gap scenarios.
+scenarios <- 26:37
+## scenarios <- seq_len(nrow(scenario_matrix))
+
+scenario_id_list <- as.integer(scenarios)
+if (anyNA(scenario_id_list) || any(!scenario_id_list %in% scenario_meta$Scenario)) {
+  stop("All entries in scenarios must match scenario_meta$Scenario.")
+}
+
+if (ncol(scenario_matrix) != length(crm_skeleton_default)) {
   stop("Scenarios and CRM skeleton have different lengths.")
 }
 
@@ -608,6 +635,7 @@ cat("CRM r models:", paste(crm_r_model_list, collapse = ", "), "\n")
 cat("CFO methods:", paste(cfo_method_list_aide, collapse = ", "), "\n")
 cat("Nmax_eff list:", paste(Nmax_eff_list_equiv, collapse = ", "), "\n")
 cat("restrict_to_tried list:", paste(restrict_to_tried_list_aide, collapse = ", "), "\n")
+cat("restrict_to_target list:", paste(restrict_to_target_list_aide, collapse = ", "), "\n")
 cat("Continuous enrollment:", continuous_enrollment_equiv, "\n")
 cat("Cycle max list:", paste(cycle_max_list_equiv, collapse = ", "), "\n")
 cat("CRM skeleton:", paste(crm_skeleton_default, collapse = ", "), "\n")
@@ -671,6 +699,7 @@ run_one_aide_task <- function(task) {
     "-r", fmt_short(task$r_carry),
     "-cyc", fmt_short(task$cycle_max),
     "-tried", as.integer(isTRUE(task$restrict_to_tried)),
+    if (isTRUE(task$restrict_to_target)) "-ptarget1" else "",
     "-j", task$job_i,
     "-b", task$block_id,
     "-s", task$seed.block,
@@ -688,6 +717,7 @@ run_one_aide_task <- function(task) {
       "-", method_tag,
       "-cyc", fmt_short(task$cycle_max),
       "-tried", as.integer(isTRUE(task$restrict_to_tried)),
+      if (isTRUE(task$restrict_to_target)) "-ptarget1" else "",
       "-j", task$job_i,
       "-b", task$block_id,
       ".log"
@@ -700,6 +730,7 @@ run_one_aide_task <- function(task) {
     cat("====================================\n")
     cat("Scenario set:", task$scenario_set, "\n")
     cat("Scenario:", task$scenario_id, "\n")
+    cat("Scenario group:", task$scenario_group, "\n")
     cat("Model:", task$model, "\n")
     cat("Method:", method_tag, "\n")
     cat("Job:", task$job_i, "\n")
@@ -716,6 +747,7 @@ run_one_aide_task <- function(task) {
     cat("Nmax_eff:", task$Nmax_eff, "\n")
     cat("dose_cap:", task$dose_cap, "\n")
     cat("restrict_to_tried:", task$restrict_to_tried, "\n")
+    cat("restrict_to_target:", task$restrict_to_target, "\n")
     cat("continuous_enrollment:", task$continuous_enrollment, "\n")
     cat("p.true:", paste(task$p.true, collapse = ", "), "\n")
     cat("p.true_ipde:", paste(task$p.true_ipde, collapse = ", "), "\n")
@@ -804,6 +836,7 @@ run_one_aide_task <- function(task) {
       decision_method = task$decision_method,
       mtd_method = task$mtd_method,
       restrict_to_tried = task$restrict_to_tried,
+      restrict_to_target = task$restrict_to_target,
       r_carry = task$r_carry,
       r_estimator = task$r_estimator,
       r_adaptive_prior = task$r_adaptive_prior,
@@ -889,6 +922,7 @@ run_one_aide_task <- function(task) {
     scenario_id = task$scenario_id,
     scenario_name = scenario_name,
     source_scenario = task$source_scenario,
+    scenario_group = task$scenario_group,
     true_mtd = task$true_mtd,
     scenario_attempt = task$scenario_attempt,
     Nmax_eff = task$Nmax_eff,
@@ -899,6 +933,7 @@ run_one_aide_task <- function(task) {
     crm_r_model = task$crm_r_model,
     cfo_method = task$cfo_method,
     restrict_to_tried = task$restrict_to_tried,
+    restrict_to_target = task$restrict_to_target,
     alpha_true = task$alpha_true,
     r_carry = task$r_carry,
     arrival_rate = task$arrival_rate,
@@ -931,9 +966,10 @@ job_seed_offset <- seed_base + (job_i - 1L) * ntrial.total
 
 for (Nmax_eff_aide in Nmax_eff_list_equiv) {
   for (restrict_to_tried_aide in restrict_to_tried_list_aide) {
-    for (model_aide in model_list_aide) {
-      for (scenario_id in scenario_id_list) {
-        p_base <- as.numeric(scenarios[scenario_id, ])
+    for (restrict_to_target_aide in restrict_to_target_list_aide) {
+      for (model_aide in model_list_aide) {
+        for (scenario_id in scenario_id_list) {
+          p_base <- as.numeric(scenario_matrix[as.character(scenario_id), ])
 
         for (alpha_true in alpha_true_list) {
           p_ipde <- make_p_ipde(p_base, alpha_true)
@@ -998,6 +1034,7 @@ for (Nmax_eff_aide in Nmax_eff_list_equiv) {
 
                         scenario_id = scenario_id,
                         source_scenario = scenario_meta$Source_Scenario[scenario_id],
+                        scenario_group = scenario_meta$Scenario_Group[scenario_id],
                         p.true = p_base,
                         p.true_ipde = p_ipde,
 
@@ -1030,6 +1067,7 @@ for (Nmax_eff_aide in Nmax_eff_list_equiv) {
                         decision_method = if (model_aide == "BOIN") decision_method_aide else "boin",
                         mtd_method = if (model_aide == "BOIN") mtd_method_aide else NULL,
                         restrict_to_tried = restrict_to_tried_aide,
+                        restrict_to_target = restrict_to_target_aide,
                         r_carry = r_carry_aide,
                         r_estimator = if (model_aide == "BOIN") r_estimator_aide else "r_fixed",
                         r_adaptive_prior = r_adaptive_prior_default,
@@ -1114,6 +1152,7 @@ for (Nmax_eff_aide in Nmax_eff_list_equiv) {
     }
   }
 }
+}
 
 cat("Number of parallel tasks:", length(tasks), "\n")
 
@@ -1167,7 +1206,7 @@ group_key <- vapply(
       paste0("cfo_", z$cfo_method)
     }
 
-    paste(
+    key_parts <- c(
       paste0(z$scenario_set, "_SC", z$scenario_id),
       z$model,
       method_tag,
@@ -1177,9 +1216,14 @@ group_key <- vapply(
       paste0("cyc", fmt_short(z$cycle_max)),
       paste0("Nmax", fmt_short(z$Nmax_eff)),
       paste0("cont", as.integer(isTRUE(z$continuous_enrollment))),
-      paste0("tried", as.integer(isTRUE(z$restrict_to_tried))),
-      sep = "_"
+      paste0("tried", as.integer(isTRUE(z$restrict_to_tried)))
     )
+
+    if (isTRUE(z$restrict_to_target)) {
+      key_parts <- c(key_parts, "ptarget1")
+    }
+
+    paste(key_parts, collapse = "_")
   },
   character(1)
 )

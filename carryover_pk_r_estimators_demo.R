@@ -1309,8 +1309,7 @@ example_scenarios <- list(
   sce2 = c(0.15, 0.30, 0.38, 0.45, 0.55),
   sce3 = c(0.15, 0.20, 0.30, 0.35, 0.45),
   sce4 = c(0.05, 0.10, 0.18, 0.30, 0.40),
-  sce5 = c(0.07, 0.12, 0.17, 0.22, 0.30),
-  sce6 = c(0.50, 0.55, 0.60, 0.65, 0.70)
+  sce5 = c(0.07, 0.12, 0.17, 0.22, 0.30)
 )
 
 ## Your original prior:
@@ -1326,7 +1325,7 @@ example_scenarios <- list(
 demo_results <- run_carryover_estimator_replicates(
   scenarios = example_scenarios,
   alpha_values = c(1.2, 1.5),
-  n_reps = 1000,
+  n_reps = 10,
   n_regular = rep(100, 5),
   n_ipde = rep(100, 5),
   
