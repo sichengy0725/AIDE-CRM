@@ -135,6 +135,47 @@ make_p_ipde <- function(p_base, alpha_true) {
   pmin(p_base + alpha_true * prev_dose_p, 1)
 }
 
+read_scenario_txt <- function(file, ndose) {
+  if (!file.exists(file)) {
+    stop("Cannot find scenario file: ", file)
+  }
+
+  lines <- readLines(file, warn = FALSE)
+  numeric_lines <- grep("^\\s*[0-9]+\\s+", lines, value = TRUE)
+  fields <- strsplit(trimws(numeric_lines), "\\s+")
+
+  expected_ncol <- ndose + 4L
+  keep <- vapply(fields, length, integer(1)) == expected_ncol
+  fields <- fields[keep]
+
+  if (length(fields) == 0L) {
+    stop("No ", ndose, "-dose scenario rows found in ", file)
+  }
+
+  mat <- do.call(rbind, fields)
+  dat <- as.data.frame(apply(mat, 2, as.numeric), stringsAsFactors = FALSE)
+  names(dat) <- c(
+    "Print_Row",
+    "Source_Scenario",
+    "True_MTD",
+    paste0("Dose", seq_len(ndose)),
+    "Attempt"
+  )
+
+  out <- data.frame(
+    Scenario = seq_len(nrow(dat)),
+    Source_Scenario = as.integer(dat$Source_Scenario),
+    Scenario_Group = basename(file),
+    True_MTD = as.integer(dat$True_MTD),
+    Attempt = as.integer(dat$Attempt),
+    dat[paste0("Dose", seq_len(ndose))],
+    row.names = NULL,
+    check.names = FALSE
+  )
+
+  out
+}
+
 make_aide_folder <- function(task) {
   method_tag <- if (task$model == "BOIN") {
     paste0(task$decision_method, "-", task$r_estimator)
@@ -283,6 +324,12 @@ combine_oc_AIDE_results <- function(files) {
 target_BOIN <- 0.30
 cutoff_equiv <- 0.95
 
+## Switch this between 5L and 8L to change both scenarios and priors.
+scenario_dose_count <- 8L
+if (!scenario_dose_count %in% c(5L, 8L)) {
+  stop("scenario_dose_count must be 5L or 8L.")
+}
+
 ## This is trials per LSF job, not total across all 2000 jobs.
 ntrial.total <- 1L
 
@@ -314,7 +361,7 @@ store_raw <- FALSE
 verbose <- FALSE
 
 ## Choose AIDE models here.
-## Backfill standard BOIN/CRM for selected 5-dose scenarios.
+## Backfill standard BOIN/CRM for selected scenarios.
 model_list_aide <- c("BOIN", "CRM")
 ## model_list_aide <- c("BOIN")
 ## model_list_aide <- c("BOIN", "CRM", "CFO")
@@ -334,13 +381,17 @@ r_estimator_list_boin <- c("r_fixed")
 ## r_estimator_list_boin <- c("r_fixed", "r_mle", "r_adaptive")
 
 ## CRM versions.
-## Five supported AIDE-CRM methods:
+## Supported AIDE-CRM methods:
 ##   fixed/r_fixed : discount CRM with fixed r
 ##   random        : discount CRM with one random r
-##   level         : discount CRM with level-specific random r
+##   level         : level-specific random r, available only for 5-dose runs
 ##   alpha_crm     : alpha-CRM effective-dose model
 ##   cumu_crm      : logistic cumulative-dose CRM/IPCRM
-crm_r_model_list <- c("fixed", "random", "level", "alpha_crm", "cumu_crm")
+crm_r_model_list <- if (scenario_dose_count == 5L) {
+  c("fixed", "random", "level", "alpha_crm", "cumu_crm")
+} else {
+  c("fixed", "random", "alpha_crm", "cumu_crm")
+}
 ## For quick tests, use for example:
 ## crm_r_model_list <- c("alpha_crm")
 ## crm_r_model_list <- c("cumu_crm")
@@ -361,8 +412,23 @@ restrict_to_target_list_aide <- c(FALSE)
 theta_mean <- 0
 theta_sd <- sqrt(2)
 
-## Skeleton for power CRM and alpha-CRM.
-q_skeleton <- c(0.15, 0.20, 0.30, 0.35, 0.45)
+if (scenario_dose_count == 5L) {
+  ## 5-dose prior settings.
+  q_skeleton <- c(0.15, 0.20, 0.30, 0.35, 0.45)
+  dose_alpha_mg <- c(15, 20, 30, 35, 45)
+  dose_ipcrm_raw <- c(15, 20, 30, 35, 45)
+  fixed_intercept <- -2.8
+  beta1_shape <- 2.5
+  cfo_skeleton_default <- c(0.005, 0.01, 0.05, 0.10, 0.30)
+} else if (scenario_dose_count == 8L) {
+  ## 8-dose prior settings.
+  q_skeleton <- c(0.12, 0.16, 0.20, 0.25, 0.30, 0.35, 0.40, 0.45)
+  dose_alpha_mg <- c(10, 20, 30, 40, 50, 60, 70, 80)
+  dose_ipcrm_raw <- c(10, 20, 30, 40, 50, 60, 70, 80)
+  fixed_intercept <- -2.2
+  beta1_shape <- 2.2
+  cfo_skeleton_default <- c(0.002, 0.008, 0.012, 0.04, 0.08, 0.10, 0.20, 0.35)
+}
 
 crm_skeleton_default <- q_skeleton
 crm_alpha_sd_default <- theta_sd
@@ -383,8 +449,6 @@ crm_level_model_file_default <- "random_CRM_level.bug"
 ## Baseline model: p_j = S(d_j)^exp(theta), with S(d_j)=skeleton_j.
 ## For IPDE observations, effective dose uses actual dose amounts and
 ## calendar-time gaps based on crm_time_col_default.
-dose_alpha_mg <- c(15, 20, 30, 35, 45)
-
 crm_dose_values_alpha_default <- dose_alpha_mg
 crm_time_col_default <- "t_start"
 crm_alpha_grid_default <- seq(0.01, 0.99, length.out = 61)
@@ -400,16 +464,13 @@ crm_alpha_n_draw_prior_default <- 5000
 ## beta0 ~ t(fixed_intercept, precision = beta0_prec, df = beta0_df)
 ## beta1 ~ Gamma(beta1_shape, beta1_rate)
 ## beta2 ~ Exp(1), but beta2 drops out at baseline because cumu.d = 0.
-fixed_intercept <- -2.8
 beta0_prec <- 2
 beta0_df <- 1
-beta1_shape <- 2.5
 beta1_rate <- 1.6
 
 ## IPCRM / cumulative CRM current dose scores.
 ## These values are passed directly to the cumulative CRM helper.
-dose_ipcrm <- c(15, 20, 30, 35, 45)
-dose_ipcrm <- dose_ipcrm / (2 * stats::sd(dose_ipcrm))
+dose_ipcrm <- dose_ipcrm_raw / (2 * stats::sd(dose_ipcrm_raw))
 
 crm_dose_scores_cumu_default <- dose_ipcrm
 crm_cumu_model_file_default <- NULL
@@ -423,7 +484,6 @@ crm_cumu_include_current_default <- FALSE
 
 ## CFO / PRIDE settings from methods_prior.R.
 cfo_method_list_aide <- c("empirical", "pride")
-cfo_skeleton_default <- c(0.005, 0.01, 0.05, 0.10, 0.30)
 cfo_model_file_default <- "PRIDE.bug"
 cfo_sigma2_beta_default <- 30
 cfo_eta_default <- 1
@@ -463,6 +523,7 @@ r_adaptive_plug_in_default <- "mean"
 r_adaptive_rel_tol_default <- 1e-6
 
 ## Scenario set.
+if (scenario_dose_count == 5L) {
 ## Rows 1-5: original 5-dose examples.
 ## Rows 6-25: 20 scenarios from "5 scenarios.txt".
 ## Rows 26-31: added high-gap-above-MTD scenarios.
@@ -547,6 +608,30 @@ scenario_meta <- data.frame(
   )
 )
 
+## Default 5-dose run: newly added high-gap scenarios.
+scenarios <- 26:37
+
+} else if (scenario_dose_count == 8L) {
+## Rows 1-20: 20 scenarios from "8 scenarios.txt".
+## Rows 21-30: added high-gap-above-MTD scenarios.
+## Rows 31-40: added high-gap-below-MTD scenarios.
+scenario_set_name <- "Set_8dose_adaptive_r_40"
+scenario_meta <- read_scenario_txt("8 scenarios.txt", ndose = 8L)
+
+if (nrow(scenario_meta) == 40L) {
+  scenario_meta$Scenario_Group <- c(
+    rep("eight_scenarios_txt", 20L),
+    rep("higher_gap_above_MTD", 10L),
+    rep("higher_gap_below_MTD", 10L)
+  )
+} else {
+  scenario_meta$Scenario_Group <- "eight_scenarios_txt"
+}
+
+## Default 8-dose run: newly added high-gap scenarios.
+scenarios <- if (nrow(scenario_meta) >= 40L) 21:40 else seq_len(nrow(scenario_meta))
+}
+
 dose_col_names <- paste0("Dose", seq_along(crm_skeleton_default))
 if (!all(dose_col_names %in% names(scenario_meta))) {
   stop("scenario_meta is missing required dose columns: ",
@@ -556,10 +641,7 @@ if (!all(dose_col_names %in% names(scenario_meta))) {
 scenario_matrix <- as.matrix(scenario_meta[dose_col_names])
 rownames(scenario_matrix) <- as.character(scenario_meta$Scenario)
 
-## Choose which scenario indexes to run.
-## The newly added high-gap scenarios are 26:37.
-## Example: scenarios <- 26:37 runs all newly added high-gap scenarios.
-scenarios <- 26:37
+## Choose which scenario indexes to run by overriding scenarios above.
 ## scenarios <- seq_len(nrow(scenario_matrix))
 
 scenario_id_list <- as.integer(scenarios)
@@ -577,6 +659,10 @@ if (length(crm_dose_values_alpha_default) != length(crm_skeleton_default)) {
 
 if (length(crm_dose_scores_cumu_default) != length(crm_skeleton_default)) {
   stop("IPCRM dose scores and CRM skeleton have different lengths.")
+}
+
+if (length(cfo_skeleton_default) != length(crm_skeleton_default)) {
+  stop("CFO skeleton and CRM skeleton have different lengths.")
 }
 
 ## ============================================================
@@ -638,6 +724,7 @@ cat("restrict_to_tried list:", paste(restrict_to_tried_list_aide, collapse = ", 
 cat("restrict_to_target list:", paste(restrict_to_target_list_aide, collapse = ", "), "\n")
 cat("Continuous enrollment:", continuous_enrollment_equiv, "\n")
 cat("Cycle max list:", paste(cycle_max_list_equiv, collapse = ", "), "\n")
+cat("Scenario dose count:", scenario_dose_count, "\n")
 cat("CRM skeleton:", paste(crm_skeleton_default, collapse = ", "), "\n")
 cat("alpha-CRM dose values:", paste(crm_dose_values_alpha_default, collapse = ", "), "\n")
 cat("alpha-CRM theta prior mean/sd:", crm_theta_prior_mean_default, crm_theta_prior_sd_default, "\n")

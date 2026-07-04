@@ -2,7 +2,9 @@
 # Random generation of monotone dose-toxicity scenarios
 # User specifies:
 #   target      = target toxicity probability
-#   target_diff = desired average adjacent probability difference
+#   target_diff = legacy desired average adjacent probability difference
+#   target_diff_below / target_diff_above =
+#     optional desired adjacent probability differences below/above the MTD
 # ============================================================
 
 
@@ -16,6 +18,38 @@ logit <- function(p) {
 
 inv_logit <- function(x) {
   plogis(x)
+}
+
+
+validate_target_diff <- function(target, target_diff, side = c("symmetric", "below", "above")) {
+  
+  side <- match.arg(side)
+  
+  if (!is.numeric(target_diff) || length(target_diff) != 1L || !is.finite(target_diff)) {
+    stop("target_diff values must be single finite numbers.")
+  }
+  
+  if (side == "symmetric") {
+    if (target_diff <= 0 || target_diff >= 0.5) {
+      stop("target_diff must be between 0 and 0.5.")
+    }
+    return(invisible(TRUE))
+  }
+  
+  max_diff <- if (side == "below") target else 1 - target
+  
+  if (target_diff <= 0 || target_diff >= max_diff) {
+    stop(
+      sprintf(
+        "target_diff_%s must be between 0 and %.4f for target = %.4f.",
+        side,
+        max_diff,
+        target
+      )
+    )
+  }
+  
+  invisible(TRUE)
 }
 
 
@@ -33,9 +67,7 @@ get_logit_spacing <- function(target, target_diff) {
     stop("target must be between 0 and 1.")
   }
   
-  if (target_diff <= 0 || target_diff >= 0.5) {
-    stop("target_diff must be between 0 and 0.5.")
-  }
+  validate_target_diff(target, target_diff, side = "symmetric")
   
   f <- function(mu) {
     upper <- inv_logit(logit(target) + mu)
@@ -44,6 +76,98 @@ get_logit_spacing <- function(target, target_diff) {
   }
   
   uniroot(f, lower = 1e-8, upper = 50)$root
+}
+
+
+get_logit_spacing_one_sided <- function(target, target_diff, side = c("below", "above")) {
+  
+  side <- match.arg(side)
+  
+  if (target <= 0 || target >= 1) {
+    stop("target must be between 0 and 1.")
+  }
+  
+  validate_target_diff(target, target_diff, side = side)
+  
+  target_eta <- logit(target)
+  
+  f <- if (side == "below") {
+    function(mu) {
+      target - inv_logit(target_eta - mu) - target_diff
+    }
+  } else {
+    function(mu) {
+      inv_logit(target_eta + mu) - target - target_diff
+    }
+  }
+  
+  uniroot(f, lower = 1e-8, upper = 50)$root
+}
+
+
+resolve_target_diff_inputs <- function(
+    target,
+    target_diff,
+    target_diff_below = NULL,
+    target_diff_above = NULL
+) {
+  
+  legacy_spacing <- is.null(target_diff_below) && is.null(target_diff_above)
+  
+  if (legacy_spacing) {
+    if (is.null(target_diff)) {
+      stop("target_diff must be specified when target_diff_below and target_diff_above are NULL.")
+    }
+    
+    spacing_mean <- get_logit_spacing(
+      target = target,
+      target_diff = target_diff
+    )
+    
+    return(list(
+      legacy_spacing = TRUE,
+      target_diff = target_diff,
+      target_diff_below = target_diff,
+      target_diff_above = target_diff,
+      spacing_mean_below = spacing_mean,
+      spacing_mean_above = spacing_mean
+    ))
+  }
+  
+  if (is.null(target_diff_below)) {
+    if (is.null(target_diff)) {
+      stop("target_diff_below must be specified when target_diff is NULL.")
+    }
+    target_diff_below <- target_diff
+  }
+  
+  if (is.null(target_diff_above)) {
+    if (is.null(target_diff)) {
+      stop("target_diff_above must be specified when target_diff is NULL.")
+    }
+    target_diff_above <- target_diff
+  }
+  
+  spacing_mean_below <- get_logit_spacing_one_sided(
+    target = target,
+    target_diff = target_diff_below,
+    side = "below"
+  )
+  
+  spacing_mean_above <- get_logit_spacing_one_sided(
+    target = target,
+    target_diff = target_diff_above,
+    side = "above"
+  )
+  
+  list(
+    legacy_spacing = FALSE,
+    target_diff = target_diff,
+    target_diff_below = target_diff_below,
+    target_diff_above = target_diff_above,
+    spacing_mean_below = spacing_mean_below,
+    spacing_mean_above = spacing_mean_above
+  )
 }
 
 
@@ -74,8 +198,12 @@ generate_one_dose_toxicity_curve <- function(
     ndose,
     target = 0.30,
     target_diff = 0.15,
+    target_diff_below = NULL,
+    target_diff_above = NULL,
     mtd = NULL,
     spacing_sd = NULL,
+    spacing_sd_below = NULL,
+    spacing_sd_above = NULL,
     mtd_jitter = NULL,
     digits = 2,
     max_try = 10000
@@ -89,10 +217,6 @@ generate_one_dose_toxicity_curve <- function(
     stop("target must be between 0 and 1.")
   }
   
-  if (target_diff <= 0 || target_diff >= 0.5) {
-    stop("target_diff must be between 0 and 0.5.")
-  }
-  
   # Randomly choose the true MTD if not specified
   if (is.null(mtd)) {
     mtd <- sample(seq_len(ndose), size = 1)
@@ -102,20 +226,57 @@ generate_one_dose_toxicity_curve <- function(
     stop("mtd must be between 1 and ndose.")
   }
   
-  # Mean adjacent spacing on the logit scale
-  spacing_mean <- get_logit_spacing(
+  # Mean adjacent spacing on the logit scale. If target_diff_below/above
+  # are omitted, this preserves the legacy symmetric spacing behavior.
+  target_diff_inputs <- resolve_target_diff_inputs(
     target = target,
-    target_diff = target_diff
+    target_diff = target_diff,
+    target_diff_below = target_diff_below,
+    target_diff_above = target_diff_above
   )
   
+  spacing_mean_below <- target_diff_inputs$spacing_mean_below
+  spacing_mean_above <- target_diff_inputs$spacing_mean_above
+  
   # Default spacing variability
-  if (is.null(spacing_sd)) {
-    spacing_sd <- spacing_mean / 3
+  if (!is.null(spacing_sd) &&
+      (!is.numeric(spacing_sd) || length(spacing_sd) != 1L || !is.finite(spacing_sd) || spacing_sd <= 0)) {
+    stop("spacing_sd must be a single positive finite number.")
+  }
+  
+  if (is.null(spacing_sd_below)) {
+    spacing_sd_below <- if (is.null(spacing_sd)) spacing_mean_below / 3 else spacing_sd
+  }
+  
+  if (is.null(spacing_sd_above)) {
+    spacing_sd_above <- if (is.null(spacing_sd)) spacing_mean_above / 3 else spacing_sd
+  }
+  
+  if (!is.numeric(spacing_sd_below) ||
+      length(spacing_sd_below) != 1L ||
+      !is.finite(spacing_sd_below) ||
+      spacing_sd_below <= 0) {
+    stop("spacing_sd_below must be a single positive finite number.")
+  }
+  
+  if (!is.numeric(spacing_sd_above) ||
+      length(spacing_sd_above) != 1L ||
+      !is.finite(spacing_sd_above) ||
+      spacing_sd_above <= 0) {
+    stop("spacing_sd_above must be a single positive finite number.")
   }
   
   # Toxicity probability at the MTD is generated near target
   if (is.null(mtd_jitter)) {
-    mtd_jitter <- target_diff / 2
+    nearest_target_diff <- if (mtd == 1L) {
+      target_diff_inputs$target_diff_above
+    } else if (mtd == ndose) {
+      target_diff_inputs$target_diff_below
+    } else {
+      min(target_diff_inputs$target_diff_below, target_diff_inputs$target_diff_above)
+    }
+    
+    mtd_jitter <- nearest_target_diff / 2
   }
   
   lower_mtd <- max(1e-6, target - mtd_jitter)
@@ -134,8 +295,8 @@ generate_one_dose_toxicity_curve <- function(
       for (j in (mtd - 1):1) {
         delta <- rposnorm(
           n = 1,
-          mean = spacing_mean,
-          sd = spacing_sd
+          mean = spacing_mean_below,
+          sd = spacing_sd_below
         )
         eta[j] <- eta[j + 1] - delta
       }
@@ -146,8 +307,8 @@ generate_one_dose_toxicity_curve <- function(
       for (j in (mtd + 1):ndose) {
         delta <- rposnorm(
           n = 1,
-          mean = spacing_mean,
-          sd = spacing_sd
+          mean = spacing_mean_above,
+          sd = spacing_sd_above
         )
         eta[j] <- eta[j - 1] + delta
       }
@@ -169,8 +330,15 @@ generate_one_dose_toxicity_curve <- function(
         mtd = mtd,
         target = target,
         target_diff = target_diff,
-        spacing_mean_logit = spacing_mean,
-        spacing_sd_logit = spacing_sd,
+        target_diff_below = target_diff_inputs$target_diff_below,
+        target_diff_above = target_diff_inputs$target_diff_above,
+        spacing_mean_logit = if (target_diff_inputs$legacy_spacing) spacing_mean_below else NA_real_,
+        spacing_mean_logit_below = spacing_mean_below,
+        spacing_mean_logit_above = spacing_mean_above,
+        spacing_sd_logit = if (target_diff_inputs$legacy_spacing &&
+                                identical(spacing_sd_below, spacing_sd_above)) spacing_sd_below else NA_real_,
+        spacing_sd_logit_below = spacing_sd_below,
+        spacing_sd_logit_above = spacing_sd_above,
         attempt = attempt
       ))
     }
@@ -189,7 +357,11 @@ generate_many_dose_toxicity_curves <- function(
     ndose,
     target = 0.30,
     target_diff = 0.15,
+    target_diff_below = NULL,
+    target_diff_above = NULL,
     spacing_sd = NULL,
+    spacing_sd_below = NULL,
+    spacing_sd_above = NULL,
     mtd_jitter = NULL,
     digits = 2,
     seed = NULL
@@ -209,7 +381,11 @@ generate_many_dose_toxicity_curves <- function(
       ndose = ndose,
       target = target,
       target_diff = target_diff,
+      target_diff_below = target_diff_below,
+      target_diff_above = target_diff_above,
       spacing_sd = spacing_sd,
+      spacing_sd_below = spacing_sd_below,
+      spacing_sd_above = spacing_sd_above,
       mtd_jitter = mtd_jitter,
       digits = digits
     )
@@ -229,6 +405,11 @@ generate_many_dose_toxicity_curves <- function(
     row.names = NULL
   )
   
+  attr(out, "target") <- target
+  attr(out, "target_diff") <- target_diff
+  attr(out, "target_diff_below") <- if (is.null(target_diff_below)) target_diff else target_diff_below
+  attr(out, "target_diff_above") <- if (is.null(target_diff_above)) target_diff else target_diff_above
+  
   return(out)
 }
 
@@ -237,10 +418,11 @@ generate_many_dose_toxicity_curves <- function(
 # Example
 # ============================================================
 scenarios <- generate_many_dose_toxicity_curves(
-  nscenario = 5,
+  nscenario = 50,
   ndose = 8,
   target = 0.30,
-  target_diff = 0.2
+  target_diff_below = 0.10,
+  target_diff_above = 0.05
 )
 
 print(scenarios)
