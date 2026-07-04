@@ -600,7 +600,7 @@ simulate_regular_ipde_counts <- function(p_true,
                                          n_ipde = 20,
                                          alpha_true = 0.1,
                                          seed = NULL,
-                                         ipde_model = c("document", "aide_alpha")) {
+                                         ipde_model = c("aide_alpha", "document")) {
   ipde_model <- match.arg(ipde_model)
   
   if (!is.null(seed)) {
@@ -621,18 +621,18 @@ simulate_regular_ipde_counts <- function(p_true,
   nR <- expand_n_by_dose(n_regular, K, "n_regular")
   nI <- expand_n_by_dose(n_ipde, K, "n_ipde")
   
-  ## In the document model, alpha_true is the simulation truth for r:
-  ## q_k = alpha_true + (1 - alpha_true) p_k, capped at 1.
-  ##
-  ## The optional "aide_alpha" mode matches older AIDE-style simulation:
+  ## AIDE-style carryover truth:
   ## q_k = p_k + alpha_true p_{k-1}, with dose 1 unchanged.
-  if (ipde_model == "document") {
-    q_true <- pmin(1, alpha_true + (1 - alpha_true) * p_true)
-  } else {
+  ##
+  ## The optional "document" mode uses the older discount-model truth:
+  ## q_k = alpha_true + (1 - alpha_true) p_k, capped at 1.
+  if (ipde_model == "aide_alpha") {
     q_true <- p_true
     if (K >= 2L) {
       q_true[-1] <- pmin(1, p_true[-1] + alpha_true * p_true[-K])
     }
+  } else {
+    q_true <- pmin(1, alpha_true + (1 - alpha_true) * p_true)
   }
   
   data.frame(
@@ -643,6 +643,85 @@ simulate_regular_ipde_counts <- function(p_true,
     yR = stats::rbinom(K, nR, p_true),
     nI = nI,
     yI = stats::rbinom(K, nI, q_true)
+  )
+}
+
+make_crm_dat_from_counts <- function(dat) {
+  counts <- make_counts(dat)
+  rows <- vector("list", nrow(counts) * 2L)
+  idx <- 1L
+  
+  for (i in seq_len(nrow(counts))) {
+    dose_i <- counts$dose[i]
+    
+    if (counts$nR[i] > 0L) {
+      rows[[idx]] <- data.frame(
+        dose = rep(dose_i, counts$nR[i]),
+        y = c(rep(1L, counts$yR[i]), rep(0L, counts$nR[i] - counts$yR[i])),
+        type = "regular",
+        ipde = 0L
+      )
+      idx <- idx + 1L
+    }
+    
+    if (counts$nI[i] > 0L) {
+      rows[[idx]] <- data.frame(
+        dose = rep(dose_i, counts$nI[i]),
+        y = c(rep(1L, counts$yI[i]), rep(0L, counts$nI[i] - counts$yI[i])),
+        type = "ipde",
+        ipde = 1L
+      )
+      idx <- idx + 1L
+    }
+  }
+  
+  out <- do.call(rbind, rows[seq_len(idx - 1L)])
+  rownames(out) <- NULL
+  out
+}
+
+fit_random_crm_comparator <- function(dat,
+                                      target = 0.30,
+                                      skeleton = NULL,
+                                      a_r = 0.15,
+                                      b_r = 0.85,
+                                      alpha_sd = sqrt(2),
+                                      model_file = "random_CRM.bug",
+                                      n_chains = 2,
+                                      n_adapt = 500,
+                                      n_burnin = 500,
+                                      n_iter = 2000,
+                                      thin = 1,
+                                      seed = NULL) {
+  counts <- make_counts(dat)
+  ndose <- nrow(counts)
+  
+  if (is.null(skeleton)) {
+    skeleton <- counts$p_true
+  }
+  
+  if (length(skeleton) != ndose) {
+    stop("skeleton must have length equal to the number of doses.")
+  }
+  
+  crm_dat <- make_crm_dat_from_counts(counts)
+  
+  crm_fit(
+    dat = crm_dat,
+    ndose = ndose,
+    skeleton = skeleton,
+    target = target,
+    r_model = "random",
+    a_r = a_r,
+    b_r = b_r,
+    alpha_sd = alpha_sd,
+    random_model_file = model_file,
+    n_chains = n_chains,
+    n_adapt = n_adapt,
+    n_burnin = n_burnin,
+    n_iter = n_iter,
+    thin = thin,
+    seed = seed
   )
 }
 
@@ -733,7 +812,7 @@ run_carryover_estimator_demo <- function(scenarios,
                                          p_prior = c(1, 1),
                                          r_max = 0.6,
                                          plug_in = "mean",
-                                         ipde_model = "document",
+                                         ipde_model = "aide_alpha",
                                          seed = 20260628,
                                          plot_dir = "carryover_pk_r_demo_plots",
                                          debug_on_error = TRUE) {
@@ -864,6 +943,26 @@ summarize_replicate_estimates <- function(replicate_results) {
       split(replicate_results, keys),
       function(x) {
         unique_r_by_rep <- unique(x[, c("replicate", "r_hat_used")])
+        finite_mean <- function(z) {
+          z <- z[is.finite(z)]
+          if (length(z) == 0L) {
+            return(NA_real_)
+          }
+          mean(z)
+        }
+        finite_sd <- function(z) {
+          z <- z[is.finite(z)]
+          if (length(z) <= 1L) {
+            return(NA_real_)
+          }
+          stats::sd(z)
+        }
+        has_crm_random <- "p_crm_random" %in% names(x)
+        unique_crm_r_by_rep <- if ("r_hat_crm_random" %in% names(x)) {
+          unique(x[, c("replicate", "r_hat_crm_random")])
+        } else {
+          NULL
+        }
         
         data.frame(
           scenario = x$scenario[1],
@@ -882,10 +981,35 @@ summarize_replicate_estimates <- function(replicate_results) {
           mean_p_mle_plugin = mean(x$p_mle_plugin, na.rm = TRUE),
           sd_p_mle_plugin = stats::sd(x$p_mle_plugin, na.rm = TRUE),
           bias_p_mle_plugin = mean(x$p_mle_plugin - x$p_true, na.rm = TRUE),
+          mean_p_crm_random = if (has_crm_random) {
+            finite_mean(x$p_crm_random)
+          } else {
+            NA_real_
+          },
+          sd_p_crm_random = if (has_crm_random) {
+            finite_sd(x$p_crm_random)
+          } else {
+            NA_real_
+          },
+          bias_p_crm_random = if (has_crm_random) {
+            finite_mean(x$p_crm_random - x$p_true)
+          } else {
+            NA_real_
+          },
           mean_r_hat = mean(x$r_hat_used, na.rm = TRUE),
           sd_r_hat = stats::sd(unique_r_by_rep$r_hat_used, na.rm = TRUE),
           mean_r_hat_posterior_mean = mean(x$r_hat_mean, na.rm = TRUE),
           mean_r_hat_map = mean(x$r_hat_map, na.rm = TRUE),
+          mean_r_hat_crm_random = if (!is.null(unique_crm_r_by_rep)) {
+            finite_mean(unique_crm_r_by_rep$r_hat_crm_random)
+          } else {
+            NA_real_
+          },
+          sd_r_hat_crm_random = if (!is.null(unique_crm_r_by_rep)) {
+            finite_sd(unique_crm_r_by_rep$r_hat_crm_random)
+          } else {
+            NA_real_
+          },
           stringsAsFactors = FALSE
         )
       }
@@ -977,21 +1101,47 @@ plot_carryover_average <- function(summary_rows,
     col = "#D55E00"
   )
   
+  has_crm_random <- "mean_p_crm_random" %in% names(dat) &&
+    any(is.finite(dat$mean_p_crm_random))
+  
+  if (has_crm_random) {
+    graphics::lines(
+      dat$dose,
+      dat$mean_p_crm_random,
+      type = "b",
+      pch = 18,
+      lwd = 2,
+      col = "#009E73"
+    )
+  }
+  
   graphics::abline(h = 0.30, col = "gray75", lty = 2)
+  
+  legend_pch <- c(16, 1, 17, 15)
+  legend_lty <- c(1, 3, 1, 1)
+  legend_col <- c("black", "gray35", "#0072B2", "#D55E00")
+  legend_text <- c(
+    "True current toxicity p_k",
+    "Average observed pooled regular + IPDE",
+    "Average plug-in pooled moment p_k",
+    "Average plug-in exact MLE p_k"
+  )
+  
+  if (has_crm_random) {
+    legend_pch <- c(legend_pch, 18)
+    legend_lty <- c(legend_lty, 1)
+    legend_col <- c(legend_col, "#009E73")
+    legend_text <- c(legend_text, "Random CRM posterior mean p_k")
+  }
   
   graphics::legend(
     "topleft",
     bty = "n",
     lwd = 2,
-    pch = c(16, 1, 17, 15),
-    lty = c(1, 3, 1, 1),
-    col = c("black", "gray35", "#0072B2", "#D55E00"),
-    legend = c(
-      "True current toxicity p_k",
-      "Average observed pooled regular + IPDE",
-      "Average plug-in pooled moment p_k",
-      "Average plug-in exact MLE p_k"
-    )
+    pch = legend_pch,
+    lty = legend_lty,
+    col = legend_col,
+    legend = legend_text
   )
 }
 
@@ -1082,23 +1232,49 @@ plot_carryover_average_by_alpha <- function(summary_rows,
       col = "#D55E00"
     )
     
+    has_crm_random <- "mean_p_crm_random" %in% names(one) &&
+      any(is.finite(one$mean_p_crm_random))
+    
+    if (has_crm_random) {
+      graphics::lines(
+        one$dose,
+        one$mean_p_crm_random,
+        type = "b",
+        pch = 18,
+        lwd = 2,
+        col = "#009E73"
+      )
+    }
+    
     graphics::abline(h = 0.30, col = "gray75", lty = 2)
     
     if (i == 1L) {
+      legend_pch <- c(16, 1, 17, 15)
+      legend_lty <- c(1, 3, 1, 1)
+      legend_col <- c("black", "gray35", "#0072B2", "#D55E00")
+      legend_text <- c(
+        "True p_k",
+        "Average observed pooled",
+        "Average pooled moment",
+        "Average exact MLE"
+      )
+      
+      if (has_crm_random) {
+        legend_pch <- c(legend_pch, 18)
+        legend_lty <- c(legend_lty, 1)
+        legend_col <- c(legend_col, "#009E73")
+        legend_text <- c(legend_text, "Random CRM")
+      }
+      
       graphics::legend(
         "topleft",
         bty = "n",
         cex = 0.75,
         lwd = 2,
-        pch = c(16, 1, 17, 15),
-        lty = c(1, 3, 1, 1),
-        col = c("black", "gray35", "#0072B2", "#D55E00"),
-        legend = c(
-          "True p_k",
-          "Average observed pooled",
-          "Average pooled moment",
-          "Average exact MLE"
-        )
+        pch = legend_pch,
+        lty = legend_lty,
+        col = legend_col,
+        legend = legend_text
       )
     }
   }
@@ -1116,10 +1292,17 @@ plot_carryover_average_by_alpha <- function(summary_rows,
 plot_carryover_average_alpha_files <- function(summary_rows,
                                                alpha_values,
                                                scenario_names,
-                                               plot_dir = "carryover_pk_r_demo_plots") {
+                                               plot_dir = "carryover_pk_r_demo_plots",
+                                               file_suffix = "") {
   if (!dir.exists(plot_dir)) {
     dir.create(plot_dir, recursive = TRUE)
   }
+  
+  if (length(file_suffix) != 1L || is.na(file_suffix)) {
+    stop("file_suffix must be a single non-NA string.")
+  }
+  
+  file_suffix <- as.character(file_suffix)
   
   files <- vapply(
     alpha_values,
@@ -1129,6 +1312,7 @@ plot_carryover_average_alpha_files <- function(summary_rows,
         paste0(
           "sce1_to_sce6_alpha_",
           gsub("\\.", "p", a),
+          file_suffix,
           "_avg.png"
         )
       )
@@ -1158,7 +1342,7 @@ run_carryover_estimator_replicates <- function(scenarios,
                                                p_prior = c(1, 1),
                                                r_max = 0.6,
                                                plug_in = "mean",
-                                               ipde_model = "document",
+                                               ipde_model = "aide_alpha",
                                                seed = 20260628,
                                                plot_dir = "carryover_pk_r_replicate_plots",
                                                debug_on_error = TRUE) {

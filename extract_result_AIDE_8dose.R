@@ -16,7 +16,7 @@
 ##
 ## Supports:
 ##   BOIN: boin / approx1 / approx2 with r_fixed, r_mle, or r_adaptive
-##   CRM : fixed / random / level / alpha_crm / cumu_crm
+##   CRM : fixed / random / alpha_crm / cumu_crm
 ##   CFO : empirical / pride
 ## ============================================================
 
@@ -28,110 +28,132 @@ rm(list = ls())
 
 ## setwd("/rsrch8/home/biostatistics/syang10/AIDE")
 
-## Choose one scenario set by commenting/uncommenting one line:
-## scenario_set_name <- "Set_8dose_adaptive_r_25"
-scenario_set_name <- "S20_8d"
+## Scenario set matched to the current 8-dose branch in run_oc_AIDE.R.
+scenario_set_name <- "Set_8dose_adaptive_r_40"
 results_root <- paste0("oc_results_cluster_AIDE_", scenario_set_name)
 
-## Twenty eight-dose true DLT scenarios from "8 scenarios.txt".
-s20_8dose_scenario_meta <- data.frame(
-  Scenario = seq_len(20L),
-  Source_Scenario = rep(seq_len(5L), times = 4L),
+## Rows 1-20: 20 base 8-dose scenarios.
+## Rows 21-30: added high-gap-above-MTD scenarios.
+## Rows 31-40: added high-gap-below-MTD scenarios.
+scenario_meta <- data.frame(
+  Scenario = seq_len(40L),
+  Source_Scenario = c(
+    rep(seq_len(5L), times = 4L),
+    1L, 5L, 26L, 21L, 50L, 12L, 15L, 3L, 13L, 42L,
+    50L, 39L, 44L, 44L, 31L, 31L, 40L, 49L, 37L, 37L
+  ),
+  Scenario_Group = c(
+    rep("eight_scenarios_txt", 20L),
+    rep("higher_gap_above_MTD", 10L),
+    rep("higher_gap_below_MTD", 10L)
+  ),
   True_MTD = c(
     5L, 2L, 4L, 8L, 8L,
     8L, 4L, 1L, 4L, 5L,
     8L, 3L, 8L, 5L, 4L,
-    6L, 1L, 2L, 8L, 1L
+    6L, 1L, 2L, 8L, 1L,
+    7L, 7L, 6L, 6L, 5L,
+    5L, 4L, 4L, 3L, 3L,
+    7L, 7L, 6L, 6L, 5L,
+    5L, 4L, 4L, 3L, 3L
   ),
   Attempt = c(
     1L, 1L, 1L, 1L, 1L,
     1L, 1L, 1L, 1L, 2L,
     9L, 1L, 13L, 1L, 1L,
-    3L, 2L, 1L, 67L, 2L
+    3L, 2L, 1L, 67L, 2L,
+    rep(1L, 17L), 2L, 1L, 1L
   ),
   Dose1 = c(
     0.11, 0.24, 0.13, 0.07, 0.07,
     0.02, 0.12, 0.35, 0.09, 0.05,
     0.00, 0.09, 0.00, 0.04, 0.06,
-    0.00, 0.32, 0.12, 0.00, 0.21
+    0.00, 0.32, 0.12, 0.00, 0.21,
+    0.10, 0.02, 0.11, 0.05, 0.13,
+    0.05, 0.12, 0.08, 0.10, 0.05,
+    0.02, 0.01, 0.03, 0.03, 0.05,
+    0.07, 0.09, 0.02, 0.10, 0.04
   ),
   Dose2 = c(
     0.14, 0.28, 0.17, 0.09, 0.08,
     0.03, 0.17, 0.40, 0.14, 0.09,
     0.01, 0.17, 0.01, 0.07, 0.08,
-    0.01, 0.51, 0.30, 0.01, 0.39
+    0.01, 0.51, 0.30, 0.01, 0.39,
+    0.14, 0.05, 0.15, 0.08, 0.15,
+    0.10, 0.17, 0.12, 0.20, 0.12,
+    0.03, 0.03, 0.04, 0.04, 0.07,
+    0.09, 0.11, 0.06, 0.15, 0.10
   ),
   Dose3 = c(
     0.19, 0.34, 0.23, 0.10, 0.10,
     0.04, 0.21, 0.51, 0.18, 0.13,
     0.02, 0.27, 0.02, 0.13, 0.17,
-    0.02, 0.67, 0.40, 0.02, 0.59
+    0.02, 0.67, 0.40, 0.02, 0.59,
+    0.17, 0.08, 0.18, 0.16, 0.21,
+    0.20, 0.19, 0.20, 0.29, 0.25,
+    0.05, 0.05, 0.08, 0.08, 0.09,
+    0.12, 0.15, 0.12, 0.32, 0.28
   ),
   Dose4 = c(
     0.24, 0.39, 0.29, 0.13, 0.13,
     0.07, 0.30, 0.66, 0.34, 0.19,
     0.04, 0.48, 0.03, 0.19, 0.31,
-    0.03, 0.80, 0.59, 0.04, 0.78
+    0.03, 0.80, 0.59, 0.04, 0.78,
+    0.19, 0.10, 0.22, 0.19, 0.27,
+    0.27, 0.28, 0.25, 0.62, 0.48,
+    0.07, 0.07, 0.10, 0.12, 0.11,
+    0.15, 0.29, 0.30, 0.36, 0.40
   ),
   Dose5 = c(
     0.30, 0.46, 0.36, 0.18, 0.16,
     0.10, 0.43, 0.69, 0.45, 0.32,
     0.06, 0.66, 0.05, 0.31, 0.54,
-    0.16, 0.94, 0.76, 0.09, 0.90
+    0.16, 0.94, 0.76, 0.09, 0.90,
+    0.23, 0.15, 0.25, 0.22, 0.30,
+    0.31, 0.51, 0.29, 0.79, 0.69,
+    0.10, 0.09, 0.12, 0.18, 0.31,
+    0.31, 0.37, 0.34, 0.44, 0.50
   ),
   Dose6 = c(
     0.34, 0.52, 0.40, 0.20, 0.20,
     0.16, 0.67, 0.80, 0.58, 0.37,
     0.08, 0.77, 0.07, 0.49, 0.75,
-    0.36, 0.98, 0.90, 0.12, 0.96
+    0.36, 0.98, 0.90, 0.12, 0.96,
+    0.26, 0.23, 0.31, 0.25, 0.60,
+    0.46, 0.61, 0.52, 0.89, 0.87,
+    0.15, 0.11, 0.27, 0.29, 0.39,
+    0.39, 0.40, 0.41, 0.51, 0.60
   ),
   Dose7 = c(
     0.37, 0.56, 0.47, 0.27, 0.24,
     0.26, 0.80, 0.88, 0.75, 0.47,
     0.17, 0.90, 0.13, 0.68, 0.92,
-    0.71, 0.99, 0.95, 0.17, 0.99
+    0.71, 0.99, 0.95, 0.17, 0.99,
+    0.29, 0.28, 0.55, 0.40, 0.79,
+    0.57, 0.80, 0.73, 0.94, 0.96,
+    0.32, 0.31, 0.35, 0.33, 0.45,
+    0.45, 0.45, 0.46, 0.57, 0.70
   ),
   Dose8 = c(
     0.41, 0.61, 0.52, 0.32, 0.31,
     0.32, 0.84, 0.91, 0.81, 0.60,
     0.28, 0.97, 0.28, 0.83, 0.96,
-    0.84, 1.00, 0.98, 0.40, 1.00
-  )
+    0.84, 1.00, 0.98, 0.40, 1.00,
+    0.52, 0.40, 0.63, 0.66, 0.91,
+    0.71, 0.89, 0.89, 0.96, 0.99,
+    0.38, 0.36, 0.39, 0.39, 0.49,
+    0.49, 0.50, 0.50, 0.63, 0.80
+  ),
+  row.names = NULL
 )
 
-## First five rows used by Set_8dose_adaptive_r_25, followed by the
-## 20 scenarios above with scenario IDs shifted to 6:25.
-added_8dose_scenario_meta <- data.frame(
-  Scenario = seq_len(5L),
-  Source_Scenario = seq_len(5L),
-  True_MTD = c(8L, 7L, 6L, 5L, 4L),
-  Attempt = rep(1L, 5L),
-  Dose1 = c(0.07, 0.05, 0.05, 0.02, 0.05),
-  Dose2 = c(0.10, 0.08, 0.10, 0.10, 0.10),
-  Dose3 = c(0.12, 0.10, 0.12, 0.15, 0.22),
-  Dose4 = c(0.14, 0.15, 0.15, 0.18, 0.30),
-  Dose5 = c(0.17, 0.20, 0.20, 0.30, 0.46),
-  Dose6 = c(0.19, 0.22, 0.30, 0.44, 0.53),
-  Dose7 = c(0.22, 0.30, 0.50, 0.52, 0.59),
-  Dose8 = c(0.26, 0.45, 0.60, 0.60, 0.66)
-)
-
-if (identical(scenario_set_name, "S20_8d")) {
-  scenario_meta <- s20_8dose_scenario_meta
-} else if (identical(scenario_set_name, "Set_8dose_adaptive_r_25")) {
-  scenario_meta <- rbind(
-    added_8dose_scenario_meta,
-    transform(s20_8dose_scenario_meta, Scenario = Scenario + 5L)
-  )
-  rownames(scenario_meta) <- NULL
-} else {
-  stop("Unknown 8-dose scenario_set_name: ", scenario_set_name)
-}
+## Current 8-dose run in run_oc_AIDE.R uses the newly added high-gap scenarios.
+scenarios <- 21:40
 
 dose_col_names <- grep("^Dose[0-9]+$", names(scenario_meta), value = TRUE)
 p_true_scenarios <- as.matrix(scenario_meta[dose_col_names])
 rownames(p_true_scenarios) <- as.character(scenario_meta$Scenario)
-scenario_id_list <- as.integer(rownames(p_true_scenarios))
+scenario_id_list <- as.integer(scenarios)
 ndose_expected <- ncol(p_true_scenarios)
 
 jobs.expected <- 1:2000
@@ -146,10 +168,10 @@ target <- 0.30
 T_assess <- 28
 C <- 3L
 cycle_max_list <- c(1L, 2L, 3L)
-Nmax_eff_list <- c(30L, 45L)
+Nmax_eff_list <- c(30L)
 dose_cap <- 3L
 continuous_enrollment <- TRUE
-restrict_to_tried_list <- c(TRUE, FALSE)
+restrict_to_tried_list <- c(TRUE)
 
 alpha_true_list <- c(0, 0.3, 0.6, 0.9)
 arrival_rate_list <- c(1 / 14)
@@ -160,8 +182,8 @@ boin_r_estimator_list <- c("r_fixed")
 boin_r_carry_list_r_mle <- c(0)
 boin_r_carry_list_fixed <- c(0)
 
-## CRM settings are kept available for optional extraction if model_list includes "CRM".
-crm_r_model_list <- c("fixed", "random", "level", "alpha_crm", "cumu_crm")
+## 8-dose run excludes level CRM because random_CRM_level.bug is 5-dose only.
+crm_r_model_list <- c("fixed", "random", "alpha_crm", "cumu_crm")
 
 ## r values by CRM backend, matching the names produced by run_oc_AIDE.R.
 ## fixed CRM uses r_carry; alpha_crm/cumu_crm do not use fixed r, so the
@@ -169,7 +191,6 @@ crm_r_model_list <- c("fixed", "random", "level", "alpha_crm", "cumu_crm")
 crm_r_carry_values <- list(
   fixed     = c(0),
   random    = c(0),
-  level     = c(0),
   alpha_crm = c(0),
   cumu_crm  = c(0)
 )
@@ -237,9 +258,8 @@ cfo_n_burnin <- 2000
 cfo_n_iter <- 5000
 cfo_thin <- 2
 
-## Extract these models. Current target folders look like
-## S20_8d-model-CFO-opt-cfo_pride-w-28-c-3-cyc-3-rate-0p07-Nmax-45-tried-1.
-model_list <- c("BOIN", "CFO")
+## Extract these models. Current run_oc_AIDE.R defaults to BOIN and CRM.
+model_list <- c("BOIN", "CRM")
 ## model_list <- c("CFO")
 ## model_list <- c("BOIN", "CRM", "CFO")
 ## model_list <- c("CRM")
@@ -559,6 +579,14 @@ summarize_aide_files <- function(files.use,
     source_scenario <- scenario_meta$Source_Scenario[match(sc, scenario_meta$Scenario)]
   }
   if (is.null(source_scenario)) source_scenario <- NA_integer_
+  
+  scenario_group <- get_field(res.list[[1]], c("scenario_group"), required = FALSE)
+  if (is.null(scenario_group) &&
+      "Scenario_Group" %in% names(scenario_meta) &&
+      sc %in% scenario_meta$Scenario) {
+    scenario_group <- scenario_meta$Scenario_Group[match(sc, scenario_meta$Scenario)]
+  }
+  if (is.null(scenario_group)) scenario_group <- NA_character_
 
   true_mtd <- get_field(res.list[[1]], c("true_mtd"), required = FALSE)
   if (is.null(true_mtd) && sc %in% scenario_meta$Scenario) {
@@ -626,6 +654,7 @@ summarize_aide_files <- function(files.use,
     Scenario_Name = paste0(scenario_set_name, "_SC", sc),
     Scenario = sc,
     Source_Scenario = source_scenario,
+    Scenario_Group = scenario_group,
     True_MTD = true_mtd,
     Scenario_Attempt = scenario_attempt,
     Model = model,
@@ -742,6 +771,7 @@ summarize_aide_files <- function(files.use,
     Scenario_Name = paste0(scenario_set_name, "_SC", sc),
     Scenario = sc,
     Source_Scenario = source_scenario,
+    Scenario_Group = scenario_group,
     True_MTD = true_mtd,
     Scenario_Attempt = scenario_attempt,
     Model = model,
@@ -948,6 +978,11 @@ for (Nmax_eff in Nmax_eff_list) {
                       Scenario_Name = paste0(scenario_set_name, "_SC", sc),
                       Scenario = sc,
                       Source_Scenario = scenario_meta$Source_Scenario[match(sc, scenario_meta$Scenario)],
+                      Scenario_Group = if ("Scenario_Group" %in% names(scenario_meta)) {
+                        scenario_meta$Scenario_Group[match(sc, scenario_meta$Scenario)]
+                      } else {
+                        NA_character_
+                      },
                       True_MTD = scenario_meta$True_MTD[match(sc, scenario_meta$Scenario)],
                       Scenario_Attempt = scenario_meta$Attempt[match(sc, scenario_meta$Scenario)],
                       Model = model,
