@@ -12,7 +12,7 @@
 ## Combined file:
 ##   {scenario_set_name}_SC{sc}_{model}_{method_tag}_a{alpha_true}_r{r_carry}_
 ##   rate{arrival_rate}_cyc{cycle_max}_Nmax{Nmax_eff}_cont{0/1}_tried{0/1}-
-##   job-{job}-combined.rds
+##   [ptarget1_]job-{job}-combined.rds
 ##
 ## Supports:
 ##   BOIN: boin / approx1 / approx2 with r_fixed, r_mle, or r_adaptive
@@ -172,6 +172,7 @@ Nmax_eff_list <- c(30L)
 dose_cap <- 3L
 continuous_enrollment <- TRUE
 restrict_to_tried_list <- c(TRUE)
+restrict_to_target_list <- c(FALSE)
 
 alpha_true_list <- c(0, 0.3, 0.6, 0.9)
 arrival_rate_list <- c(1 / 14)
@@ -328,6 +329,7 @@ make_foldername <- function(model,
                             arrival_rate,
                             Nmax_eff,
                             restrict_to_tried,
+                            restrict_to_target,
                             scenario_set = scenario_set_name) {
   paste0(
     scenario_set,
@@ -338,7 +340,8 @@ make_foldername <- function(model,
     "-cyc-", fmt_short(cycle_max),
     "-rate-", fmt_short(arrival_rate),
     "-Nmax-", fmt_short(Nmax_eff),
-    "-tried-", as.integer(isTRUE(restrict_to_tried))
+    "-tried-", as.integer(isTRUE(restrict_to_tried)),
+    if (isTRUE(restrict_to_target)) "-ptarget-1" else ""
   )
 }
 
@@ -360,8 +363,9 @@ make_group_key <- function(sc,
                            Nmax_eff,
                            continuous_enrollment,
                            restrict_to_tried,
+                           restrict_to_target,
                            scenario_set = scenario_set_name) {
-  paste(
+  key_parts <- c(
     paste0(scenario_set, "_SC", sc),
     model,
     method_tag,
@@ -371,9 +375,14 @@ make_group_key <- function(sc,
     paste0("cyc", fmt_short(cycle_max)),
     paste0("Nmax", fmt_short(Nmax_eff)),
     paste0("cont", as.integer(isTRUE(continuous_enrollment))),
-    paste0("tried", as.integer(isTRUE(restrict_to_tried))),
-    sep = "_"
+    paste0("tried", as.integer(isTRUE(restrict_to_tried)))
   )
+  
+  if (isTRUE(restrict_to_target)) {
+    key_parts <- c(key_parts, "ptarget1")
+  }
+  
+  paste(key_parts, collapse = "_")
 }
 
 make_filename <- function(sc,
@@ -386,6 +395,7 @@ make_filename <- function(sc,
                           Nmax_eff,
                           continuous_enrollment,
                           restrict_to_tried,
+                          restrict_to_target,
                           job) {
   paste0(
     make_group_key(
@@ -398,7 +408,8 @@ make_filename <- function(sc,
       cycle_max = cycle_max,
       Nmax_eff = Nmax_eff,
       continuous_enrollment = continuous_enrollment,
-      restrict_to_tried = restrict_to_tried
+      restrict_to_tried = restrict_to_tried,
+      restrict_to_target = restrict_to_target
     ),
     "-job-", job,
     "-combined.rds"
@@ -550,7 +561,8 @@ summarize_aide_files <- function(files.use,
                                  Nmax_eff,
                                  cycle_max,
                                  continuous_enrollment,
-                                 restrict_to_tried) {
+                                 restrict_to_tried,
+                                 restrict_to_target) {
   res.list <- lapply(files.use, readRDS)
 
   ndose <- get_field(res.list[[1]], c("ndose"))
@@ -671,6 +683,7 @@ summarize_aide_files <- function(files.use,
     Cycle_Max = cycle_max,
     Continuous_Enrollment = as.integer(isTRUE(continuous_enrollment)),
     Restrict_To_Tried = as.integer(isTRUE(restrict_to_tried)),
+    Restrict_To_Target = as.integer(isTRUE(restrict_to_target)),
     Dose = seq_len(ndose),
 
     True_DLT_rate = p.true,
@@ -788,6 +801,7 @@ summarize_aide_files <- function(files.use,
     Cycle_Max = cycle_max,
     Continuous_Enrollment = as.integer(isTRUE(continuous_enrollment)),
     Restrict_To_Tried = as.integer(isTRUE(restrict_to_tried)),
+    Restrict_To_Target = as.integer(isTRUE(restrict_to_target)),
     Metric = metrics,
     stringsAsFactors = FALSE
   )
@@ -834,6 +848,7 @@ miss.idx <- 1L
 
 for (Nmax_eff in Nmax_eff_list) {
   for (restrict_to_tried in restrict_to_tried_list) {
+    for (restrict_to_target in restrict_to_target_list) {
     for (model in model_list) {
       if (model == "BOIN") {
         method_loop <- boin_method_list
@@ -888,7 +903,8 @@ for (Nmax_eff in Nmax_eff_list) {
                       cycle_max = cycle_max,
                       arrival_rate = arrival_rate,
                       Nmax_eff = Nmax_eff,
-                      restrict_to_tried = restrict_to_tried
+                      restrict_to_tried = restrict_to_tried,
+                      restrict_to_target = restrict_to_target
                     )
 
                     folderpath <- resolve_folderpath(foldername)
@@ -909,6 +925,7 @@ for (Nmax_eff in Nmax_eff_list) {
                             Nmax_eff = Nmax_eff,
                             continuous_enrollment = continuous_enrollment,
                             restrict_to_tried = restrict_to_tried,
+                            restrict_to_target = restrict_to_target,
                             job = j
                           )
                         },
@@ -934,7 +951,8 @@ for (Nmax_eff in Nmax_eff_list) {
                         cycle_max = cycle_max,
                         Nmax_eff = Nmax_eff,
                         continuous_enrollment = continuous_enrollment,
-                        restrict_to_tried = restrict_to_tried
+                        restrict_to_tried = restrict_to_tried,
+                        restrict_to_target = restrict_to_target
                       )
                       pattern <- paste0("^", strict_key, "-job-[0-9]+-combined\\.rds$")
                       files.use <- list.files(
@@ -968,6 +986,7 @@ for (Nmax_eff in Nmax_eff_list) {
                     cat("Nmax eff:", Nmax_eff, "\n")
                     cat("Continuous:", continuous_enrollment, "\n")
                     cat("Restrict to tried:", restrict_to_tried, "\n")
+                    cat("Restrict to target:", restrict_to_target, "\n")
                     cat("Folder:", folderpath, "\n")
                     cat("Example file:", files[1], "\n")
                     cat("Found", length(files.use), "files; missing", length(missing.jobs), "jobs.\n")
@@ -999,6 +1018,7 @@ for (Nmax_eff in Nmax_eff_list) {
                       Cycle_Max = cycle_max,
                       Continuous_Enrollment = as.integer(isTRUE(continuous_enrollment)),
                       Restrict_To_Tried = as.integer(isTRUE(restrict_to_tried)),
+                      Restrict_To_Target = as.integer(isTRUE(restrict_to_target)),
                       Folder = folderpath,
                       Example_file = files[1],
                       n_found = length(files.use),
@@ -1030,7 +1050,8 @@ for (Nmax_eff in Nmax_eff_list) {
                       Nmax_eff = Nmax_eff,
                       cycle_max = cycle_max,
                       continuous_enrollment = continuous_enrollment,
-                      restrict_to_tried = restrict_to_tried
+                      restrict_to_tried = restrict_to_tried,
+                      restrict_to_target = restrict_to_target
                     )
 
                     cat(
@@ -1056,7 +1077,8 @@ for (Nmax_eff in Nmax_eff_list) {
                       cycle_max = cycle_max,
                       Nmax_eff = Nmax_eff,
                       continuous_enrollment = continuous_enrollment,
-                      restrict_to_tried = restrict_to_tried
+                      restrict_to_tried = restrict_to_tried,
+                      restrict_to_target = restrict_to_target
                     )
 
                     all.dose.summary[[key]] <- one$dose_summary
@@ -1071,6 +1093,7 @@ for (Nmax_eff in Nmax_eff_list) {
     }
   }
 }
+  }
   }
 }
 
@@ -1107,6 +1130,7 @@ out.tag <- paste0(
   "_dosecap", fmt_short(dose_cap),
   "_cont", as.integer(isTRUE(continuous_enrollment)),
   "_tried", paste(as.integer(restrict_to_tried_list), collapse = "_"),
+  "_ptarget", paste(as.integer(restrict_to_target_list), collapse = "_"),
   "_jobs", min(jobs.expected), "to", max(jobs.expected)
 )
 
