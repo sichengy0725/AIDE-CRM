@@ -135,47 +135,6 @@ make_p_ipde <- function(p_base, alpha_true) {
   pmin(p_base + alpha_true * prev_dose_p, 1)
 }
 
-read_scenario_txt <- function(file, ndose) {
-  if (!file.exists(file)) {
-    stop("Cannot find scenario file: ", file)
-  }
-
-  lines <- readLines(file, warn = FALSE)
-  numeric_lines <- grep("^\\s*[0-9]+\\s+", lines, value = TRUE)
-  fields <- strsplit(trimws(numeric_lines), "\\s+")
-
-  expected_ncol <- ndose + 4L
-  keep <- vapply(fields, length, integer(1)) == expected_ncol
-  fields <- fields[keep]
-
-  if (length(fields) == 0L) {
-    stop("No ", ndose, "-dose scenario rows found in ", file)
-  }
-
-  mat <- do.call(rbind, fields)
-  dat <- as.data.frame(apply(mat, 2, as.numeric), stringsAsFactors = FALSE)
-  names(dat) <- c(
-    "Print_Row",
-    "Source_Scenario",
-    "True_MTD",
-    paste0("Dose", seq_len(ndose)),
-    "Attempt"
-  )
-
-  out <- data.frame(
-    Scenario = seq_len(nrow(dat)),
-    Source_Scenario = as.integer(dat$Source_Scenario),
-    Scenario_Group = basename(file),
-    True_MTD = as.integer(dat$True_MTD),
-    Attempt = as.integer(dat$Attempt),
-    dat[paste0("Dose", seq_len(ndose))],
-    row.names = NULL,
-    check.names = FALSE
-  )
-
-  out
-}
-
 make_aide_folder <- function(task) {
   method_tag <- if (task$model == "BOIN") {
     paste0(task$decision_method, "-", task$r_estimator)
@@ -525,7 +484,7 @@ r_adaptive_rel_tol_default <- 1e-6
 ## Scenario set.
 if (scenario_dose_count == 5L) {
 ## Rows 1-5: original 5-dose examples.
-## Rows 6-25: 20 scenarios from "5 scenarios.txt".
+## Rows 6-25: 20 base 5-dose scenarios.
 ## Rows 26-31: added high-gap-above-MTD scenarios.
 ## Rows 32-37: added high-gap-below-MTD scenarios.
 scenario_set_name <- "Set_5dose_adaptive_r_37"
@@ -605,31 +564,132 @@ scenario_meta <- data.frame(
     0.88, 0.78, 0.97, 0.25, 0.77,
     0.80, 0.62, 0.77, 0.86, 0.54, 0.60,
     0.36, 0.38, 0.42, 0.45, 0.43, 0.50
-  )
+  ),
+  row.names = NULL
 )
 
 ## Default 5-dose run: newly added high-gap scenarios.
 scenarios <- 26:37
 
 } else if (scenario_dose_count == 8L) {
-## Rows 1-20: 20 scenarios from "8 scenarios.txt".
+## Rows 1-20: 20 base 8-dose scenarios.
 ## Rows 21-30: added high-gap-above-MTD scenarios.
 ## Rows 31-40: added high-gap-below-MTD scenarios.
 scenario_set_name <- "Set_8dose_adaptive_r_40"
-scenario_meta <- read_scenario_txt("8 scenarios.txt", ndose = 8L)
-
-if (nrow(scenario_meta) == 40L) {
-  scenario_meta$Scenario_Group <- c(
+scenario_meta <- data.frame(
+  Scenario = seq_len(40L),
+  Source_Scenario = c(
+    rep(seq_len(5L), times = 4L),
+    1L, 5L, 26L, 21L, 50L, 12L, 15L, 3L, 13L, 42L,
+    50L, 39L, 44L, 44L, 31L, 31L, 40L, 49L, 37L, 37L
+  ),
+  Scenario_Group = c(
     rep("eight_scenarios_txt", 20L),
     rep("higher_gap_above_MTD", 10L),
     rep("higher_gap_below_MTD", 10L)
-  )
-} else {
-  scenario_meta$Scenario_Group <- "eight_scenarios_txt"
-}
+  ),
+  True_MTD = c(
+    5L, 2L, 4L, 8L, 8L,
+    8L, 4L, 1L, 4L, 5L,
+    8L, 3L, 8L, 5L, 4L,
+    6L, 1L, 2L, 8L, 1L,
+    7L, 7L, 6L, 6L, 5L,
+    5L, 4L, 4L, 3L, 3L,
+    7L, 7L, 6L, 6L, 5L,
+    5L, 4L, 4L, 3L, 3L
+  ),
+  Attempt = c(
+    1L, 1L, 1L, 1L, 1L,
+    1L, 1L, 1L, 1L, 2L,
+    9L, 1L, 13L, 1L, 1L,
+    3L, 2L, 1L, 67L, 2L,
+    rep(1L, 17L), 2L, 1L, 1L
+  ),
+  Dose1 = c(
+    0.11, 0.24, 0.13, 0.07, 0.07,
+    0.02, 0.12, 0.35, 0.09, 0.05,
+    0.00, 0.09, 0.00, 0.04, 0.06,
+    0.00, 0.32, 0.12, 0.00, 0.21,
+    0.10, 0.02, 0.11, 0.05, 0.13,
+    0.05, 0.12, 0.08, 0.10, 0.05,
+    0.02, 0.01, 0.03, 0.03, 0.05,
+    0.07, 0.09, 0.02, 0.10, 0.04
+  ),
+  Dose2 = c(
+    0.14, 0.28, 0.17, 0.09, 0.08,
+    0.03, 0.17, 0.40, 0.14, 0.09,
+    0.01, 0.17, 0.01, 0.07, 0.08,
+    0.01, 0.51, 0.30, 0.01, 0.39,
+    0.14, 0.05, 0.15, 0.08, 0.15,
+    0.10, 0.17, 0.12, 0.20, 0.12,
+    0.03, 0.03, 0.04, 0.04, 0.07,
+    0.09, 0.11, 0.06, 0.15, 0.10
+  ),
+  Dose3 = c(
+    0.19, 0.34, 0.23, 0.10, 0.10,
+    0.04, 0.21, 0.51, 0.18, 0.13,
+    0.02, 0.27, 0.02, 0.13, 0.17,
+    0.02, 0.67, 0.40, 0.02, 0.59,
+    0.17, 0.08, 0.18, 0.16, 0.21,
+    0.20, 0.19, 0.20, 0.29, 0.25,
+    0.05, 0.05, 0.08, 0.08, 0.09,
+    0.12, 0.15, 0.12, 0.32, 0.28
+  ),
+  Dose4 = c(
+    0.24, 0.39, 0.29, 0.13, 0.13,
+    0.07, 0.30, 0.66, 0.34, 0.19,
+    0.04, 0.48, 0.03, 0.19, 0.31,
+    0.03, 0.80, 0.59, 0.04, 0.78,
+    0.19, 0.10, 0.22, 0.19, 0.27,
+    0.27, 0.28, 0.25, 0.62, 0.48,
+    0.07, 0.07, 0.10, 0.12, 0.11,
+    0.15, 0.29, 0.30, 0.36, 0.40
+  ),
+  Dose5 = c(
+    0.30, 0.46, 0.36, 0.18, 0.16,
+    0.10, 0.43, 0.69, 0.45, 0.32,
+    0.06, 0.66, 0.05, 0.31, 0.54,
+    0.16, 0.94, 0.76, 0.09, 0.90,
+    0.23, 0.15, 0.25, 0.22, 0.30,
+    0.31, 0.51, 0.29, 0.79, 0.69,
+    0.10, 0.09, 0.12, 0.18, 0.31,
+    0.31, 0.37, 0.34, 0.44, 0.50
+  ),
+  Dose6 = c(
+    0.34, 0.52, 0.40, 0.20, 0.20,
+    0.16, 0.67, 0.80, 0.58, 0.37,
+    0.08, 0.77, 0.07, 0.49, 0.75,
+    0.36, 0.98, 0.90, 0.12, 0.96,
+    0.26, 0.23, 0.31, 0.25, 0.60,
+    0.46, 0.61, 0.52, 0.89, 0.87,
+    0.15, 0.11, 0.27, 0.29, 0.39,
+    0.39, 0.40, 0.41, 0.51, 0.60
+  ),
+  Dose7 = c(
+    0.37, 0.56, 0.47, 0.27, 0.24,
+    0.26, 0.80, 0.88, 0.75, 0.47,
+    0.17, 0.90, 0.13, 0.68, 0.92,
+    0.71, 0.99, 0.95, 0.17, 0.99,
+    0.29, 0.28, 0.55, 0.40, 0.79,
+    0.57, 0.80, 0.73, 0.94, 0.96,
+    0.32, 0.31, 0.35, 0.33, 0.45,
+    0.45, 0.45, 0.46, 0.57, 0.70
+  ),
+  Dose8 = c(
+    0.41, 0.61, 0.52, 0.32, 0.31,
+    0.32, 0.84, 0.91, 0.81, 0.60,
+    0.28, 0.97, 0.28, 0.83, 0.96,
+    0.84, 1.00, 0.98, 0.40, 1.00,
+    0.52, 0.40, 0.63, 0.66, 0.91,
+    0.71, 0.89, 0.89, 0.96, 0.99,
+    0.38, 0.36, 0.39, 0.39, 0.49,
+    0.49, 0.50, 0.50, 0.63, 0.80
+  ),
+  row.names = NULL
+)
 
 ## Default 8-dose run: newly added high-gap scenarios.
-scenarios <- if (nrow(scenario_meta) >= 40L) 21:40 else seq_len(nrow(scenario_meta))
+scenarios <- 21:40
 }
 
 dose_col_names <- paste0("Dose", seq_along(crm_skeleton_default))
