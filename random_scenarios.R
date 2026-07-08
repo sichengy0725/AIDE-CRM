@@ -414,17 +414,104 @@ generate_many_dose_toxicity_curves <- function(
 }
 
 
+# -----------------------------
+# Save generated scenarios
+# -----------------------------
+
+fmt_scenario_param <- function(x, digits = 4) {
+  x <- round(as.numeric(x), digits)
+  out <- format(x, scientific = FALSE, trim = TRUE)
+  out <- sub("(\\.[0-9]*?)0+$", "\\1", out)
+  out <- sub("\\.$", "", out)
+  out[out == "-0"] <- "0"
+  out <- gsub("-", "m", out)
+  out <- gsub("\\.", "p", out)
+  out
+}
+
+
+make_random_scenario_filename <- function(
+    ndose,
+    nscenario,
+    target,
+    target_diff_below,
+    target_diff_above,
+    out_dir = "scenario_sets"
+) {
+  file.path(
+    out_dir,
+    paste0(
+      "random_scenarios",
+      "_ndose", as.integer(ndose),
+      "_nscenario", as.integer(nscenario),
+      "_target", fmt_scenario_param(target),
+      "_tdiffbelow", fmt_scenario_param(target_diff_below),
+      "_tdiffabove", fmt_scenario_param(target_diff_above),
+      ".csv"
+    )
+  )
+}
+
+
+save_generated_scenarios_csv <- function(scenarios, file) {
+  if (!is.data.frame(scenarios)) {
+    stop("scenarios must be a data.frame.")
+  }
+
+  out_dir <- dirname(file)
+  if (nzchar(out_dir) && !dir.exists(out_dir)) {
+    dir.create(out_dir, recursive = TRUE)
+  }
+
+  utils::write.csv(scenarios, file = file, row.names = FALSE)
+  invisible(normalizePath(file, winslash = "/", mustWork = FALSE))
+}
+
+
 # ============================================================
-# Example
+# User settings / run
 # ============================================================
+ndose <- 5L
+nscenario <- 10000L
+target <- 0.30
+target_diff_below <- 0.15
+target_diff_above <- 0.15
+
+args <- commandArgs(trailingOnly = TRUE)
+if (length(args) > 0L) {
+  if (length(args) != 5L) {
+    stop(
+      "Usage: Rscript random_scenarios.R ",
+      "<ndose> <nscenario> <target> <target_diff_below> <target_diff_above>"
+    )
+  }
+
+  ndose <- as.integer(args[1])
+  nscenario <- as.integer(args[2])
+  target <- as.numeric(args[3])
+  target_diff_below <- as.numeric(args[4])
+  target_diff_above <- as.numeric(args[5])
+}
+
 scenarios <- generate_many_dose_toxicity_curves(
-  nscenario = 50,
-  ndose = 8,
-  target = 0.30,
-  target_diff_below = 0.10,
-  target_diff_above = 0.05
+  nscenario = nscenario,
+  ndose = ndose,
+  target = target,
+  target_diff_below = target_diff_below,
+  target_diff_above = target_diff_above
 )
 
+scenario_file <- make_random_scenario_filename(
+  ndose = ndose,
+  nscenario = nscenario,
+  target = target,
+  target_diff_below = target_diff_below,
+  target_diff_above = target_diff_above
+)
+
+saved_file <- save_generated_scenarios_csv(scenarios, scenario_file)
+
+cat("Saved generated scenarios to:", saved_file, "\n")
 print(scenarios)
 
 

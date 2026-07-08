@@ -142,7 +142,6 @@ get_pride_posterior <- function(tmp,
     sigma_w  <- sqrt(sigma2_w)
     
     if (is.finite(m_use) && m_use < M) {
-      if (!is.null(seed_subsample)) set.seed(seed_subsample)
       idx <- sample.int(M, size = m_use)
       beta_draws <- beta_draws[idx, , drop = FALSE]
       sigma_w <- sigma_w[idx]
@@ -198,7 +197,6 @@ get_pride_posterior <- function(tmp,
   
   M <- nrow(beta_draws)
   if (is.finite(m_use) && m_use < M) {
-    if (!is.null(seed_subsample)) set.seed(seed_subsample)
     idx <- sample.int(M, size = m_use)
     beta_draws <- beta_draws[idx, , drop = FALSE]
     sigma_w <- sigma_w[idx]
