@@ -1,4 +1,3 @@
-library(coda)
 source('CFO_tox_utils.R')
 select.mtd <- function(target, y, n, cutoff.eli=0.95)
 {
@@ -82,6 +81,155 @@ make_pride_jags_data <- function(tmp,
   )
 }
 
+make_pride_dlt_res <- function(tmp, K) {
+  if (is.null(tmp) || nrow(tmp) == 0L) {
+    return(matrix(NA_integer_, nrow = 0L, ncol = K))
+  }
+  stopifnot(is.data.frame(tmp))
+  if (!all(c("id", "dose") %in% names(tmp))) stop("tmp must contain id and dose.")
+  if (!("y_obs" %in% names(tmp)) && !("y" %in% names(tmp))) {
+    stop("tmp must contain y_obs or y.")
+  }
+  
+  y <- if ("y_obs" %in% names(tmp)) tmp$y_obs else tmp$y
+  if (any(!is.na(y) & !y %in% c(0, 1))) stop("y must be 0/1.")
+  
+  dose <- as.integer(tmp$dose)
+  if (any(dose < 1L | dose > K, na.rm = TRUE)) {
+    stop("dose must be in 1..K (dose level index).")
+  }
+  
+  uid <- sort(unique(tmp$id))
+  id_map <- setNames(seq_along(uid), uid)
+  DLT_res <- matrix(NA_integer_, nrow = length(uid), ncol = K)
+  
+  for (i in seq_len(nrow(tmp))) {
+    if (is.na(y[i]) || is.na(dose[i])) next
+    row_i <- id_map[[as.character(tmp$id[i])]]
+    col_i <- dose[i]
+    if (is.na(DLT_res[row_i, col_i])) {
+      DLT_res[row_i, col_i] <- as.integer(y[i])
+    } else {
+      DLT_res[row_i, col_i] <- max(DLT_res[row_i, col_i], as.integer(y[i]))
+    }
+  }
+  
+  DLT_res[rowSums(!is.na(DLT_res)) > 0L, , drop = FALSE]
+}
+
+rinvgamma_pride <- function(n, shape, scale) {
+  1 / stats::rgamma(n, shape = shape, rate = scale)
+}
+
+qinvgamma_pride <- function(p, shape, scale) {
+  1 / stats::qgamma(1 - p, shape = shape, rate = scale)
+}
+
+p.values <- function(iterations = 1000, DLT_res, mu_k, sigma_beta = 10, eta = 0.1) {
+  iterations <- as.integer(iterations)
+  if (!is.finite(iterations) || iterations < 1L) stop("iterations must be a positive integer.")
+  if (!is.finite(sigma_beta) || sigma_beta <= 0) stop("sigma_beta must be positive.")
+  if (!is.finite(eta) || eta <= 0) stop("eta must be positive.")
+  
+  DLT_res <- as.matrix(DLT_res)
+  mu_k <- as.numeric(mu_k)
+  ndose <- length(mu_k)
+  if (ncol(DLT_res) != ndose) stop("DLT_res must have one column per dose.")
+  
+  row_has_obs <- if (nrow(DLT_res) > 0L) rowSums(!is.na(DLT_res)) > 0L else logical(0)
+  DLT_res <- DLT_res[row_has_obs, , drop = FALSE]
+  trial_pts <- nrow(DLT_res)
+  
+  beta_samples <- matrix(NA_real_, nrow = iterations, ncol = ndose)
+  if (trial_pts == 0L) {
+    beta_samples <- matrix(
+      stats::rnorm(iterations * ndose, mean = rep(mu_k, each = iterations), sd = sigma_beta),
+      nrow = iterations,
+      ncol = ndose,
+      byrow = FALSE
+    )
+    return(stats::plogis(beta_samples))
+  }
+  
+  log1pexp <- function(x) {
+    out <- numeric(length(x))
+    pos <- x > 0
+    out[pos] <- x[pos] + log1p(exp(-x[pos]))
+    out[!pos] <- log1p(exp(x[!pos]))
+    out
+  }
+  
+  beta <- mu_k
+  accept_rate_beta <- numeric(ndose)
+  
+  upper_limit <- qinvgamma_pride(0.95, shape = eta, scale = eta)
+  repeat {
+    sigma2 <- rinvgamma_pride(1, shape = eta, scale = eta)
+    if (sigma2 <= upper_limit) break
+  }
+  
+  W <- stats::rnorm(trial_pts, 0, sqrt(sigma2))
+  accept_rate_W <- numeric(trial_pts)
+  
+  log_posterior_beta <- function(beta_k, W, y, mu_k, sigma_beta) {
+    eta_y <- beta_k + W
+    log_likelihood <- sum(y * eta_y - log1pexp(eta_y))
+    log_prior <- - (beta_k - mu_k)^2 / (2 * sigma_beta^2)
+    log_likelihood + log_prior
+  }
+  
+  log_posterior_W <- function(W_i, beta, y, sigma2) {
+    eta_y <- beta + W_i
+    log_likelihood <- sum(y * eta_y - log1pexp(eta_y))
+    log_prior <- - W_i^2 / (2 * sigma2)
+    log_likelihood + log_prior
+  }
+  
+  proposal_sd_beta <- 1
+  proposal_sd_W <- 1
+  for (iter in seq_len(iterations)) {
+    for (i in seq_len(trial_pts)) {
+      current_W_i <- W[i]
+      proposed_W_i <- stats::rnorm(1, current_W_i, proposal_sd_W)
+      index <- which(!is.na(DLT_res[i, ]))
+      
+      log_accept_ratio <- log_posterior_W(proposed_W_i, beta[index], DLT_res[i, index], sigma2) -
+        log_posterior_W(current_W_i, beta[index], DLT_res[i, index], sigma2)
+      
+      if (log(stats::runif(1)) < log_accept_ratio) {
+        accept_rate_W[i] <- accept_rate_W[i] + 1
+        W[i] <- proposed_W_i
+      }
+    }
+    
+    shape <- eta + trial_pts / 2
+    rate <- eta + sum(W^2) / 2
+    sigma2 <- rinvgamma_pride(1, shape = shape, scale = rate)
+    
+    for (k in seq_len(ndose)) {
+      current_beta_k <- beta[k]
+      proposed_beta_k <- stats::rnorm(1, current_beta_k, proposal_sd_beta)
+      index <- which(!is.na(DLT_res[, k]))
+      
+      if (length(index) != 0L) {
+        log_accept_ratio <- log_posterior_beta(proposed_beta_k, W[index], DLT_res[index, k], mu_k[k], sigma_beta) -
+          log_posterior_beta(current_beta_k, W[index], DLT_res[index, k], mu_k[k], sigma_beta)
+        
+        if (log(stats::runif(1)) < log_accept_ratio) {
+          accept_rate_beta[k] <- accept_rate_beta[k] + 1
+          beta[k] <- proposed_beta_k
+        }
+      } else {
+        beta[k] <- stats::rnorm(1, mu_k[k], sigma_beta)
+      }
+    }
+    
+    beta_samples[iter, ] <- beta
+  }
+  
+  stats::plogis(beta_samples)
+}
+
 
 get_pride_posterior <- function(tmp,
                                 K,
@@ -102,115 +250,39 @@ get_pride_posterior <- function(tmp,
                                 monitor  = c("beta", "sigma_w")) {
   
   pk_method <- match.arg(pk_method)
+  force(model_file)
+  force(pk_method)
+  force(n_mc_w)
+  force(n.chains)
+  force(n.adapt)
+  force(n.burn)
+  force(thin)
+  force(monitor)
   
-  pk_from_beta <- function(beta_draws, sigma_w,
-                           method = c("approx", "mc"),
-                           n_mc_w = 200) {
-    method <- match.arg(method)
-    beta_draws <- as.matrix(beta_draws)   # M x K
-    sigma_w <- as.numeric(sigma_w)        # length M
-    M <- nrow(beta_draws)
-    K <- ncol(beta_draws)
-    
-    if (method == "approx") {
-      # logistic-normal moment approximation
-      denom <- sqrt(1 + (pi^2 / 3) * (sigma_w^2))
-      return(plogis(beta_draws / denom))
-    }
-    
-    pk <- matrix(NA_real_, nrow = M, ncol = K)
-    for (m in seq_len(M)) {
-      Wm <- rnorm(n_mc_w, 0, sigma_w[m])
-      mat <- sweep(
-        matrix(beta_draws[m, ], nrow = n_mc_w, ncol = K, byrow = TRUE),
-        1, Wm, "+"
-      )
-      pk[m, ] <- colMeans(plogis(mat))
-    }
-    pk
-  }
-  
-  # prior-only case
-  if (is.null(tmp) || nrow(tmp) == 0L) {
-    M <- n.iter
-    beta_draws <- matrix(
-      rnorm(M * K, mean = rep(mu, each = M), sd = sqrt(sigma2_beta)),
-      nrow = M, ncol = K, byrow = FALSE
-    )
-    
-    sigma2_w <- 1 / rgamma(M, shape = eta, rate = eta)
-    sigma_w  <- sqrt(sigma2_w)
-    
-    if (is.finite(m_use) && m_use < M) {
-      idx <- sample.int(M, size = m_use)
-      beta_draws <- beta_draws[idx, , drop = FALSE]
-      sigma_w <- sigma_w[idx]
-    }
-    
-    pk_draws <- pk_from_beta(beta_draws, sigma_w, method = pk_method, n_mc_w = n_mc_w)
-    posttox <- colMeans(pk_draws)
-    prob_overtox <- colMeans(pk_draws > TARGET)
-    
-    return(list(
-      pk_draws = pk_draws,
-      posttox = posttox,
-      beta_draws = beta_draws,
-      sigma_w_draws = sigma_w,
-      prob_overtox = prob_overtox
-    ))
-  }
-  
-  data_jags <- make_pride_jags_data(
-    tmp = tmp, K = K, mu = mu,
-    sigma2_beta = sigma2_beta, eta = eta
+  DLT_res <- make_pride_dlt_res(tmp = tmp, K = K)
+  pk_draws <- p.values(
+    iterations = n.iter,
+    DLT_res = DLT_res,
+    mu_k = mu,
+    sigma_beta = sqrt(sigma2_beta),
+    eta = eta
   )
   
-  jags <- rjags::jags.model(
-    file     = model_file,
-    data     = data_jags,
-    n.chains = n.chains,
-    n.adapt  = n.adapt,
-    quiet    = TRUE
-  )
-  update(jags, n.burn, progress.bar = "none")
-  
-  smp <- rjags::coda.samples(
-    model          = jags,
-    variable.names = monitor,
-    n.iter         = n.iter,
-    thin           = thin,
-    progress.bar   = "none"
-  )
-  draws <- as.matrix(smp)
-  
-  beta_cols <- paste0("beta[", seq_len(K), "]")
-  if (!all(beta_cols %in% colnames(draws))) {
-    missing <- beta_cols[!beta_cols %in% colnames(draws)]
-    stop("Missing beta columns: ", paste(missing, collapse = ", "))
-  }
-  if (!("sigma_w" %in% colnames(draws))) {
-    stop("sigma_w not found in posterior draws.")
-  }
-  
-  beta_draws <- draws[, beta_cols, drop = FALSE]
-  sigma_w <- draws[, "sigma_w"]
-  
-  M <- nrow(beta_draws)
+  M <- nrow(pk_draws)
   if (is.finite(m_use) && m_use < M) {
     idx <- sample.int(M, size = m_use)
-    beta_draws <- beta_draws[idx, , drop = FALSE]
-    sigma_w <- sigma_w[idx]
+    pk_draws <- pk_draws[idx, , drop = FALSE]
   }
   
-  pk_draws <- pk_from_beta(beta_draws, sigma_w, method = pk_method, n_mc_w = n_mc_w)
   posttox <- colMeans(pk_draws)
   prob_overtox <- colMeans(pk_draws > TARGET)
+  eps <- .Machine$double.eps
   
   list(
     pk_draws = pk_draws,
     posttox = posttox,
-    beta_draws = beta_draws,
-    sigma_w_draws = sigma_w,
+    beta_draws = stats::qlogis(pmin(1 - eps, pmax(eps, pk_draws))),
+    sigma_w_draws = NULL,
     prob_overtox = prob_overtox
   )
 }
@@ -476,6 +548,27 @@ simulate_PRIDE_design <- function(
     n_right <- if (cur_dose < K) sum(dat_dec$dose == (cur_dose + 1L)) else 0L
     n_by_dose <- tabulate(dat_dec$dose, nbins = K)
     y_by_dose <- tabulate(dat_dec$dose[dat_dec$y == 1], nbins = K)
+    post_dec <- NULL
+    if (CFO != TRUE) {
+      post_dec <- get_pride_posterior(
+        tmp = dat_dec,
+        K = K,
+        mu = mu,
+        TARGET = TARGET,
+        model_file = model_file,
+        sigma2_beta = sigma2_beta,
+        eta = eta,
+        pk_method = pk_method,
+        n_mc_w = n_mc_w,
+        m_use = m_use,
+        n.chains = n.chains,
+        n.adapt = n.adapt,
+        n.burn = n.burn,
+        n.iter = n.iter,
+        thin = thin
+      )
+    }
+    
     # model-based elimination rule
     if(CFO == TRUE){
       
@@ -565,25 +658,6 @@ simulate_PRIDE_design <- function(
       )
     
     } else {
-      
-      post_dec <- get_pride_posterior(
-        tmp = dat_dec,
-        K = K,
-        mu = mu,
-        TARGET = TARGET,
-        model_file = model_file,
-        sigma2_beta = sigma2_beta,
-        eta = eta,
-        pk_method = pk_method,
-        n_mc_w = n_mc_w,
-        m_use = m_use,
-        n.chains = n.chains,
-        n.adapt = n.adapt,
-        n.burn = n.burn,
-        n.iter = n.iter,
-        thin = thin
-      )
-      
       next_dose <- cfo_move_pride(
         cur_dose = cur_dose,
         pk_draws = post_dec$pk_draws,
