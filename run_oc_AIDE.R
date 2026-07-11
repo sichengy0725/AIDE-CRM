@@ -31,9 +31,7 @@ source("AIDE_BOIN_helper.R")
 source("AIDE_CRM_helper_final.R")
 source("AIDE_modified.R")
 
-library(parallel)
-
-## If CRM or PRIDE-backed CFO is used, workers need rjags/coda.
+## If CRM or PRIDE-backed CFO is used, load rjags/coda when available.
 ## Loading here is safe even for BOIN if installed.
 if (requireNamespace("rjags", quietly = TRUE)) library(rjags)
 if (requireNamespace("coda", quietly = TRUE)) library(coda)
@@ -98,19 +96,6 @@ with_sink <- function(file, expr) {
     close(con)
   }, add = TRUE)
   force(expr)
-}
-
-make_trial_blocks <- function(ntrial.total, nblocks) {
-  base_n <- ntrial.total %/% nblocks
-  rem_n  <- ntrial.total %% nblocks
-
-  out <- rep(base_n, nblocks)
-
-  if (rem_n > 0) {
-    out[seq_len(rem_n)] <- out[seq_len(rem_n)] + 1L
-  }
-
-  out
 }
 
 get_job_index <- function(args) {
@@ -699,21 +684,16 @@ if (length(cfo_skeleton_default) != length(crm_skeleton_default)) {
 ## ============================================================
 ## Command-line arguments
 ##
-## args[1] = number of cores
+## args[1] = worker count, retained for backward compatibility and ignored
 ## args[2] = number of trials per LSF job
 ## args[3] = job index, 1,...,2000
 ## args[4] = random scenario batch index, if using random scenario file
 ## ============================================================
 
 if (length(args) >= 1) {
-  ncores <- as.integer(args[1])
+  requested_workers <- suppressWarnings(as.integer(args[1]))
 } else {
-  lsf_cores <- Sys.getenv("LSB_DJOB_NUMPROC", unset = "")
-  if (nzchar(lsf_cores)) {
-    ncores <- as.integer(lsf_cores)
-  } else {
-    ncores <- max(1L, detectCores() - 1L)
-  }
+  requested_workers <- 1L
 }
 
 if (length(args) >= 2) {
@@ -726,19 +706,22 @@ if (is.na(job_i) || job_i < 1L) {
   stop("job_i must be a positive integer.")
 }
 
-if (is.na(ncores) || ncores < 1L) {
-  stop("ncores must be a positive integer.")
+if (is.na(requested_workers) || requested_workers < 1L) {
+  stop("args[1] worker count must be a positive integer when supplied.")
 }
 
 if (is.na(ntrial.total) || ntrial.total < 1L) {
   stop("ntrial.total must be a positive integer.")
 }
 
-ncores <- min(ncores, ntrial.total)
+if (requested_workers != 1L) {
+  warning("Worker-count argument ignored; running sequentially with one worker.")
+}
 
 cat("LSF job/block index:", job_i, "\n")
 cat("Working directory:", getwd(), "\n")
-cat("Parallel cores:", ncores, "\n")
+cat("Execution mode: sequential\n")
+cat("Requested workers argument:", requested_workers, "\n")
 cat("Trials per setting in this job:", ntrial.total, "\n")
 cat("Models:", paste(model_list_aide, collapse = ", "), "\n")
 cat("BOIN methods:", paste(method_list_boin, collapse = ", "), "\n")
@@ -773,8 +756,8 @@ if (isTRUE(use_random_scenario_file)) {
 }
 cat("Scenario IDs:", paste(scenario_id_list, collapse = ", "), "\n")
 
-trial_blocks <- make_trial_blocks(ntrial.total, ncores)
-block_start <- cumsum(c(1L, trial_blocks[-length(trial_blocks)]))
+trial_blocks <- ntrial.total
+block_start <- 1L
 
 cat("Trial blocks:", paste(trial_blocks, collapse = ", "), "\n")
 cat("Block starts:", paste(block_start, collapse = ", "), "\n")
@@ -1278,49 +1261,22 @@ for (Nmax_eff_aide in Nmax_eff_list_equiv) {
   }
 }
 
-cat("Number of parallel tasks:", length(tasks), "\n")
+cat("Number of tasks:", length(tasks), "\n")
 
 ## ============================================================
-## Run parallel jobs
+## Run jobs sequentially
 ## ============================================================
 
-cl <- makeCluster(ncores, type = "PSOCK")
+task_results <- lapply(tasks, run_one_aide_task)
 
-clusterExport(
-  cl,
-  varlist = c(
-    "fmt_param",
-    "fmt_num",
-    "fmt_short",
-    "with_sink",
-    "make_trial_blocks",
-    "make_p_ipde",
-    "make_aide_folder",
-    "combine_oc_AIDE_results",
-    "run_one_aide_task",
-    "get_oc_sim_AIDE"
-  ),
-  envir = environment()
-)
-
-clusterSetRNGStream(cl, iseed = 100000 + job_i)
-
-on.exit({
-  try(stopCluster(cl), silent = TRUE)
-}, add = TRUE)
-
-parallel_results <- parLapplyLB(cl, tasks, run_one_aide_task)
-
-stopCluster(cl)
-
-cat("\nAll parallel chunks completed.\n")
+cat("\nAll sequential tasks completed.\n")
 
 ## ============================================================
 ## Combine chunk results by setting within this LSF job
 ## ============================================================
 
 group_key <- vapply(
-  parallel_results,
+  task_results,
   function(z) {
     method_tag <- if (z$model == "BOIN") {
       paste0(z$decision_method, "-", z$r_estimator)
@@ -1352,7 +1308,7 @@ group_key <- vapply(
   character(1)
 )
 
-groups <- split(parallel_results, group_key)
+groups <- split(task_results, group_key)
 
 for (g in names(groups)) {
   files <- vapply(groups[[g]], function(z) z$file, character(1))
