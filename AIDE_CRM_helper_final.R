@@ -1102,18 +1102,6 @@ select.mtd.crm <- function(target,
 
   dat2 <- crm_prepare_dat(dat, ndose, time_col = time_col)
   n <- tabulate(as.integer(dat2$dose), nbins = ndose)
-  y <- tabulate(as.integer(dat2$dose[dat2$y == 1L]), nbins = ndose)
-
-  ## Keep the original empirical overdose elimination for doses with enough data.
-  for (j in seq_len(ndose)) {
-    if (n[j] > 2L) {
-      post_over <- 1 - stats::pbeta(target, y[j] + 1, n[j] - y[j] + 1)
-      if (post_over > cutoff.eli) {
-        elimi[j:ndose] <- 1L
-        break
-      }
-    }
-  }
 
   fit <- crm_fit(
     dat = dat2,
@@ -1158,6 +1146,14 @@ select.mtd.crm <- function(target,
   )
 
   phat_out <- fit$p_hat
+
+  ## Elimination is determined by the fitted CRM model, not a separate
+  ## beta-binomial calculation on the observed dose-specific outcomes.
+  if (!is.null(fit$eliminated)) {
+    elimi <- as.integer(fit$eliminated)
+  } else if (!is.null(fit$stop) && isTRUE(fit$stop == 1L)) {
+    elimi <- rep(1L, ndose)
+  }
 
   if (elimi[1L] == 1L || (!is.null(fit$stop) && isTRUE(fit$stop == 1L))) {
     return(list(
