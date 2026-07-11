@@ -35,10 +35,6 @@ random_nscenario <- 10000L
 random_target <- target
 random_target_diff_below <- 0.05
 random_target_diff_above <- 0.05
-if (!isTRUE(all.equal(random_target_diff_below, random_target_diff_above))) {
-  stop("This extractor assumes random_target_diff_below equals random_target_diff_above.")
-}
-target_gap <- random_target_diff_below
 scenario_dir <- "scenario_sets"
 
 ## run_oc_AIDE.R defaults
@@ -103,11 +99,6 @@ fmt_short <- function(x, digits = 2) {
   out <- gsub("-", "m", out)
   out <- gsub("\\.", "p", out)
   out
-}
-
-fmt_gap <- function(x) {
-  out <- formatC(as.numeric(x), format = "f", digits = 2)
-  gsub("\\.", "p", out)
 }
 
 make_random_scenario_filename <- function(
@@ -195,21 +186,9 @@ make_method_tag <- function(model,
     return(paste0(boin_method, "-", boin_r_estimator))
   }
   if (model == "CRM") {
-    return(if (identical(crm_r_model, "fixed")) "crm_r_fixed" else crm_r_model)
+    return(paste0("crm_", crm_r_model))
   }
   paste0("cfo_", cfo_method)
-}
-
-make_method_tag_aliases <- function(model, method_tag, crm_r_model = NULL) {
-  out <- method_tag
-
-  ## Support only the earlier fixed-r output name. The stable convention is
-  ## crm_r_fixed for fixed r, and the raw model name for other CRM variants.
-  if (model == "CRM" && identical(crm_r_model, "fixed")) {
-    out <- c(out, "crm_fixed")
-  }
-
-  unique(out)
 }
 
 make_foldername <- function(model,
@@ -672,14 +651,13 @@ if (!all(dose_col_names %in% names(scenario_meta))) {
 scenario_id_list <- scenario_meta$Scenario
 ndose_expected <- length(dose_col_names)
 
-out.dir <- paste0("OC_summary_randomsce_targetgap", fmt_gap(target_gap))
+out.dir <- paste0("OC_summary_randomsce_", scenario_set_name)
 if (!dir.exists(out.dir)) dir.create(out.dir, recursive = TRUE)
 
 cat("Scenario set:", scenario_set_name, "\n")
 cat("Scenario file:", scenario_file, "\n")
 cat("Results root:", results_root, "\n")
 cat("Number of scenarios to average:", length(scenario_id_list), "\n")
-cat("Target gap:", target_gap, "\n")
 cat("Allocation field:", allocation_field, "\n")
 
 ## -------------------------------
@@ -742,11 +720,18 @@ for (Nmax_eff in Nmax_eff_list) {
                           cfo_method = if (model == "CFO") cfo_method else NULL
                         )
 
-                        method_tags_search <- make_method_tag_aliases(
+                        foldername <- make_foldername(
                           model = model,
                           method_tag = method_tag,
-                          crm_r_model = if (model == "CRM") crm_r_model else NULL
+                          cycle_max = cycle_max,
+                          arrival_rate = arrival_rate,
+                          Nmax_eff = Nmax_eff,
+                          restrict_to_tried = restrict_to_tried,
+                          restrict_to_target = restrict_to_target,
+                          scenario_set = scenario_set_name
                         )
+
+                        folderpath <- resolve_folderpath(results_root, foldername)
 
                         setting_meta <- make_setting_meta(
                           model = model,
@@ -766,64 +751,47 @@ for (Nmax_eff in Nmax_eff_list) {
                           scenario_set_name = scenario_set_name
                         )
 
-                        folderpaths <- vapply(
-                          method_tags_search,
-                          function(method_tag_i) {
-                            foldername_i <- make_foldername(
-                              model = model,
-                              method_tag = method_tag_i,
-                              cycle_max = cycle_max,
-                              arrival_rate = arrival_rate,
-                              Nmax_eff = Nmax_eff,
-                              restrict_to_tried = restrict_to_tried,
-                              restrict_to_target = restrict_to_target,
-                              scenario_set = scenario_set_name
-                            )
-                            resolve_folderpath(results_root, foldername_i)
-                          },
-                          character(1)
-                        )
-
                         cat("\n====================================\n")
                         cat("Model:", model, "\n")
                         cat("Method tag:", method_tag, "\n")
-                        cat("Method tags searched:", paste(method_tags_search, collapse = ", "), "\n")
                         cat("alpha_true:", alpha_true, "\n")
                         cat("Cycle max:", cycle_max, "\n")
                         cat("Nmax eff:", Nmax_eff, "\n")
-                        cat("Folders:", paste(folderpaths, collapse = "; "), "\n")
+                        cat("Folder:", folderpath, "\n")
 
-                        files.use <- character(0)
-
-                        for (ii in seq_along(method_tags_search)) {
-                          folderpath_i <- folderpaths[ii]
-                          if (!dir.exists(folderpath_i)) next
-
-                          pattern_i <- make_file_pattern(
-                            scenario_set = scenario_set_name,
-                            model = model,
-                            method_tag = method_tags_search[ii],
-                            alpha_true = alpha_true,
-                            r_carry = r_carry,
-                            arrival_rate = arrival_rate,
-                            cycle_max = cycle_max,
-                            Nmax_eff = Nmax_eff,
-                            continuous_enrollment = continuous_enrollment,
-                            restrict_to_tried = restrict_to_tried,
-                            restrict_to_target = restrict_to_target
+                        if (!dir.exists(folderpath)) {
+                          cat("Folder not found; skipping.\n")
+                          acc <- new_accumulator(scenario_id_list, ndose_expected)
+                          one <- summarize_accumulator(
+                            acc = acc,
+                            scenario_meta = scenario_meta,
+                            setting_meta = setting_meta,
+                            n_files_found = 0L
                           )
-
-                          files.use <- c(
-                            files.use,
-                            list.files(
-                              folderpath_i,
-                              pattern = pattern_i,
-                              full.names = TRUE
-                            )
-                          )
+                          all.missing.summary[[missing_idx]] <- one$missing_summary
+                          missing_idx <- missing_idx + 1L
+                          next
                         }
 
-                        files.use <- unique(files.use)
+                        pattern <- make_file_pattern(
+                          scenario_set = scenario_set_name,
+                          model = model,
+                          method_tag = method_tag,
+                          alpha_true = alpha_true,
+                          r_carry = r_carry,
+                          arrival_rate = arrival_rate,
+                          cycle_max = cycle_max,
+                          Nmax_eff = Nmax_eff,
+                          continuous_enrollment = continuous_enrollment,
+                          restrict_to_tried = restrict_to_tried,
+                          restrict_to_target = restrict_to_target
+                        )
+
+                        files.use <- list.files(
+                          folderpath,
+                          pattern = pattern,
+                          full.names = TRUE
+                        )
 
                         cat("Found", length(files.use), "combined files.\n")
 
@@ -909,15 +877,33 @@ missing.summary.df <- do.call(rbind, all.missing.summary)
 wide.summary.out <- round_numeric_df(wide.summary.df, digits = 4)
 table.summary.out <- round_numeric_df(table.summary.df, digits = 4)
 
-out.tag <- paste0("randomsce_targetgap", fmt_gap(target_gap))
+out.tag <- paste0(
+  paste0("All_AIDE_OC_", scenario_set_name),
+  "_models", paste(model_list, collapse = "_"),
+  if ("BOIN" %in% model_list) paste0("_boin", paste(boin_method_list, collapse = "_")) else "",
+  if ("BOIN" %in% model_list) paste0("_rest", paste(boin_r_estimator_list, collapse = "_")) else "",
+  if ("CRM" %in% model_list) paste0("_crm", paste(crm_r_model_list, collapse = "_")) else "",
+  if ("CFO" %in% model_list) paste0("_cfo", paste(cfo_method_list, collapse = "_")) else "",
+  "_target", fmt_num(target),
+  "_w", fmt_short(T_assess),
+  "_c", fmt_short(C),
+  "_cyc", paste(fmt_short(cycle_max_list), collapse = "_"),
+  "_rate", paste(fmt_short(arrival_rate_list), collapse = "_"),
+  "_Nmax", paste(fmt_short(Nmax_eff_list), collapse = "_"),
+  "_dosecap", fmt_short(dose_cap),
+  "_cont", as.integer(isTRUE(continuous_enrollment)),
+  "_tried", paste(as.integer(restrict_to_tried_list), collapse = "_"),
+  "_ptarget", paste(as.integer(restrict_to_target_list), collapse = "_"),
+  "_scenarios", min(scenario_id_list), "to", max(scenario_id_list)
+)
 
-out.wide.csv <- file.path(out.dir, paste0(out.tag, "_wide_summary.csv"))
-out.table.csv <- file.path(out.dir, paste0(out.tag, "_table_summary.csv"))
-out.missing.csv <- file.path(out.dir, paste0(out.tag, "_missing_scenarios.csv"))
+out.wide.csv <- file.path(out.dir, paste0(out.tag, "_randomsce_wide_summary.csv"))
+out.table.csv <- file.path(out.dir, paste0(out.tag, "_randomsce_table_summary.csv"))
+out.missing.csv <- file.path(out.dir, paste0(out.tag, "_randomsce_missing_scenarios.csv"))
 
-out.wide.rds <- file.path(out.dir, paste0(out.tag, "_wide_summary.rds"))
-out.table.rds <- file.path(out.dir, paste0(out.tag, "_table_summary.rds"))
-out.missing.rds <- file.path(out.dir, paste0(out.tag, "_missing_scenarios.rds"))
+out.wide.rds <- file.path(out.dir, paste0(out.tag, "_randomsce_wide_summary.rds"))
+out.table.rds <- file.path(out.dir, paste0(out.tag, "_randomsce_table_summary.rds"))
+out.missing.rds <- file.path(out.dir, paste0(out.tag, "_randomsce_missing_scenarios.rds"))
 
 write.csv(wide.summary.out, out.wide.csv, row.names = FALSE)
 write.csv(table.summary.out, out.table.csv, row.names = FALSE)
