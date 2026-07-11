@@ -37,6 +37,14 @@ random_target_diff_below <- 0.05
 random_target_diff_above <- 0.05
 scenario_dir <- "scenario_sets"
 
+if (!isTRUE(all.equal(random_target_diff_below, random_target_diff_above))) {
+  stop("random_target_diff_below and random_target_diff_above must be equal.")
+}
+target_gap <- random_target_diff_below
+if (!target_gap %in% c(0.05, 0.10, 0.15)) {
+  stop("target_gap must be one of: 0.05, 0.10, 0.15.")
+}
+
 ## run_oc_AIDE.R defaults
 T_assess <- 28
 C <- 3L
@@ -99,6 +107,10 @@ fmt_short <- function(x, digits = 2) {
   out <- gsub("-", "m", out)
   out <- gsub("\\.", "p", out)
   out
+}
+
+fmt_gap <- function(x) {
+  gsub("\\.", "p", formatC(x, format = "f", digits = 2))
 }
 
 make_random_scenario_filename <- function(
@@ -651,7 +663,7 @@ if (!all(dose_col_names %in% names(scenario_meta))) {
 scenario_id_list <- scenario_meta$Scenario
 ndose_expected <- length(dose_col_names)
 
-out.dir <- paste0("OC_summary_randomsce_", scenario_set_name)
+out.dir <- paste0("OC_summary_randomsce_targetgap", fmt_gap(target_gap))
 if (!dir.exists(out.dir)) dir.create(out.dir, recursive = TRUE)
 
 cat("Scenario set:", scenario_set_name, "\n")
@@ -877,33 +889,15 @@ missing.summary.df <- do.call(rbind, all.missing.summary)
 wide.summary.out <- round_numeric_df(wide.summary.df, digits = 4)
 table.summary.out <- round_numeric_df(table.summary.df, digits = 4)
 
-out.tag <- paste0(
-  paste0("All_AIDE_OC_", scenario_set_name),
-  "_models", paste(model_list, collapse = "_"),
-  if ("BOIN" %in% model_list) paste0("_boin", paste(boin_method_list, collapse = "_")) else "",
-  if ("BOIN" %in% model_list) paste0("_rest", paste(boin_r_estimator_list, collapse = "_")) else "",
-  if ("CRM" %in% model_list) paste0("_crm", paste(crm_r_model_list, collapse = "_")) else "",
-  if ("CFO" %in% model_list) paste0("_cfo", paste(cfo_method_list, collapse = "_")) else "",
-  "_target", fmt_num(target),
-  "_w", fmt_short(T_assess),
-  "_c", fmt_short(C),
-  "_cyc", paste(fmt_short(cycle_max_list), collapse = "_"),
-  "_rate", paste(fmt_short(arrival_rate_list), collapse = "_"),
-  "_Nmax", paste(fmt_short(Nmax_eff_list), collapse = "_"),
-  "_dosecap", fmt_short(dose_cap),
-  "_cont", as.integer(isTRUE(continuous_enrollment)),
-  "_tried", paste(as.integer(restrict_to_tried_list), collapse = "_"),
-  "_ptarget", paste(as.integer(restrict_to_target_list), collapse = "_"),
-  "_scenarios", min(scenario_id_list), "to", max(scenario_id_list)
-)
+out.tag <- paste0("randomsce_targetgap", fmt_gap(target_gap))
 
-out.wide.csv <- file.path(out.dir, paste0(out.tag, "_randomsce_wide_summary.csv"))
-out.table.csv <- file.path(out.dir, paste0(out.tag, "_randomsce_table_summary.csv"))
-out.missing.csv <- file.path(out.dir, paste0(out.tag, "_randomsce_missing_scenarios.csv"))
+out.wide.csv <- file.path(out.dir, paste0(out.tag, "_wide_summary.csv"))
+out.table.csv <- file.path(out.dir, paste0(out.tag, "_table_summary.csv"))
+out.missing.csv <- file.path(out.dir, paste0(out.tag, "_missing_scenarios.csv"))
 
-out.wide.rds <- file.path(out.dir, paste0(out.tag, "_randomsce_wide_summary.rds"))
-out.table.rds <- file.path(out.dir, paste0(out.tag, "_randomsce_table_summary.rds"))
-out.missing.rds <- file.path(out.dir, paste0(out.tag, "_randomsce_missing_scenarios.rds"))
+out.wide.rds <- file.path(out.dir, paste0(out.tag, "_wide_summary.rds"))
+out.table.rds <- file.path(out.dir, paste0(out.tag, "_table_summary.rds"))
+out.missing.rds <- file.path(out.dir, paste0(out.tag, "_missing_scenarios.rds"))
 
 write.csv(wide.summary.out, out.wide.csv, row.names = FALSE)
 write.csv(table.summary.out, out.table.csv, row.names = FALSE)
