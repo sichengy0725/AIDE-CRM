@@ -233,7 +233,7 @@ make_aide_folder <- function(task) {
   method_tag <- if (task$model == "BOIN") {
     paste0(task$decision_method, "-", task$r_estimator)
   } else if (task$model == "CRM") {
-    paste0("crm_", task$crm_r_model)
+    if (identical(task$crm_r_model, "fixed")) "crm_r_fixed" else task$crm_r_model
   } else {
     paste0("cfo_", task$cfo_method)
   }
@@ -790,7 +790,7 @@ run_one_aide_task <- function(task) {
   method_tag <- if (task$model == "BOIN") {
     paste0(task$decision_method, "-", task$r_estimator)
   } else if (task$model == "CRM") {
-    paste0("crm_", task$crm_r_model)
+    if (identical(task$crm_r_model, "fixed")) "crm_r_fixed" else task$crm_r_model
   } else {
     paste0("cfo_", task$cfo_method)
   }
@@ -1114,7 +1114,11 @@ for (Nmax_eff_aide in Nmax_eff_list_equiv) {
                       r_carry_list_boin
                     }
                   } else if (model_aide == "CRM") {
-                    mtd_method_aide <- paste0("crm_", crm_r_model_aide)
+                    mtd_method_aide <- if (identical(crm_r_model_aide, "fixed")) {
+                      "crm_r_fixed"
+                    } else {
+                      crm_r_model_aide
+                    }
                     r_carry_loop <- r_carry_list_crm
                   } else {
                     mtd_method_aide <- paste0("cfo_", cfo_method_aide)
@@ -1281,7 +1285,7 @@ group_key <- vapply(
     method_tag <- if (z$model == "BOIN") {
       paste0(z$decision_method, "-", z$r_estimator)
     } else if (z$model == "CRM") {
-      paste0("crm_", z$crm_r_model)
+      if (identical(z$crm_r_model, "fixed")) "crm_r_fixed" else z$crm_r_model
     } else {
       paste0("cfo_", z$cfo_method)
     }

@@ -195,7 +195,7 @@ make_method_tag <- function(model,
     return(paste0(boin_method, "-", boin_r_estimator))
   }
   if (model == "CRM") {
-    return(paste0("crm_", crm_r_model))
+    return(if (identical(crm_r_model, "fixed")) "crm_r_fixed" else crm_r_model)
   }
   paste0("cfo_", cfo_method)
 }
@@ -203,10 +203,10 @@ make_method_tag <- function(model,
 make_method_tag_aliases <- function(model, method_tag, crm_r_model = NULL) {
   out <- method_tag
 
-  ## Older CRM fixed runs were written as crm_r_fixed, while current
-  ## run_oc_AIDE.R writes the same setting as crm_fixed.
+  ## Support only the earlier fixed-r output name. The stable convention is
+  ## crm_r_fixed for fixed r, and the raw model name for other CRM variants.
   if (model == "CRM" && identical(crm_r_model, "fixed")) {
-    out <- c(out, "crm_r_fixed")
+    out <- c(out, "crm_fixed")
   }
 
   unique(out)
