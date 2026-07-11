@@ -1,0 +1,30 @@
+model {
+
+  ############################################################
+  # AIDE-CRM/IPCRM cumulative-dose model with delayed outcomes
+  #
+  # Data required:
+  #   N              : total number of dose assignments
+  #   J              : number of dose levels
+  #   y[i]           : observed DLT by decision time, 0/1
+  #   w[i]           : follow-up weight in [0, 1]
+  #   zeros[i]       : zeros-trick vector of 0s
+  #   assigned_d[i]  : assigned dose score
+  #   cumu_d[i]      : previous cumulative dose score
+  #   dose_scores[j] : baseline dose score for dose j
+  ############################################################
+
+  for (i in 1:N) {
+    logit(p[i]) <- beta0 + beta1 * assigned_d[i] + beta2 * cumu_d[i]
+    loglik[i] <- y[i] * log(p[i]) + (1 - y[i]) * w[i] * log(1 - p[i])
+    zeros[i] ~ dpois(-loglik[i])
+  }
+
+  beta0 ~ dt(beta0_mean, beta0_prec, beta0_df)
+  beta1 ~ dgamma(beta1_shape, beta1_rate)
+  beta2 ~ dexp(beta2_rate)
+
+  for (j in 1:J) {
+    logit(p_base[j]) <- beta0 + beta1 * dose_scores[j]
+  }
+}

@@ -15,6 +15,7 @@
 ## Data requirements:
 ##   Required columns: dose and y, or dose and y_obs
 ##   Optional columns : type, id, cycle, arrival_time/t_start/t_arrival/t_eval
+##   Optional TITE columns: tite_weight/weight/w/wi, or follow-up time
 ##   For alpha_crm, arrival time is used if available; otherwise row order is used.
 ## ============================================================
 
@@ -23,11 +24,17 @@
 ## ------------------------------------------------------------
 crm_inv_logit <- function(x) 1 / (1 + exp(-x))
 
-crm_r_model_choices <- function() c("fixed", "r_fixed", "random", "level", "alpha_crm", "cumu_crm")
+crm_r_model_choices <- function() c("fixed", "r_fixed", "random", "level", "alpha_crm", "cumu_crm", "ipcrm")
 
 crm_normalize_r_model <- function(r_model) {
   r_model <- match.arg(r_model, choices = crm_r_model_choices())
-  if (r_model == "r_fixed") "fixed" else r_model
+  if (r_model == "r_fixed") {
+    "fixed"
+  } else if (r_model == "ipcrm") {
+    "cumu_crm"
+  } else {
+    r_model
+  }
 }
 
 crm_validate_skeleton <- function(skeleton, ndose) {
@@ -48,10 +55,132 @@ crm_default_dose_scores <- function(skeleton) {
   stats::qlogis(skeleton) - 3
 }
 
+crm_normalize_colname <- function(x) {
+  x <- tolower(x)
+  x <- gsub("[^a-z0-9]+", "_", x)
+  gsub("^_+|_+$", "", x)
+}
+
+crm_find_data_col <- function(dat,
+                              preferred = NULL,
+                              candidates = character(0)) {
+  if (!is.null(preferred) && preferred %in% names(dat)) {
+    return(preferred)
+  }
+
+  if (length(candidates) == 0L || is.null(dat) || ncol(dat) == 0L) {
+    return(NULL)
+  }
+
+  normalized_names <- crm_normalize_colname(names(dat))
+  normalized_candidates <- crm_normalize_colname(candidates)
+
+  for (cand in normalized_candidates) {
+    hit <- which(normalized_names == cand)
+    if (length(hit) > 0L) {
+      return(names(dat)[hit[1L]])
+    }
+  }
+
+  NULL
+}
+
+crm_clip01 <- function(x) pmin(1, pmax(0, x))
+
+crm_prepare_tite_weight <- function(dat,
+                                    y,
+                                    assessment_window = NULL,
+                                    decision_time = NULL,
+                                    weight_col = NULL,
+                                    followup_col = NULL) {
+  n <- length(y)
+  if (n == 0L) return(numeric(0))
+
+  weight_candidates <- c(
+    "tite_weight", "weight", "w", "wi",
+    "followup_fraction", "followup fraction",
+    "eval_frac", "frac_eval", "fraction_evaluated",
+    "followup_prop", "time_weight"
+  )
+  weight_name <- crm_find_data_col(dat, weight_col, weight_candidates)
+
+  if (!is.null(weight_name)) {
+    w <- as.numeric(dat[[weight_name]])
+  } else {
+    followup_candidates <- c(
+      "followup_time", "followup", "time_follow", "u",
+      "obs_time", "observed_time", "t_obs"
+    )
+    followup_name <- crm_find_data_col(dat, followup_col, followup_candidates)
+
+    if (!is.null(followup_name) &&
+        !is.null(assessment_window) &&
+        is.finite(assessment_window) &&
+        assessment_window > 0) {
+      w <- as.numeric(dat[[followup_name]]) / assessment_window
+    } else if (!is.null(decision_time) &&
+               !is.null(assessment_window) &&
+               is.finite(decision_time) &&
+               is.finite(assessment_window) &&
+               assessment_window > 0) {
+      start_name <- crm_find_data_col(
+        dat,
+        preferred = NULL,
+        candidates = c("t_start", "start_time", "arrival_time", "t_arrival", "t_enter")
+      )
+      if (!is.null(start_name)) {
+        w <- (as.numeric(decision_time) - as.numeric(dat[[start_name]])) / assessment_window
+      } else {
+        w <- rep(1, n)
+      }
+    } else {
+      w <- rep(1, n)
+    }
+  }
+
+  if (length(w) != n || any(!is.finite(w))) {
+    stop("TITE weights must be finite and have one value per row.")
+  }
+
+  w <- crm_clip01(w)
+
+  observed_name <- crm_find_data_col(
+    dat,
+    preferred = NULL,
+    candidates = c("observed", "is_observed", "complete", "completed", "evaluated")
+  )
+  if (!is.null(observed_name)) {
+    observed <- as.logical(dat[[observed_name]])
+    observed[is.na(observed)] <- FALSE
+    w[observed] <- 1
+  }
+
+  if (!is.null(decision_time) && is.finite(decision_time)) {
+    eval_name <- crm_find_data_col(
+      dat,
+      preferred = NULL,
+      candidates = c("t_eval", "eval_time", "evaluation_time")
+    )
+    if (!is.null(eval_name)) {
+      fully_evaluated <- as.numeric(dat[[eval_name]]) <= as.numeric(decision_time)
+      fully_evaluated[is.na(fully_evaluated)] <- FALSE
+      w[fully_evaluated] <- 1
+    }
+  }
+
+  ## Observed DLTs always contribute as completed observations.
+  w[y == 1L] <- 1
+  crm_clip01(w)
+}
+
 crm_prepare_dat <- function(dat,
                             ndose,
                             time_col = NULL,
-                            require_time = FALSE) {
+                            require_time = FALSE,
+                            assessment_window = NULL,
+                            decision_time = NULL,
+                            weight_col = NULL,
+                            followup_col = NULL) {
   if (is.null(dat) || nrow(dat) == 0L) return(dat)
   
   if (!"dose" %in% names(dat)) {
@@ -111,6 +240,15 @@ crm_prepare_dat <- function(dat,
   if (any(!is.finite(out$arrival_time))) {
     stop("arrival_time/time_col contains non-finite values.")
   }
+
+  out$tite_weight <- crm_prepare_tite_weight(
+    dat = dat,
+    y = out$y,
+    assessment_window = assessment_window,
+    decision_time = decision_time,
+    weight_col = weight_col,
+    followup_col = followup_col
+  )
   
   out <- out[order(out$id, out$cycle, out$arrival_time), , drop = FALSE]
   rownames(out) <- NULL
@@ -157,8 +295,8 @@ crm_fit <- function(dat,
                     b_r = 9,
                     alpha_sd = 2,
                     model_file = NULL,
-                    fixed_model_file = "fix_CRM.bug",
-                    random_model_file = "random_CRM.bug",
+                    fixed_model_file = "fix_CRM_TITE.bug",
+                    random_model_file = "random_CRM_TITE.bug",
                     level_model_file = "random_CRM_level.bug",
                     n_chains = 2,
                     n_adapt = 500,
@@ -169,6 +307,10 @@ crm_fit <- function(dat,
                     dose_values = NULL,
                     dose_scores = NULL,
                     time_col = NULL,
+                    assessment_window = NULL,
+                    decision_time = NULL,
+                    weight_col = NULL,
+                    followup_col = NULL,
                     alpha_grid = seq(0.01, 0.99, length.out = 61),
                     alpha_T = 28,
                     theta_prior_mean = 0,
@@ -177,7 +319,7 @@ crm_fit <- function(dat,
                     alpha_rel_tol = 1e-8,
                     alpha_eps = 1e-12,
                     alpha_n_draw_prior = 5000,
-                    cumu_model_file = NULL,
+                    cumu_model_file = "cumu_CRM_TITE.bug",
                     cumu_beta0_mean = stats::qlogis(target),
                     cumu_beta0_prec = 4,
                     cumu_beta0_df = 1,
@@ -205,6 +347,10 @@ crm_fit <- function(dat,
       fixed_model_file = fixed_model_file,
       random_model_file = random_model_file,
       level_model_file = level_model_file,
+      assessment_window = assessment_window,
+      decision_time = decision_time,
+      weight_col = weight_col,
+      followup_col = followup_col,
       n_chains = n_chains,
       n_adapt = n_adapt,
       n_burnin = n_burnin,
@@ -232,6 +378,10 @@ crm_fit <- function(dat,
       rel.tol = alpha_rel_tol,
       n_draw_prior = alpha_n_draw_prior,
       time_col = time_col,
+      assessment_window = if (is.null(assessment_window)) alpha_T else assessment_window,
+      decision_time = decision_time,
+      weight_col = weight_col,
+      followup_col = followup_col,
       seed = seed
     ))
   }
@@ -253,6 +403,10 @@ crm_fit <- function(dat,
       beta1_rate = cumu_beta1_rate,
       beta2_rate = cumu_beta2_rate,
       include_current = cumu_include_current,
+      assessment_window = assessment_window,
+      decision_time = decision_time,
+      weight_col = weight_col,
+      followup_col = followup_col,
       n_chains = n_chains,
       n_adapt = n_adapt,
       n_burnin = n_burnin,
@@ -278,9 +432,13 @@ crm_fit_discount <- function(dat,
                              b_r = 9,
                              alpha_sd = 2,
                              model_file = NULL,
-                             fixed_model_file = "fix_CRM.bug",
-                             random_model_file = "random_CRM.bug",
+                             fixed_model_file = "fix_CRM_TITE.bug",
+                             random_model_file = "random_CRM_TITE.bug",
                              level_model_file = "random_CRM_level.bug",
+                             assessment_window = NULL,
+                             decision_time = NULL,
+                             weight_col = NULL,
+                             followup_col = NULL,
                              n_chains = 2,
                              n_adapt = 500,
                              n_burnin = 500,
@@ -320,7 +478,14 @@ crm_fit_discount <- function(dat,
     stop("For fixed r, r_carry must be a scalar in [0, 1).")
   }
   
-  dat2 <- crm_prepare_dat(dat, ndose)
+  dat2 <- crm_prepare_dat(
+    dat,
+    ndose,
+    assessment_window = assessment_window,
+    decision_time = decision_time,
+    weight_col = weight_col,
+    followup_col = followup_col
+  )
   if (is.null(dat2) || nrow(dat2) == 0L) {
     stop("CRM requires at least one observed assignment in dat.")
   }
@@ -328,6 +493,7 @@ crm_fit_discount <- function(dat,
   y_vec <- as.integer(dat2$y)
   dose_vec <- as.integer(dat2$dose)
   ipde_vec <- as.integer(dat2$type == "retreat")
+  w_vec <- as.numeric(dat2$tite_weight)
   
   jags_data <- list(
     N = length(y_vec),
@@ -335,6 +501,7 @@ crm_fit_discount <- function(dat,
     y = y_vec,
     dose = dose_vec,
     ipde = ipde_vec,
+    w = w_vec,
     q = as.numeric(skeleton),
     tau_alpha = 1 / alpha_sd^2
   )
@@ -422,7 +589,8 @@ crm_fit_discount <- function(dat,
       prob_p1_over_target = prob_overtox,
       earlystop = stop_flag,
       eliminated = if (stop_flag == 1L) rep(1L, ndose) else rep(0L, ndose),
-      model_file = model_file
+      model_file = model_file,
+      n_eff = sum(w_vec)
     )
   )
 }
@@ -476,15 +644,18 @@ compute_Dij_alpha <- function(tmp, alpha, T, d_grid) {
 logpost_theta_given_alpha_vec <- function(theta,
                                           y,
                                           S_at_D,
+                                          tite_weight = NULL,
                                           eps = 1e-12,
                                           theta_prior_mean = 0,
                                           theta_prior_sd = sqrt(2)) {
   lp <- stats::dnorm(theta, theta_prior_mean, theta_prior_sd, log = TRUE)
+  if (is.null(tite_weight)) tite_weight <- rep(1, length(y))
   et <- exp(theta)
   ll <- vapply(et, function(et1) {
     p <- S_at_D^et1
-    p <- pmin(1 - eps, pmax(eps, p))
-    sum(y * log(p) + (1 - y) * log1p(-p))
+    p_eff <- tite_weight * p
+    p_eff <- pmin(1 - eps, pmax(eps, p_eff))
+    sum(y * log(p_eff) + (1 - y) * log1p(-p_eff))
   }, numeric(1))
   lp + ll
 }
@@ -504,6 +675,10 @@ crm_fit_alpha_integrate <- function(dat,
                                     rel.tol = 1e-8,
                                     n_draw_prior = 5000,
                                     time_col = NULL,
+                                    assessment_window = T,
+                                    decision_time = NULL,
+                                    weight_col = NULL,
+                                    followup_col = NULL,
                                     seed = NULL) {
   
   crm_validate_skeleton(skeleton, ndose)
@@ -545,8 +720,18 @@ crm_fit_alpha_integrate <- function(dat,
     ))
   }
   
-  tmp <- crm_prepare_dat(dat, ndose, time_col = time_col, require_time = TRUE)
+  tmp <- crm_prepare_dat(
+    dat,
+    ndose,
+    time_col = time_col,
+    require_time = TRUE,
+    assessment_window = assessment_window,
+    decision_time = decision_time,
+    weight_col = weight_col,
+    followup_col = followup_col
+  )
   y <- as.integer(tmp$y)
+  tite_weight <- as.numeric(tmp$tite_weight)
   
   lower <- theta_prior_mean - L * theta_prior_sd
   upper <- theta_prior_mean + L * theta_prior_sd
@@ -572,6 +757,7 @@ crm_fit_alpha_integrate <- function(dat,
         theta = theta,
         y = y,
         S_at_D = S_at_D,
+        tite_weight = tite_weight,
         eps = eps,
         theta_prior_mean = theta_prior_mean,
         theta_prior_sd = theta_prior_sd
@@ -606,6 +792,7 @@ crm_fit_alpha_integrate <- function(dat,
           theta = theta,
           y = y,
           S_at_D = S_at_D,
+          tite_weight = tite_weight,
           eps = eps,
           theta_prior_mean = theta_prior_mean,
           theta_prior_sd = theta_prior_sd
@@ -632,7 +819,8 @@ crm_fit_alpha_integrate <- function(dat,
       MTD = which.min(abs(posttox - target)),
       prob_p1_over_target = prob_overtox,
       earlystop = stop_flag,
-      eliminated = if (stop_flag == 1L) rep(1L, ndose) else rep(0L, ndose)
+      eliminated = if (stop_flag == 1L) rep(1L, ndose) else rep(0L, ndose),
+      n_eff = sum(tite_weight)
     )
   )
 }
@@ -644,8 +832,9 @@ crm_write_cumu_model_file <- function(model_file = NULL) {
   model_string <- "
 model {
   for (i in 1:N) {
-    y[i] ~ dbin(p[i], 1)
     logit(p[i]) <- beta0 + beta1 * assigned_d[i] + beta2 * cumu_d[i]
+    loglik[i] <- y[i] * log(p[i]) + (1 - y[i]) * w[i] * log(1 - p[i])
+    zeros[i] ~ dpois(-loglik[i])
   }
 
   beta0 ~ dt(beta0_mean, beta0_prec, beta0_df)
@@ -693,7 +882,7 @@ crm_fit_cumu_jags <- function(dat,
                               dose_scores = NULL,
                               target = 0.30,
                               cutoff = 0.95,
-                              model_file = NULL,
+                              model_file = "cumu_CRM_TITE.bug",
                               beta0_mean = stats::qlogis(target),
                               beta0_prec = 4,
                               beta0_df = 1,
@@ -701,6 +890,10 @@ crm_fit_cumu_jags <- function(dat,
                               beta1_rate = 1.21,
                               beta2_rate = 1,
                               include_current = FALSE,
+                              assessment_window = NULL,
+                              decision_time = NULL,
+                              weight_col = NULL,
+                              followup_col = NULL,
                               n_chains = 2,
                               n_adapt = 500,
                               n_burnin = 500,
@@ -719,7 +912,14 @@ crm_fit_cumu_jags <- function(dat,
   if (length(dose_scores) != ndose) stop("dose_scores must have length ndose.")
   if (any(!is.finite(dose_scores))) stop("dose_scores must be finite.")
   
-  dat2 <- crm_prepare_dat(dat, ndose)
+  dat2 <- crm_prepare_dat(
+    dat,
+    ndose,
+    assessment_window = assessment_window,
+    decision_time = decision_time,
+    weight_col = weight_col,
+    followup_col = followup_col
+  )
   if (is.null(dat2) || nrow(dat2) == 0L) {
     stop("cumu_crm requires at least one observed assignment in dat.")
   }
@@ -737,6 +937,8 @@ crm_fit_cumu_jags <- function(dat,
     N = length(dat2$y),
     J = ndose,
     y = as.integer(dat2$y),
+    w = as.numeric(dat2$tite_weight),
+    zeros = rep(0L, length(dat2$y)),
     assigned_d = as.numeric(assigned_d),
     cumu_d = as.numeric(cumu_d),
     dose_scores = as.numeric(dose_scores),
@@ -793,6 +995,7 @@ crm_fit_cumu_jags <- function(dat,
       earlystop = stop_flag,
       eliminated = if (stop_flag == 1L) rep(1L, ndose) else rep(0L, ndose),
       model_file = model_file,
+      n_eff = sum(dat2$tite_weight),
       beta_prior = list(
         beta0_mean = beta0_mean,
         beta0_prec = beta0_prec,
@@ -819,8 +1022,8 @@ crm_move <- function(current_dose,
                      b_r = 9,
                      alpha_sd = 2,
                      model_file = NULL,
-                     fixed_model_file = "fix_CRM.bug",
-                     random_model_file = "random_CRM.bug",
+                     fixed_model_file = "fix_CRM_TITE.bug",
+                     random_model_file = "random_CRM_TITE.bug",
                      level_model_file = "random_CRM_level.bug",
                      n_chains = 2,
                      n_adapt = 500,
@@ -837,6 +1040,10 @@ crm_move <- function(current_dose,
                      dose_values = NULL,
                      dose_scores = NULL,
                      time_col = NULL,
+                     assessment_window = NULL,
+                     decision_time = NULL,
+                     weight_col = NULL,
+                     followup_col = NULL,
                      alpha_grid = seq(0.01, 0.99, length.out = 61),
                      alpha_T = 28,
                      theta_prior_mean = 0,
@@ -845,7 +1052,7 @@ crm_move <- function(current_dose,
                      alpha_rel_tol = 1e-8,
                      alpha_eps = 1e-12,
                      alpha_n_draw_prior = 5000,
-                     cumu_model_file = NULL,
+                     cumu_model_file = "cumu_CRM_TITE.bug",
                      cumu_beta0_mean = stats::qlogis(target),
                      cumu_beta0_prec = 4,
                      cumu_beta0_df = 1,
@@ -920,6 +1127,10 @@ crm_move <- function(current_dose,
     dose_values = dose_values,
     dose_scores = dose_scores,
     time_col = time_col,
+    assessment_window = assessment_window,
+    decision_time = decision_time,
+    weight_col = weight_col,
+    followup_col = followup_col,
     alpha_grid = alpha_grid,
     alpha_T = alpha_T,
     theta_prior_mean = theta_prior_mean,
@@ -943,7 +1154,7 @@ crm_move <- function(current_dose,
       next_dose = 99L,
       action = "earlystop_p1_over_toxic",
       mu_hat = fit$p_hat[current_dose],
-      n_eff = nrow(dat),
+      n_eff = if (!is.null(fit$n_eff)) fit$n_eff else nrow(dat),
       method = paste0("crm_", r_model),
       p_hat = fit$p_hat,
       theta_ipde_hat = fit$theta_ipde_hat,
@@ -969,7 +1180,7 @@ crm_move <- function(current_dose,
       next_dose = current_dose,
       action = "stay_all_eliminated",
       mu_hat = fit$p_hat[current_dose],
-      n_eff = nrow(dat),
+      n_eff = if (!is.null(fit$n_eff)) fit$n_eff else nrow(dat),
       method = paste0("crm_", r_model),
       p_hat = fit$p_hat,
       theta_ipde_hat = fit$theta_ipde_hat,
@@ -1010,7 +1221,7 @@ crm_move <- function(current_dose,
     next_dose = next_dose,
     action = action,
     mu_hat = fit$p_hat[current_dose],
-    n_eff = nrow(dat),
+    n_eff = if (!is.null(fit$n_eff)) fit$n_eff else nrow(dat),
     method = paste0("crm_", r_model),
     p_hat = fit$p_hat,
     theta_ipde_hat = fit$theta_ipde_hat,
@@ -1042,8 +1253,8 @@ select.mtd.crm <- function(target,
                            b_r = 9,
                            alpha_sd = 2,
                            model_file = NULL,
-                           fixed_model_file = "fix_CRM.bug",
-                           random_model_file = "random_CRM.bug",
+                           fixed_model_file = "fix_CRM_TITE.bug",
+                           random_model_file = "random_CRM_TITE.bug",
                            level_model_file = "random_CRM_level.bug",
                            n_chains = 2,
                            n_adapt = 500,
@@ -1055,6 +1266,10 @@ select.mtd.crm <- function(target,
                            dose_values = NULL,
                            dose_scores = NULL,
                            time_col = NULL,
+                           assessment_window = NULL,
+                           decision_time = NULL,
+                           weight_col = NULL,
+                           followup_col = NULL,
                            alpha_grid = seq(0.01, 0.99, length.out = 61),
                            alpha_T = 28,
                            theta_prior_mean = 0,
@@ -1063,7 +1278,7 @@ select.mtd.crm <- function(target,
                            alpha_rel_tol = 1e-8,
                            alpha_eps = 1e-12,
                            alpha_n_draw_prior = 5000,
-                           cumu_model_file = NULL,
+                           cumu_model_file = "cumu_CRM_TITE.bug",
                            cumu_beta0_mean = stats::qlogis(target),
                            cumu_beta0_prec = 4,
                            cumu_beta0_df = 1,
@@ -1102,14 +1317,28 @@ select.mtd.crm <- function(target,
     ))
   }
   
-  dat2 <- crm_prepare_dat(dat, ndose, time_col = time_col)
+  dat2 <- crm_prepare_dat(
+    dat,
+    ndose,
+    time_col = time_col,
+    assessment_window = assessment_window,
+    decision_time = decision_time,
+    weight_col = weight_col,
+    followup_col = followup_col
+  )
   n <- tabulate(as.integer(dat2$dose), nbins = ndose)
   y <- tabulate(as.integer(dat2$dose[dat2$y == 1L]), nbins = ndose)
-  
-  ## Keep the original empirical overdose elimination for doses with enough data.
+  n_eff <- numeric(ndose)
   for (j in seq_len(ndose)) {
-    if (n[j] > 2L) {
-      post_over <- 1 - stats::pbeta(target, y[j] + 1, n[j] - y[j] + 1)
+    rows_j <- dat2$dose == j
+    n_eff[j] <- sum(dat2$y[rows_j] == 1L) +
+      sum(dat2$tite_weight[rows_j & dat2$y == 0L])
+  }
+  
+  ## Weighted overdose elimination: pending non-DLT rows contribute through w.
+  for (j in seq_len(ndose)) {
+    if (n_eff[j] > 2) {
+      post_over <- 1 - stats::pbeta(target, y[j] + 1, n_eff[j] - y[j] + 1)
       if (post_over > cutoff.eli) {
         elimi[j:ndose] <- 1L
         break
@@ -1141,6 +1370,10 @@ select.mtd.crm <- function(target,
     dose_values = dose_values,
     dose_scores = dose_scores,
     time_col = time_col,
+    assessment_window = assessment_window,
+    decision_time = decision_time,
+    weight_col = weight_col,
+    followup_col = followup_col,
     alpha_grid = alpha_grid,
     alpha_T = alpha_T,
     theta_prior_mean = theta_prior_mean,
@@ -1174,6 +1407,7 @@ select.mtd.crm <- function(target,
       prob_overtox = fit$prob_overtox,
       prob_p1_over_target = fit$prob_overtox,
       model_file = if (!is.null(fit$model_file)) fit$model_file else model_file,
+      n_eff = n_eff,
       earlystop = 1L,
       stop = 1L
     ))
@@ -1203,6 +1437,7 @@ select.mtd.crm <- function(target,
     prob_overtox = fit$prob_overtox,
     prob_p1_over_target = fit$prob_overtox,
     model_file = if (!is.null(fit$model_file)) fit$model_file else model_file,
+    n_eff = n_eff,
     earlystop = if (!is.null(fit$earlystop)) fit$earlystop else fit$stop,
     stop = fit$stop,
     fit = fit
