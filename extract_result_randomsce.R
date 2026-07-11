@@ -200,6 +200,18 @@ make_method_tag <- function(model,
   paste0("cfo_", cfo_method)
 }
 
+make_method_tag_aliases <- function(model, method_tag, crm_r_model = NULL) {
+  out <- method_tag
+
+  ## Older CRM fixed runs were written as crm_r_fixed, while current
+  ## run_oc_AIDE.R writes the same setting as crm_fixed.
+  if (model == "CRM" && identical(crm_r_model, "fixed")) {
+    out <- c(out, "crm_r_fixed")
+  }
+
+  unique(out)
+}
+
 make_foldername <- function(model,
                             method_tag,
                             cycle_max,
@@ -730,18 +742,11 @@ for (Nmax_eff in Nmax_eff_list) {
                           cfo_method = if (model == "CFO") cfo_method else NULL
                         )
 
-                        foldername <- make_foldername(
+                        method_tags_search <- make_method_tag_aliases(
                           model = model,
                           method_tag = method_tag,
-                          cycle_max = cycle_max,
-                          arrival_rate = arrival_rate,
-                          Nmax_eff = Nmax_eff,
-                          restrict_to_tried = restrict_to_tried,
-                          restrict_to_target = restrict_to_target,
-                          scenario_set = scenario_set_name
+                          crm_r_model = if (model == "CRM") crm_r_model else NULL
                         )
-
-                        folderpath <- resolve_folderpath(results_root, foldername)
 
                         setting_meta <- make_setting_meta(
                           model = model,
@@ -761,47 +766,64 @@ for (Nmax_eff in Nmax_eff_list) {
                           scenario_set_name = scenario_set_name
                         )
 
+                        folderpaths <- vapply(
+                          method_tags_search,
+                          function(method_tag_i) {
+                            foldername_i <- make_foldername(
+                              model = model,
+                              method_tag = method_tag_i,
+                              cycle_max = cycle_max,
+                              arrival_rate = arrival_rate,
+                              Nmax_eff = Nmax_eff,
+                              restrict_to_tried = restrict_to_tried,
+                              restrict_to_target = restrict_to_target,
+                              scenario_set = scenario_set_name
+                            )
+                            resolve_folderpath(results_root, foldername_i)
+                          },
+                          character(1)
+                        )
+
                         cat("\n====================================\n")
                         cat("Model:", model, "\n")
                         cat("Method tag:", method_tag, "\n")
+                        cat("Method tags searched:", paste(method_tags_search, collapse = ", "), "\n")
                         cat("alpha_true:", alpha_true, "\n")
                         cat("Cycle max:", cycle_max, "\n")
                         cat("Nmax eff:", Nmax_eff, "\n")
-                        cat("Folder:", folderpath, "\n")
+                        cat("Folders:", paste(folderpaths, collapse = "; "), "\n")
 
-                        if (!dir.exists(folderpath)) {
-                          cat("Folder not found; skipping.\n")
-                          acc <- new_accumulator(scenario_id_list, ndose_expected)
-                          one <- summarize_accumulator(
-                            acc = acc,
-                            scenario_meta = scenario_meta,
-                            setting_meta = setting_meta,
-                            n_files_found = 0L
+                        files.use <- character(0)
+
+                        for (ii in seq_along(method_tags_search)) {
+                          folderpath_i <- folderpaths[ii]
+                          if (!dir.exists(folderpath_i)) next
+
+                          pattern_i <- make_file_pattern(
+                            scenario_set = scenario_set_name,
+                            model = model,
+                            method_tag = method_tags_search[ii],
+                            alpha_true = alpha_true,
+                            r_carry = r_carry,
+                            arrival_rate = arrival_rate,
+                            cycle_max = cycle_max,
+                            Nmax_eff = Nmax_eff,
+                            continuous_enrollment = continuous_enrollment,
+                            restrict_to_tried = restrict_to_tried,
+                            restrict_to_target = restrict_to_target
                           )
-                          all.missing.summary[[missing_idx]] <- one$missing_summary
-                          missing_idx <- missing_idx + 1L
-                          next
+
+                          files.use <- c(
+                            files.use,
+                            list.files(
+                              folderpath_i,
+                              pattern = pattern_i,
+                              full.names = TRUE
+                            )
+                          )
                         }
 
-                        pattern <- make_file_pattern(
-                          scenario_set = scenario_set_name,
-                          model = model,
-                          method_tag = method_tag,
-                          alpha_true = alpha_true,
-                          r_carry = r_carry,
-                          arrival_rate = arrival_rate,
-                          cycle_max = cycle_max,
-                          Nmax_eff = Nmax_eff,
-                          continuous_enrollment = continuous_enrollment,
-                          restrict_to_tried = restrict_to_tried,
-                          restrict_to_target = restrict_to_target
-                        )
-
-                        files.use <- list.files(
-                          folderpath,
-                          pattern = pattern,
-                          full.names = TRUE
-                        )
+                        files.use <- unique(files.use)
 
                         cat("Found", length(files.use), "combined files.\n")
 
