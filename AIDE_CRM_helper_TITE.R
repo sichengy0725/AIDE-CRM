@@ -4,11 +4,11 @@
 ## This file layers a TITE event-clock simulation over the updated
 ## likelihoods in AIDE_CRM_helper_modified.R.
 ##
-## Arrival rule:
-##   - new patients and IPDE/retreat opportunities are both arrivals
-##   - if the current cohort is open and has fewer than cohortsize
-##     enrolled rows, the arrival is appended to that cohort
-##   - otherwise, the arrival waits in FIFO order until a cohort slot opens
+## Cohort assignment rule:
+##   - eligible IPDE/retreat patients are used before new arrivals
+##   - a recycled patient must have received their most recent dose at the
+##     immediately lower dose level
+##   - remaining events wait until a cohort slot opens
 ## ============================================================
 
 if (!exists("crm_fit", mode = "function") ||
@@ -318,6 +318,46 @@ simulate_AIDE_CRM_TITE_design <- function(
     invisible(NULL)
   }
 
+  recycle_event_is_eligible <- function(ev, dose = current_dose) {
+    if (ev$type != "retreat" || dose <= 1L) return(FALSE)
+
+    hist <- admin[admin$id == ev$id, , drop = FALSE]
+    if (nrow(hist) == 0L) return(FALSE)
+
+    hist <- hist[order(hist$t_start, hist$row_id), , drop = FALSE]
+    last <- hist[nrow(hist), , drop = FALSE]
+
+    isTRUE(
+      last$y == 0L &&
+        last$t_eval <= ev$time + 1e-10 &&
+        last$ncycle < cycle_max &&
+        last$dose == dose - 1L
+    )
+  }
+
+  next_waiting_index <- function() {
+    if (nrow(waiting) == 0L) return(integer(0))
+
+    retreat_idx <- which(waiting$type == "retreat")
+    if (length(retreat_idx) > 0L) {
+      eligible_retreat_idx <- retreat_idx[vapply(
+        retreat_idx,
+        function(i) recycle_event_is_eligible(waiting[i, , drop = FALSE]),
+        logical(1)
+      )]
+      if (length(eligible_retreat_idx) > 0L) {
+        return(eligible_retreat_idx[1L])
+      }
+    }
+
+    new_idx <- which(waiting$type == "new")
+    if (length(new_idx) > 0L) new_idx[1L] else integer(0)
+  }
+
+  has_assignable_waiting <- function() {
+    length(next_waiting_index()) > 0L
+  }
+
   assign_waiting_one <- function(time) {
     if (!cohort_open || cohort_enrolled >= cohortsize || nrow(waiting) == 0L) {
       return(FALSE)
@@ -326,8 +366,11 @@ simulate_AIDE_CRM_TITE_design <- function(
       return(FALSE)
     }
 
-    ev <- waiting[1L, , drop = FALSE]
-    waiting_new <- waiting[-1L, , drop = FALSE]
+    waiting_index <- next_waiting_index()
+    if (length(waiting_index) == 0L) return(FALSE)
+
+    ev <- waiting[waiting_index, , drop = FALSE]
+    waiting_new <- waiting[-waiting_index, , drop = FALSE]
     rownames(waiting_new) <- NULL
     waiting <<- waiting_new
 
@@ -336,15 +379,11 @@ simulate_AIDE_CRM_TITE_design <- function(
       row_cycle <- 1L
       pi_val <- p_true[current_dose]
     } else {
+      if (!recycle_event_is_eligible(ev)) return(FALSE)
+
       hist <- admin[admin$id == ev$id, , drop = FALSE]
-      if (nrow(hist) == 0L) return(FALSE)
       hist <- hist[order(hist$t_start, hist$row_id), , drop = FALSE]
       last <- hist[nrow(hist), , drop = FALSE]
-      if (!(last$y == 0L &&
-            last$t_eval <= ev$time + 1e-10 &&
-            last$ncycle < cycle_max)) {
-        return(FALSE)
-      }
       row_cycle <- as.integer(last$ncycle + 1L)
       pi_val <- p_ipde[current_dose]
       row_type <- "retreat"
@@ -502,7 +541,8 @@ simulate_AIDE_CRM_TITE_design <- function(
   while (!trial_stop &&
          nrow(admin) < Nmax_eff &&
          (nrow(future_events) > 0L || nrow(waiting) > 0L)) {
-    if (nrow(waiting) == 0L) {
+    if (!has_assignable_waiting()) {
+      if (nrow(future_events) == 0L) break
       future_events <- future_events[order(future_events$time, future_events$seq), , drop = FALSE]
       t_now <- future_events$time[1L]
       add_to_waiting(pop_due_events(t_now))
@@ -653,6 +693,8 @@ get_oc_sim_AIDE_CRM_TITE <- function(
   total_admin <- numeric(ntrial)
   total_unique <- numeric(ntrial)
   duration <- numeric(ntrial)
+  final_mtd_by_trial <- rep(NA_integer_, ntrial)
+  earlystop_by_trial <- integer(ntrial)
 
   raw_trials <- if (store_raw) vector("list", ntrial) else NULL
 
@@ -684,6 +726,8 @@ get_oc_sim_AIDE_CRM_TITE <- function(
 
     duration[itrial] <- fit$final$trial_time
     mtd <- fit$final$MTD
+    final_mtd_by_trial[itrial] <- as.integer(mtd)
+    earlystop_by_trial[itrial] <- as.integer(isTRUE(as.logical(fit$final$earlystop)))
     if (isTRUE(as.logical(fit$final$earlystop)) || identical(mtd, 99L)) {
       stop_count <- stop_count + 1L
     } else if (!is.na(mtd) && mtd >= 1L && mtd <= ndose) {
@@ -697,6 +741,16 @@ get_oc_sim_AIDE_CRM_TITE <- function(
     target = target,
     p.true = p.true,
     p.true_ipde = p.true_ipde,
+    ntrial = ntrial,
+    ndose = ndose,
+    final_mtd_by_trial = final_mtd_by_trial,
+    earlystop_by_trial = earlystop_by_trial,
+    n_by_dose = n_by_dose / ntrial,
+    unique_n_by_dose = unique_n_by_dose / ntrial,
+    nipde_by_dose = nipde_by_dose / ntrial,
+    total_admin_by_trial = total_admin,
+    total_unique_by_trial = total_unique,
+    duration_by_trial = duration,
     selpercent = 100 * sel_count / ntrial,
     npatients = n_by_dose / ntrial,
     ntox = y_by_dose / ntrial,

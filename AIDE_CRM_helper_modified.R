@@ -826,15 +826,19 @@ crm_fit_alpha_integrate <- function(dat,
 }
 
 ## ============================================================
-## 4) Logistic cumulative-dose CRM through JAGS
+## 4) Logistic cumulative-dose CRM / IPCRM through JAGS
+##
+## All rows use the common TITE-CRM likelihood.  In particular, a
+## pending non-DLT with follow-up weight w contributes 1 - w * p,
+## rather than the delayed-outcome approximation (1 - p)^w.
 ## ============================================================
 crm_write_cumu_model_file <- function(model_file = NULL) {
   model_string <- "
 model {
   for (i in 1:N) {
     logit(p[i]) <- beta0 + beta1 * assigned_d[i] + beta2 * cumu_d[i]
-    loglik[i] <- y[i] * log(p[i]) + (1 - y[i]) * w[i] * log(1 - p[i])
-    zeros[i] ~ dpois(-loglik[i])
+    p_eff[i] <- w[i] * p[i]
+    y[i] ~ dbern(p_eff[i])
   }
 
   beta0 ~ dt(beta0_mean, beta0_prec, beta0_df)
@@ -938,7 +942,6 @@ crm_fit_cumu_jags <- function(dat,
     J = ndose,
     y = as.integer(dat2$y),
     w = as.numeric(dat2$tite_weight),
-    zeros = rep(0L, length(dat2$y)),
     assigned_d = as.numeric(assigned_d),
     cumu_d = as.numeric(cumu_d),
     dose_scores = as.numeric(dose_scores),
