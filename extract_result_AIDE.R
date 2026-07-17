@@ -30,22 +30,16 @@ rm(list = ls())
 
 ## setwd("/rsrch8/home/biostatistics/syang10/AIDE")
 
-## Current run_oc_AIDE.R defaults: random 5-dose scenarios, batch 1 (1:10).
-scenario_file <- file.path(
-  "scenario_sets",
-  "random_scenarios_ndose5_nscenario10000_target0p3_tdiffbelow0p05_tdiffabove0p05.csv"
-)
+## Current non-random 5-dose runner branch: scenarios 26:37.
+scenario_file <- file.path("scenario_sets", "Set_5dose_adaptive_r_37.csv")
 scenario_set_name <- tools::file_path_sans_ext(basename(scenario_file))
 results_root <- paste0("oc_results_cluster_AIDE_", scenario_set_name)
 
 scenario_meta <- utils::read.csv(scenario_file, check.names = FALSE, stringsAsFactors = FALSE)
-scenario_meta$True_MTD <- scenario_meta$MTD
-scenario_meta$Source_Scenario <- scenario_meta$Scenario
-scenario_meta$Scenario_Group <- "random_scenario"
 dose_col_names <- grep("^Dose[0-9]+$", names(scenario_meta), value = TRUE)
 p_true_scenarios <- as.matrix(scenario_meta[dose_col_names])
 rownames(p_true_scenarios) <- as.character(scenario_meta$Scenario)
-scenario_id_list <- 1:10
+scenario_id_list <- 26:37
 ndose_expected <- ncol(p_true_scenarios)
 
 jobs.expected <- 1:2000
