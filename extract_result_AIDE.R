@@ -39,7 +39,7 @@ scenario_meta <- utils::read.csv(scenario_file, check.names = FALSE, stringsAsFa
 dose_col_names <- grep("^Dose[0-9]+$", names(scenario_meta), value = TRUE)
 p_true_scenarios <- as.matrix(scenario_meta[dose_col_names])
 rownames(p_true_scenarios) <- as.character(scenario_meta$Scenario)
-scenario_id_list <- 26:37
+scenario_id_list <- 1:6
 ndose_expected <- ncol(p_true_scenarios)
 
 jobs.expected <- 1:2000
@@ -53,7 +53,7 @@ target <- 0.30
 
 T_assess <- 28
 C <- 3L
-cycle_max_list <- c(1L, 2L, 3L)
+cycle_max_list <- c(2L)
 Nmax_eff_list <- c(30L)
 ## 1 = recycle from any lower dose; 2 = adjacent lower dose only.
 ipde_design_list <- c(1L)
@@ -68,22 +68,22 @@ continuous_enrollment <- TRUE
 restrict_to_tried_list <- c(TRUE)
 
 alpha_true_list <- c(0, 0.3, 0.6, 0.9)
-arrival_rate_list <- c(1 / 14)
+arrival_rate_list <- c(1 / 28, 1 / 56)
 
 ## BOIN settings matched to runner
 boin_method_list <- c("approx1", "approx2")
-boin_r_estimator_list <- c("r_fixed")
+boin_r_estimator_list <- c("fixed")
 boin_r_carry_list_r_mle <- c(0)
 boin_r_carry_list_fixed <- c(0)
 
 ## CRM settings matched to the current 5-dose random-scenario runner.
-crm_r_model_list <- c("fixed", "random", "level", "alpha_crm", "cumu_crm")
+crm_r_model_list <- c("crm_r_fixed", "random")
 
 ## r values by CRM backend, matching the names produced by run_oc_AIDE.R.
 ## fixed CRM uses r_carry; alpha_crm/cumu_crm do not use fixed r, so the
 ## runner convention is usually r0 in the filename.
 crm_r_carry_values <- list(
-  fixed     = c(0),
+  crm_r_fixed = c(0),
   random    = c(0),
   level     = c(0),
   alpha_crm = c(0),
@@ -153,8 +153,7 @@ cfo_n_burnin <- 2000
 cfo_n_iter <- 5000
 cfo_thin <- 2
 
-## Current runner models.  CRM includes fixed, random, level, alpha, and IPCRM.
-model_list <- c("BOIN", "CRM")
+model_list <- c("CRM")
 
 out.dir <- paste0("OC_summary_from_parallel_AIDE_jobs_", scenario_set_name)
 if (!dir.exists(out.dir)) dir.create(out.dir, recursive = TRUE)
@@ -313,6 +312,29 @@ make_filename <- function(sc,
     ),
     "-job-", job,
     "-combined.rds"
+  )
+}
+
+## Legacy cluster runs saved one raw RDS per trial/block instead of a
+## per-job "-combined.rds" file. These RDS objects have the same fields used
+## by summarize_aide_files(), so they can be summarized directly.
+make_raw_file_pattern <- function(sc,
+                                  model,
+                                  method_tag,
+                                  alpha_true,
+                                  r_carry,
+                                  cycle_max,
+                                  restrict_to_tried,
+                                  scenario_set = scenario_set_name) {
+  paste0(
+    "^", scenario_set, "_SC", sc,
+    "-", model,
+    "-", method_tag,
+    "-a", fmt_short(alpha_true),
+    "-r", fmt_short(r_carry),
+    "-cyc", fmt_short(cycle_max),
+    "-tried", as.integer(isTRUE(restrict_to_tried)),
+    "-j[0-9]+-b[0-9]+-s[0-9]+-n[0-9]+\\.rds$"
   )
 }
 
@@ -885,6 +907,33 @@ for (setting_i in seq_len(nrow(setting_grid))) {
                           basename(files.use)
                         ))
                         missing.jobs <- setdiff(jobs.expected, found_jobs)
+                      }
+
+                      ## Older runs have one raw RDS per job/block, such as
+                      ## ...-j1536-b1-s1536-n1.rds, with no combined suffix.
+                      if (length(files.use) == 0L) {
+                        raw_pattern <- make_raw_file_pattern(
+                          sc = sc,
+                          model = model,
+                          method_tag = method_tag,
+                          alpha_true = alpha_true,
+                          r_carry = r_carry,
+                          cycle_max = cycle_max,
+                          restrict_to_tried = restrict_to_tried
+                        )
+                        files.use <- list.files(
+                          folderpath,
+                          pattern = raw_pattern,
+                          full.names = TRUE
+                        )
+                        if (length(files.use) > 0L) {
+                          found_jobs <- as.integer(sub(
+                            ".*-j([0-9]+)-b[0-9]+-s[0-9]+-n[0-9]+\\.rds$",
+                            "\\1",
+                            basename(files.use)
+                          ))
+                          missing.jobs <- setdiff(jobs.expected, unique(found_jobs))
+                        }
                       }
                     }
 
