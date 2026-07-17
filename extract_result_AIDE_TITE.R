@@ -7,11 +7,13 @@
 ## Folder:
 ##   oc_results_cluster_AIDE_TITE_{scenario_set_name}/
 ##   {scenario_set_name}-model-{model}-opt-{method_tag}-w-{T_assess}-c-{C}-
-##   cyc-{cycle_max}-rate-{arrival_rate}-Nmax-{Nmax_eff}-tried-{0/1}/
+##   cyc-{cycle_max}-rate-{arrival_rate}-Nmax-{Nmax_eff}-ipde-{1/2}-
+##   newfirst-{1/2}-neval-{n_eval_escalate}-tried-{0/1}/
 ##
 ## Combined file:
 ##   {scenario_set_name}_SC{sc}_{model}_{method_tag}_a{alpha_true}_r{r_carry}_
-##   rate{arrival_rate}_cyc{cycle_max}_Nmax{Nmax_eff}_cont{0/1}_tried{0/1}-
+##   rate{arrival_rate}_cyc{cycle_max}_Nmax{Nmax_eff}_ipde{1/2}_cont{0/1}_
+##   newfirst{1/2}_neval{n_eval_escalate}_tried{0/1}-
 ##   [ptarget1_]job-{job}-combined.rds
 ##
 ## Supports:
@@ -26,96 +28,20 @@ rm(list = ls())
 
 ## setwd("/rsrch8/home/biostatistics/syang10/AIDE")
 
-## Scenario set matched to the current 5-dose branch in run_oc_AIDE_TITE.R.
-scenario_set_name <- "Set_5dose_adaptive_r_37"
+## Current run_oc_AIDE_TITE.R defaults: random 5-dose scenarios, batch 1 (1:10).
+scenario_file <- file.path(
+  "scenario_sets",
+  "random_scenarios_ndose5_nscenario10000_target0p3_tdiffbelow0p05_tdiffabove0p05.csv"
+)
+scenario_set_name <- tools::file_path_sans_ext(basename(scenario_file))
 results_root <- paste0("oc_results_cluster_AIDE_TITE_", scenario_set_name)
 
-## Rows 1-5: original 5-dose examples.
-## Rows 6-25: 20 base 5-dose scenarios.
-## Rows 26-31: added high-gap-above-MTD scenarios.
-## Rows 32-37: added high-gap-below-MTD scenarios.
-scenario_meta <- data.frame(
-  Scenario = seq_len(37L),
-  Source_Scenario = c(
-    seq_len(5L),
-    rep(seq_len(5L), times = 4L),
-    seq_len(6L),
-    seq_len(6L)
-  ),
-  Scenario_Group = c(
-    rep("base_example", 5L),
-    rep("five_scenarios_txt", 20L),
-    rep("higher_gap_above_MTD", 6L),
-    rep("higher_gap_below_MTD", 6L)
-  ),
-  True_MTD = c(
-    1L, 3L, 3L, 4L, 5L,
-    1L, 4L, 1L, 5L, 2L,
-    2L, 4L, 3L, 4L, 3L,
-    5L, 2L, 5L, 2L, 3L,
-    1L, 2L, 1L, 5L, 3L,
-    3L, 3L, 2L, 2L, 4L, 4L,
-    4L, 3L, 3L, 3L, 2L, 2L
-  ),
-  Attempt = c(
-    rep(1L, 5L),
-    1L, 1L, 1L, 1L, 1L,
-    1L, 3L, 1L, 1L, 1L,
-    1L, 1L, 1L, 1L, 1L,
-    1L, 1L, 1L, 1L, 2L,
-    rep(1L, 12L)
-  ),
-  Dose1 = c(
-    0.30, 0.15, 0.15, 0.05, 0.07,
-    0.29, 0.16, 0.32, 0.15, 0.23,
-    0.22, 0.06, 0.21, 0.09, 0.13,
-    0.02, 0.11, 0.02, 0.11, 0.07,
-    0.37, 0.07, 0.32, 0.01, 0.09,
-    0.15, 0.11, 0.20, 0.19, 0.05, 0.04,
-    0.02, 0.01, 0.05, 0.03, 0.13, 0.08
-  ),
-  Dose2 = c(
-    0.35, 0.20, 0.20, 0.10, 0.12,
-    0.34, 0.20, 0.37, 0.18, 0.28,
-    0.32, 0.09, 0.29, 0.15, 0.20,
-    0.06, 0.23, 0.04, 0.26, 0.14,
-    0.56, 0.27, 0.55, 0.02, 0.18,
-    0.22, 0.17, 0.30, 0.30, 0.08, 0.06,
-    0.05, 0.02, 0.13, 0.09, 0.29, 0.30
-  ),
-  Dose3 = c(
-    0.40, 0.30, 0.30, 0.18, 0.17,
-    0.38, 0.26, 0.42, 0.22, 0.32,
-    0.44, 0.18, 0.30, 0.23, 0.32,
-    0.09, 0.39, 0.10, 0.39, 0.31,
-    0.69, 0.50, 0.80, 0.05, 0.37,
-    0.30, 0.30, 0.50, 0.56, 0.17, 0.10,
-    0.11, 0.09, 0.30, 0.30, 0.35, 0.40
-  ),
-  Dose4 = c(
-    0.45, 0.35, 0.35, 0.30, 0.22,
-    0.43, 0.31, 0.48, 0.26, 0.39,
-    0.59, 0.29, 0.39, 0.28, 0.39,
-    0.14, 0.58, 0.20, 0.60, 0.41,
-    0.83, 0.56, 0.94, 0.10, 0.63,
-    0.62, 0.50, 0.60, 0.74, 0.27, 0.20,
-    0.30, 0.32, 0.36, 0.40, 0.40, 0.45
-  ),
-  Dose5 = c(
-    0.50, 0.45, 0.45, 0.40, 0.30,
-    0.52, 0.36, 0.52, 0.29, 0.43,
-    0.67, 0.44, 0.46, 0.39, 0.46,
-    0.26, 0.76, 0.35, 0.77, 0.52,
-    0.88, 0.78, 0.97, 0.25, 0.77,
-    0.80, 0.62, 0.77, 0.86, 0.54, 0.60,
-    0.36, 0.38, 0.42, 0.45, 0.43, 0.50
-  ),
-  row.names = NULL
-)
+scenario_meta <- utils::read.csv(scenario_file, check.names = FALSE, stringsAsFactors = FALSE)
+scenario_meta$True_MTD <- scenario_meta$MTD
+scenario_meta$Source_Scenario <- scenario_meta$Scenario
+scenario_meta$Scenario_Group <- "random_scenario"
 
-## Settings shown in the current 5-dose TITE run.  Update these values if the
-## corresponding run_oc_AIDE_TITE.R settings change.
-scenarios <- 1:6
+scenarios <- 1:10
 
 dose_col_names <- grep("^Dose[0-9]+$", names(scenario_meta), value = TRUE)
 p_true_scenarios <- as.matrix(scenario_meta[dose_col_names])
@@ -134,15 +60,23 @@ target <- 0.30
 
 T_assess <- 28
 C <- 3L
-cycle_max_list <- c(2L)
+cycle_max_list <- c(1L, 2L, 3L)
 Nmax_eff_list <- c(30L)
+## 1 = recycle from any lower dose; 2 = adjacent lower dose only.
+ipde_design_list <- c(1L)
+## 1 = prioritize new patients; 2 = prioritize eligible IPDE patients.
+new_pat_first_list <- c(1L)
+## Escalation is allowed once this many patients are evaluated at the dose.
+n_eval_escalate_list <- c(3L)
+## Kept for runner compatibility; the TITE implementation stops at Nmax_eff.
+d_cap <- 100L
 dose_cap <- 3L
 continuous_enrollment <- TRUE
 restrict_to_tried_list <- c(TRUE)
 restrict_to_target_list <- c(FALSE)
 
 alpha_true_list <- c(0, 0.3, 0.6, 0.9)
-arrival_rate_list <- c(1 / 50, 1 / 25, 1 / 14)
+arrival_rate_list <- c(1 / 14)
 
 ## BOIN settings matched to runner
 boin_method_list <- c("approx1", "approx2")
@@ -293,6 +227,9 @@ make_foldername <- function(model,
                             cycle_max,
                             arrival_rate,
                             Nmax_eff,
+                            ipde_design,
+                            new_pat_first,
+                            n_eval_escalate,
                             restrict_to_tried,
                             restrict_to_target,
                             scenario_set = scenario_set_name) {
@@ -305,6 +242,9 @@ make_foldername <- function(model,
     "-cyc-", fmt_short(cycle_max),
     "-rate-", fmt_short(arrival_rate),
     "-Nmax-", fmt_short(Nmax_eff),
+    "-ipde-", ipde_design,
+    "-newfirst-", new_pat_first,
+    "-neval-", n_eval_escalate,
     "-tried-", as.integer(isTRUE(restrict_to_tried)),
     if (isTRUE(restrict_to_target)) "-ptarget-1" else ""
   )
@@ -326,7 +266,10 @@ make_group_key <- function(sc,
                            arrival_rate,
                            cycle_max,
                            Nmax_eff,
+                           ipde_design,
                            continuous_enrollment,
+                           new_pat_first,
+                           n_eval_escalate,
                            restrict_to_tried,
                            restrict_to_target,
                            scenario_set = scenario_set_name) {
@@ -339,7 +282,10 @@ make_group_key <- function(sc,
     paste0("rate", fmt_short(arrival_rate)),
     paste0("cyc", fmt_short(cycle_max)),
     paste0("Nmax", fmt_short(Nmax_eff)),
+    paste0("ipde", ipde_design),
     paste0("cont", as.integer(isTRUE(continuous_enrollment))),
+    paste0("newfirst", new_pat_first),
+    paste0("neval", n_eval_escalate),
     paste0("tried", as.integer(isTRUE(restrict_to_tried)))
   )
 
@@ -355,11 +301,14 @@ make_filename <- function(sc,
                           method_tag,
                           alpha_true,
                           r_carry,
-                          arrival_rate,
-                          cycle_max,
-                          Nmax_eff,
-                          continuous_enrollment,
-                          restrict_to_tried,
+                           arrival_rate,
+                           cycle_max,
+                           Nmax_eff,
+                           ipde_design,
+                           continuous_enrollment,
+                           new_pat_first,
+                           n_eval_escalate,
+                           restrict_to_tried,
                           restrict_to_target,
                           job) {
   paste0(
@@ -369,11 +318,14 @@ make_filename <- function(sc,
       method_tag = method_tag,
       alpha_true = alpha_true,
       r_carry = r_carry,
-      arrival_rate = arrival_rate,
-      cycle_max = cycle_max,
-      Nmax_eff = Nmax_eff,
-      continuous_enrollment = continuous_enrollment,
-      restrict_to_tried = restrict_to_tried,
+       arrival_rate = arrival_rate,
+       cycle_max = cycle_max,
+       Nmax_eff = Nmax_eff,
+       ipde_design = ipde_design,
+       continuous_enrollment = continuous_enrollment,
+       new_pat_first = new_pat_first,
+       n_eval_escalate = n_eval_escalate,
+       restrict_to_tried = restrict_to_tried,
       restrict_to_target = restrict_to_target
     ),
     "-job-", job,
@@ -528,6 +480,9 @@ summarize_aide_files <- function(files.use,
                                  Nmax_eff,
                                  cycle_max,
                                  continuous_enrollment,
+                                 ipde_design,
+                                 new_pat_first,
+                                 n_eval_escalate,
                                  restrict_to_tried,
                                  restrict_to_target) {
   res.list <- lapply(files.use, readRDS)
@@ -648,6 +603,11 @@ summarize_aide_files <- function(files.use,
     T_assess = T_assess,
     Nmax_eff = Nmax_eff,
     Cycle_Max = cycle_max,
+    IPDE_Design = ipde_design,
+    New_Patient_First = new_pat_first,
+    N_Eval_Escalate = n_eval_escalate,
+    D_Cap = d_cap,
+    Dose_Cap = dose_cap,
     Continuous_Enrollment = as.integer(isTRUE(continuous_enrollment)),
     Restrict_To_Tried = as.integer(isTRUE(restrict_to_tried)),
     Restrict_To_Target = as.integer(isTRUE(restrict_to_target)),
@@ -766,6 +726,11 @@ summarize_aide_files <- function(files.use,
     T_assess = T_assess,
     Nmax_eff = Nmax_eff,
     Cycle_Max = cycle_max,
+    IPDE_Design = ipde_design,
+    New_Patient_First = new_pat_first,
+    N_Eval_Escalate = n_eval_escalate,
+    D_Cap = d_cap,
+    Dose_Cap = dose_cap,
     Continuous_Enrollment = as.integer(isTRUE(continuous_enrollment)),
     Restrict_To_Tried = as.integer(isTRUE(restrict_to_tried)),
     Restrict_To_Target = as.integer(isTRUE(restrict_to_target)),
@@ -813,7 +778,20 @@ missing.log <- list()
 
 miss.idx <- 1L
 
-for (Nmax_eff in Nmax_eff_list) {
+setting_grid <- expand.grid(
+  Nmax_eff = Nmax_eff_list,
+  ipde_design = ipde_design_list,
+  new_pat_first = new_pat_first_list,
+  n_eval_escalate = n_eval_escalate_list,
+  KEEP.OUT.ATTRS = FALSE,
+  stringsAsFactors = FALSE
+)
+
+for (setting_i in seq_len(nrow(setting_grid))) {
+  Nmax_eff <- setting_grid$Nmax_eff[setting_i]
+  ipde_design <- setting_grid$ipde_design[setting_i]
+  new_pat_first <- setting_grid$new_pat_first[setting_i]
+  n_eval_escalate <- setting_grid$n_eval_escalate[setting_i]
   for (restrict_to_tried in restrict_to_tried_list) {
     for (restrict_to_target in restrict_to_target_list) {
     for (model in model_list) {
@@ -870,6 +848,9 @@ for (Nmax_eff in Nmax_eff_list) {
                       cycle_max = cycle_max,
                       arrival_rate = arrival_rate,
                       Nmax_eff = Nmax_eff,
+                      ipde_design = ipde_design,
+                      new_pat_first = new_pat_first,
+                      n_eval_escalate = n_eval_escalate,
                       restrict_to_tried = restrict_to_tried,
                       restrict_to_target = restrict_to_target
                     )
@@ -887,11 +868,14 @@ for (Nmax_eff in Nmax_eff_list) {
                             method_tag = method_tag,
                             alpha_true = alpha_true,
                             r_carry = r_carry,
-                            arrival_rate = arrival_rate,
-                            cycle_max = cycle_max,
-                            Nmax_eff = Nmax_eff,
-                            continuous_enrollment = continuous_enrollment,
-                            restrict_to_tried = restrict_to_tried,
+                             arrival_rate = arrival_rate,
+                             cycle_max = cycle_max,
+                             Nmax_eff = Nmax_eff,
+                             ipde_design = ipde_design,
+                             continuous_enrollment = continuous_enrollment,
+                             new_pat_first = new_pat_first,
+                             n_eval_escalate = n_eval_escalate,
+                             restrict_to_tried = restrict_to_tried,
                             restrict_to_target = restrict_to_target,
                             job = j
                           )
@@ -914,11 +898,14 @@ for (Nmax_eff in Nmax_eff_list) {
                         method_tag = method_tag,
                         alpha_true = alpha_true,
                         r_carry = r_carry,
-                        arrival_rate = arrival_rate,
-                        cycle_max = cycle_max,
-                        Nmax_eff = Nmax_eff,
-                        continuous_enrollment = continuous_enrollment,
-                        restrict_to_tried = restrict_to_tried,
+                         arrival_rate = arrival_rate,
+                         cycle_max = cycle_max,
+                         Nmax_eff = Nmax_eff,
+                         ipde_design = ipde_design,
+                         continuous_enrollment = continuous_enrollment,
+                         new_pat_first = new_pat_first,
+                         n_eval_escalate = n_eval_escalate,
+                         restrict_to_tried = restrict_to_tried,
                         restrict_to_target = restrict_to_target
                       )
                       pattern <- paste0("^", strict_key, "-job-[0-9]+-combined\\.rds$")
@@ -951,6 +938,9 @@ for (Nmax_eff in Nmax_eff_list) {
                     cat("Accrual:", arrival_rate, "\n")
                     cat("Cycle max:", cycle_max, "\n")
                     cat("Nmax eff:", Nmax_eff, "\n")
+                    cat("IPDE design:", ipde_design, "\n")
+                    cat("New patient first:", new_pat_first, "\n")
+                    cat("N evaluated for escalation:", n_eval_escalate, "\n")
                     cat("Continuous:", continuous_enrollment, "\n")
                     cat("Restrict to tried:", restrict_to_tried, "\n")
                     cat("Restrict to target:", restrict_to_target, "\n")
@@ -983,6 +973,11 @@ for (Nmax_eff in Nmax_eff_list) {
                       T_assess = T_assess,
                       Nmax_eff = Nmax_eff,
                       Cycle_Max = cycle_max,
+                      IPDE_Design = ipde_design,
+                      New_Patient_First = new_pat_first,
+                      N_Eval_Escalate = n_eval_escalate,
+                      D_Cap = d_cap,
+                      Dose_Cap = dose_cap,
                       Continuous_Enrollment = as.integer(isTRUE(continuous_enrollment)),
                       Restrict_To_Tried = as.integer(isTRUE(restrict_to_tried)),
                       Restrict_To_Target = as.integer(isTRUE(restrict_to_target)),
@@ -1017,6 +1012,9 @@ for (Nmax_eff in Nmax_eff_list) {
                       Nmax_eff = Nmax_eff,
                       cycle_max = cycle_max,
                       continuous_enrollment = continuous_enrollment,
+                      ipde_design = ipde_design,
+                      new_pat_first = new_pat_first,
+                      n_eval_escalate = n_eval_escalate,
                       restrict_to_tried = restrict_to_tried,
                       restrict_to_target = restrict_to_target
                     )
@@ -1043,7 +1041,10 @@ for (Nmax_eff in Nmax_eff_list) {
                       arrival_rate = arrival_rate,
                       cycle_max = cycle_max,
                       Nmax_eff = Nmax_eff,
+                      ipde_design = ipde_design,
                       continuous_enrollment = continuous_enrollment,
+                      new_pat_first = new_pat_first,
+                      n_eval_escalate = n_eval_escalate,
                       restrict_to_tried = restrict_to_tried,
                       restrict_to_target = restrict_to_target
                     )
@@ -1094,6 +1095,10 @@ out.tag <- paste0(
   "_cyc", paste(fmt_short(cycle_max_list), collapse = "_"),
   "_rate", paste(fmt_short(arrival_rate_list), collapse = "_"),
   "_Nmax", paste(fmt_short(Nmax_eff_list), collapse = "_"),
+  "_ipde", paste(ipde_design_list, collapse = "_"),
+  "_newfirst", paste(new_pat_first_list, collapse = "_"),
+  "_neval", paste(n_eval_escalate_list, collapse = "_"),
+  "_dcap", fmt_short(d_cap),
   "_dosecap", fmt_short(dose_cap),
   "_cont", as.integer(isTRUE(continuous_enrollment)),
   "_tried", paste(as.integer(restrict_to_tried_list), collapse = "_"),
