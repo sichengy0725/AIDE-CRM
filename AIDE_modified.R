@@ -72,7 +72,7 @@ simulate_AIDE_design <- function(
 
   # --- escalation gate ---
   dose_cap = 3L,
-  # Escalation requires more than this many evaluated patients at the current dose.
+  # Escalation requires at least this many evaluated patients at the current dose.
   n_eval_escalate = 3L,
 
   # --- BOIN decision / final selection method ---
@@ -511,7 +511,6 @@ simulate_AIDE_design <- function(
   repeat {
     if (stop_trial) break
     if (nrow(admin) >= Nmax_eff) break
-
     add_arrivals_to_waiting(t_decision)
 
     dat_dec <- make_decision_dat(admin, t_decision)
@@ -921,7 +920,7 @@ simulate_AIDE_design <- function(
     }
 
     next_dose <- move$next_dose
-    if (next_dose > curr_dose && n_curr <= n_eval_escalate) {
+    if (next_dose > curr_dose && n_curr < n_eval_escalate) {
       next_dose <- curr_dose
       move$next_dose <- curr_dose
       move$action <- "stay_insufficient_evaluated"
@@ -935,7 +934,6 @@ simulate_AIDE_design <- function(
     cohort_id <- cohort_id + 1L
     t_available <- t_decision
     t_start <- t_available
-
     new_ids <- integer(0)
     ret_ids <- integer(0)
     new_patients <- data.frame(
@@ -1038,7 +1036,7 @@ simulate_AIDE_design <- function(
 
         last <- st[st$id == pid, , drop = FALSE]
         if (nrow(last) != 1L) next
-
+        
         dlt <- draw_dlt_time(
           pi_val = aide_ipde_toxicity_probability(
             p_true = p_true,
@@ -1156,7 +1154,7 @@ simulate_AIDE_design <- function(
 
   trial_time <- max(admin$t_eval, na.rm = TRUE) -
     min(admin$t_arrival, na.rm = TRUE)
-
+  browser()
   phat <- rep(NA_real_, K)
   r_hat <- if (model == "CRM" && crm_r_model == "fixed") r_carry else rep(NA_real_, K)
   r_use <- rep(NA_real_, K)
@@ -1267,7 +1265,6 @@ simulate_AIDE_design <- function(
   }
 
   final_elimi <- if (!is.null(final_fit$eliminated)) final_fit$eliminated else elimi
-
   list(
     admin = admin,
     waiting = waiting,
@@ -1309,6 +1306,7 @@ simulate_AIDE_design <- function(
       model = model
     )
   )
+  
 }
 
 ## ------------------------------------------------------------

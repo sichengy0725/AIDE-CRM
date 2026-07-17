@@ -6,8 +6,8 @@
 ##
 ## Cohort assignment rule (controlled by new_pat_first):
 ##   - new arrivals (1) or eligible IPDE/retreat patients (2) are prioritized
-##   - a recycled patient must have received their most recent dose at the
-##     immediately lower dose level
+##   - ipde_design = 1 permits recycling from any lower prior dose; 2 permits
+##     recycling only from the immediately lower prior dose
 ##   - recycled-patient toxicity uses the patient's actual prior dose
 ##   - remaining events wait until a cohort slot opens
 ## ============================================================
@@ -167,10 +167,12 @@ simulate_AIDE_CRM_TITE_design <- function(
     t0 = 0,
     # 1 = prioritize new arrivals; 2 = prioritize eligible IPDE patients
     new_pat_first = 2L,
+    # 1 = recycle from any lower dose; 2 = recycle from the adjacent lower dose
+    ipde_design = 2L,
     startdose = 1L,
     cutoff = 0.95,
     dose_cap = 3L,
-    # Escalation requires more than this many evaluated patients at the current dose.
+    # Escalation requires at least this many evaluated patients at the current dose.
     n_eval_escalate = 3L,
     dlt_dist = 1,
     dlt_alpha = 0.5,
@@ -245,6 +247,11 @@ simulate_AIDE_CRM_TITE_design <- function(
     stop("new_pat_first must be 1 (new patients first) or 2 (IPDE patients first).")
   }
   new_pat_first <- as.integer(new_pat_first)
+  if (length(ipde_design) != 1L || is.na(ipde_design) ||
+      !ipde_design %in% c(1, 2)) {
+    stop("ipde_design must be 1 (any lower dose) or 2 (adjacent lower dose).")
+  }
+  ipde_design <- as.integer(ipde_design)
   if (length(n_eval_escalate) != 1L || !is.finite(n_eval_escalate) ||
       n_eval_escalate < 0 || n_eval_escalate != as.integer(n_eval_escalate)) {
     stop("n_eval_escalate must be a single non-negative integer.")
@@ -297,12 +304,14 @@ simulate_AIDE_CRM_TITE_design <- function(
     action = character(0),
     n_admin = integer(0),
     queue = integer(0),
+    assignment_suspended = logical(0),
     stringsAsFactors = FALSE
   )
 
   elimi <- rep(0L, ndose)
   earlystop <- 0L
   trial_stop <- FALSE
+  trial_suspended <- FALSE
   current_dose <- as.integer(startdose)
   current_dose <- max(1L, min(ndose, current_dose))
   cohort_id <- 1L
@@ -325,6 +334,13 @@ simulate_AIDE_CRM_TITE_design <- function(
     invisible(NULL)
   }
 
+  has_scheduled_decision <- function(time) {
+    any(
+      future_events$type == "decision" &
+        abs(future_events$time - time) <= 1e-10
+    )
+  }
+
   pop_due_events <- function(time) {
     if (nrow(future_events) == 0L) {
       return(future_events)
@@ -340,6 +356,9 @@ simulate_AIDE_CRM_TITE_design <- function(
 
     for (ii in seq_len(nrow(events))) {
       ev <- events[ii, , drop = FALSE]
+
+      ## Decision events only wake a suspended trial; they are not patients.
+      if (ev$type == "decision") next
 
       if (ev$type == "retreat") {
         hist <- admin[admin$id == ev$id, , drop = FALSE]
@@ -379,11 +398,17 @@ simulate_AIDE_CRM_TITE_design <- function(
     hist <- hist[order(hist$t_start, hist$row_id), , drop = FALSE]
     last <- hist[nrow(hist), , drop = FALSE]
 
+    eligible_prior_dose <- if (ipde_design == 1L) {
+      last$dose < dose
+    } else {
+      last$dose == dose - 1L
+    }
+
     isTRUE(
       last$y == 0L &&
         last$t_eval <= ev$time + 1e-10 &&
         last$ncycle < cycle_max &&
-        last$dose == dose - 1L
+        eligible_prior_dose
     )
   }
 
@@ -451,7 +476,8 @@ simulate_AIDE_CRM_TITE_design <- function(
 
     dlt <- aide_crm_tite_draw_dlt(
       pi_val = pi_val,
-      t_start = ev$time,
+      # A queued patient begins treatment only when a cohort slot is assigned.
+      t_start = time,
       window = T_assess,
       dist = dlt_dist,
       alpha = dlt_alpha
@@ -463,7 +489,7 @@ simulate_AIDE_CRM_TITE_design <- function(
         row_id = nrow(admin) + 1L,
         id = ev$id,
         t_arrival = ev$time,
-        t_start = ev$time,
+        t_start = time,
         t_tox = dlt$t_tox,
         t_eval = dlt$t_eval,
         dose = current_dose,
@@ -474,6 +500,12 @@ simulate_AIDE_CRM_TITE_design <- function(
         stringsAsFactors = FALSE
       )
     )
+
+    ## Reassess as soon as an outcome becomes evaluable, even if no new
+    ## patient is waiting to open the following cohort.
+    if (!has_scheduled_decision(dlt$t_eval)) {
+      schedule_event(dlt$t_eval, "decision", NA_integer_)
+    }
 
     if (dlt$y == 0L && row_cycle < cycle_max) {
       schedule_event(dlt$t_eval, "retreat", ev$id)
@@ -486,7 +518,7 @@ simulate_AIDE_CRM_TITE_design <- function(
 
     if (verbose) {
       message(
-        "t=", round(ev$time, 2),
+        "t=", round(time, 2),
         " cohort=", cohort_id,
         " dose=", current_dose,
         " type=", row_type,
@@ -507,7 +539,9 @@ simulate_AIDE_CRM_TITE_design <- function(
     invisible(NULL)
   }
 
-  open_next_cohort <- function(time) {
+  open_next_cohort <- function(time,
+                               advance_cohort = TRUE,
+                               apply_move = TRUE) {
     if (nrow(admin) == 0L) {
       cohort_open <<- TRUE
       cohort_enrolled <<- 0L
@@ -567,15 +601,29 @@ simulate_AIDE_CRM_TITE_design <- function(
       cumu_beta2_rate = crm_cumu_beta2_rate,
       cumu_include_current = crm_cumu_include_current
     )
-
     if (!is.null(move$eliminated)) {
       elimi <<- move$eliminated
     }
 
-    if (isTRUE(move$next_dose > current_dose) &&
-        n_eval_curr <= n_eval_escalate) {
-      move$next_dose <- current_dose
-      move$action <- "stay_insufficient_evaluated"
+    insufficient_evaluated <- n_eval_curr < n_eval_escalate
+    suspend_for_evaluation <- isTRUE(apply_move) &&
+      isTRUE(move$next_dose > current_dose) &&
+      insufficient_evaluated
+
+    if (suspend_for_evaluation) {
+      ## Do not assign another cohort at the current dose. New arrivals remain
+      ## in waiting while the trial waits for more information.
+      move$action <- "suspend_insufficient_evaluated"
+    } else if (!apply_move &&
+               !isTRUE(move$stop_trial) &&
+               !isTRUE(as.logical(move$earlystop))) {
+      ## A partially enrolled cohort continues at its assigned dose, but the
+      ## evaluation gate is recorded at every arrival and evaluation.
+      move$action <- if (insufficient_evaluated) {
+        "suspend_insufficient_evaluated"
+      } else {
+        "cohort_incomplete"
+      }
     }
 
     decision_log <<- rbind(
@@ -588,6 +636,7 @@ simulate_AIDE_CRM_TITE_design <- function(
         action = move$action,
         n_admin = nrow(admin),
         queue = nrow(waiting),
+        assignment_suspended = isTRUE(suspend_for_evaluation),
         stringsAsFactors = FALSE
       )
     )
@@ -598,9 +647,34 @@ simulate_AIDE_CRM_TITE_design <- function(
       return(invisible(NULL))
     }
 
+    if (suspend_for_evaluation) {
+      ## Any newly evaluable patient can update the CRM decision, whereas the
+      ## gate itself remains based on evaluated patients at current_dose.
+      next_eval <- admin$t_eval[admin$t_eval > time + 1e-10]
+      next_eval <- next_eval[is.finite(next_eval)]
+      if (length(next_eval) == 0L) {
+        stop("Cannot suspend: no pending patient evaluations.")
+      }
+
+      next_eval <- min(next_eval)
+      if (!has_scheduled_decision(next_eval)) {
+        schedule_event(next_eval, "decision", NA_integer_)
+      }
+      trial_suspended <<- TRUE
+      cohort_open <<- FALSE
+      return(invisible(NULL))
+    }
+
+    if (!apply_move) {
+      return(invisible(NULL))
+    }
+
+    trial_suspended <<- FALSE
     current_dose <<- max(1L, min(ndose, as.integer(move$next_dose)))
-    cohort_id <<- cohort_id + 1L
-    cohort_enrolled <<- 0L
+    if (advance_cohort) {
+      cohort_id <<- cohort_id + 1L
+      cohort_enrolled <<- 0L
+    }
     cohort_open <<- TRUE
     invisible(NULL)
   }
@@ -608,22 +682,63 @@ simulate_AIDE_CRM_TITE_design <- function(
   while (!trial_stop &&
          nrow(admin) < Nmax_eff &&
          (nrow(future_events) > 0L || nrow(waiting) > 0L)) {
+    if (trial_suspended) {
+      ## Continue accruing arrivals into waiting, but assign no dose until a
+      ## pending evaluation or new arrival makes a new decision possible.
+      if (nrow(future_events) == 0L) break
+      future_events <- future_events[order(future_events$time, future_events$seq), , drop = FALSE]
+      t_now <- future_events$time[1L]
+      due_events <- pop_due_events(t_now)
+      decision_due <- any(due_events$type == "decision")
+      arrival_due <- any(due_events$type == "new")
+      add_to_waiting(due_events)
+
+      if (decision_due || arrival_due) {
+        open_next_cohort(t_now)
+        if (!trial_stop && !trial_suspended && cohort_open) {
+          fill_open_cohort(t_now)
+        }
+      }
+      next
+    }
+
+    decision_due <- FALSE
+    arrival_due <- FALSE
     if (!has_assignable_waiting()) {
       if (nrow(future_events) == 0L) break
       future_events <- future_events[order(future_events$time, future_events$seq), , drop = FALSE]
       t_now <- future_events$time[1L]
-      add_to_waiting(pop_due_events(t_now))
+      due_events <- pop_due_events(t_now)
+      decision_due <- any(due_events$type == "decision")
+      arrival_due <- any(due_events$type == "new")
+      add_to_waiting(due_events)
     }
 
-    if (cohort_open) {
+    if (!trial_suspended && cohort_open) {
       fill_open_cohort(t_now)
     }
 
-    repeat {
-      if (trial_stop || nrow(admin) >= Nmax_eff) break
-      if (!cohort_open && nrow(waiting) > 0L) {
+    ## Fit the model after every new arrival and every newly evaluable outcome.
+    ## A partially enrolled cohort retains its assigned dose until completion.
+    ## The first arrival has no prior outcome information to update.
+    check_due <- decision_due || (arrival_due && nrow(admin) > 1L)
+    if (!trial_stop && !trial_suspended && check_due) {
+      if (!cohort_open) {
         open_next_cohort(t_now)
-        if (trial_stop) break
+      } else {
+        open_next_cohort(
+          t_now,
+          advance_cohort = FALSE,
+          apply_move = cohort_enrolled == 0L
+        )
+      }
+    }
+
+    repeat {
+      if (trial_stop || trial_suspended || nrow(admin) >= Nmax_eff) break
+      if (!cohort_open) {
+        open_next_cohort(t_now)
+        if (trial_stop || trial_suspended) break
         fill_open_cohort(t_now)
       } else {
         break
@@ -638,6 +753,7 @@ simulate_AIDE_CRM_TITE_design <- function(
       future_events = future_events,
       decision_log = decision_log,
       new_pat_first = new_pat_first,
+      ipde_design = ipde_design,
       n_eval_escalate = n_eval_escalate,
       ipde_alpha = ipde_alpha,
       final = list(
@@ -712,16 +828,15 @@ simulate_AIDE_CRM_TITE_design <- function(
       cumu_include_current = crm_cumu_include_current
     )
   }
-
   trial_time <- max(admin$t_eval, na.rm = TRUE) -
     min(admin$t_arrival, na.rm = TRUE)
-
   list(
     admin = admin,
     waiting = waiting,
     future_events = future_events,
     decision_log = decision_log,
     new_pat_first = new_pat_first,
+    ipde_design = ipde_design,
     n_eval_escalate = n_eval_escalate,
     ipde_alpha = ipde_alpha,
     final = list(
@@ -753,6 +868,7 @@ get_oc_sim_AIDE_CRM_TITE <- function(
     ntrial = 1000,
     seed = 1,
     new_pat_first = 2L,
+    ipde_design = 2L,
     n_eval_escalate = 3L,
     store_raw = FALSE,
     ...
@@ -762,6 +878,11 @@ get_oc_sim_AIDE_CRM_TITE <- function(
     stop("new_pat_first must be 1 (new patients first) or 2 (IPDE patients first).")
   }
   new_pat_first <- as.integer(new_pat_first)
+  if (length(ipde_design) != 1L || is.na(ipde_design) ||
+      !ipde_design %in% c(1, 2)) {
+    stop("ipde_design must be 1 (any lower dose) or 2 (adjacent lower dose).")
+  }
+  ipde_design <- as.integer(ipde_design)
   if (length(n_eval_escalate) != 1L || !is.finite(n_eval_escalate) ||
       n_eval_escalate < 0 || n_eval_escalate != as.integer(n_eval_escalate)) {
     stop("n_eval_escalate must be a single non-negative integer.")
@@ -797,6 +918,7 @@ get_oc_sim_AIDE_CRM_TITE <- function(
       target = target,
       seed = seed + itrial - 1L,
       new_pat_first = new_pat_first,
+      ipde_design = ipde_design,
       n_eval_escalate = n_eval_escalate,
       ...
     )
@@ -839,6 +961,7 @@ get_oc_sim_AIDE_CRM_TITE <- function(
     ntrial = ntrial,
     ndose = ndose,
     new_pat_first = new_pat_first,
+    ipde_design = ipde_design,
     n_eval_escalate = n_eval_escalate,
     final_mtd_by_trial = final_mtd_by_trial,
     earlystop_by_trial = earlystop_by_trial,

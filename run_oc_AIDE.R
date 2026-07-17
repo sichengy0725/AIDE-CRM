@@ -251,6 +251,7 @@ make_aide_folder <- function(task) {
     "-cyc-", fmt_short(task$cycle_max),
     "-rate-", fmt_short(task$arrival_rate),
     "-Nmax-", fmt_short(task$Nmax_eff),
+    "-ipde-", task$ipde_design,
     "-newfirst-", task$new_pat_first,
     "-neval-", task$n_eval_escalate,
     "-tried-", as.integer(isTRUE(task$restrict_to_tried)),
@@ -411,7 +412,8 @@ C_equiv <- 3L
 cycle_max_list_equiv <- c(1L, 2L, 3L)
 
 Nmax_eff_list_equiv <- c(30L)
-ipde_design_equiv <- 2L
+## 1 = recycle eligible patients from any lower dose; 2 = adjacent lower dose only.
+ipde_design_equiv <- 1L
 
 t0 <- 0
 day_obs <- 0
@@ -420,13 +422,14 @@ day_obs <- 0
 ## illustration more closely than just-in-time recruitment.
 continuous_enrollment_equiv <- TRUE
 ## Cohort-fill priority: 1 = new patients first; 2 = eligible IPDE patients first.
-new_pat_first_equiv <- 2L
+new_pat_first_equiv <- 1L
 dlt_dist_equiv <- 2
 dlt_alpha_equiv <- 0.5
 
-d_cap_aide <- 100
+## Per-dose enrollment cap; 100 prevents a dose-level cap from stopping a trial.
+d_cap_aide <- 100L
 dose_cap_aide <- 3L
-## Escalation is allowed only after more than this many patients are evaluated.
+## Escalation is allowed once at least this many patients are evaluated.
 n_eval_escalate_aide <- 3L
 
 store_raw <- FALSE
@@ -858,6 +861,7 @@ run_one_aide_task <- function(task) {
     cat("C:", task$C, "\n")
     cat("cycle_max:", task$cycle_max, "\n")
     cat("Nmax_eff:", task$Nmax_eff, "\n")
+    cat("ipde_design:", task$ipde_design, "\n")
     cat("dose_cap:", task$dose_cap, "\n")
     cat("n_eval_escalate:", task$n_eval_escalate, "\n")
     cat("restrict_to_tried:", task$restrict_to_tried, "\n")
@@ -1056,6 +1060,7 @@ run_one_aide_task <- function(task) {
     ipde_alpha = task$ipde_alpha,
     r_carry = task$r_carry,
     arrival_rate = task$arrival_rate,
+    ipde_design = task$ipde_design,
     new_pat_first = task$new_pat_first,
     n_eval_escalate = task$n_eval_escalate,
     cycle_max = task$cycle_max,
@@ -1317,6 +1322,7 @@ group_key <- vapply(
       paste0("rate", fmt_short(z$arrival_rate)),
       paste0("cyc", fmt_short(z$cycle_max)),
       paste0("Nmax", fmt_short(z$Nmax_eff)),
+      paste0("ipde", z$ipde_design),
       paste0("cont", as.integer(isTRUE(z$continuous_enrollment))),
       paste0("newfirst", z$new_pat_first),
       paste0("neval", z$n_eval_escalate),
