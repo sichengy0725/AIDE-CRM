@@ -157,8 +157,8 @@ make_p_ipde <- function(p_base, alpha_true) {
 
   p_base <- as.numeric(p_base)
 
-  ## IPDE truth: dose j has current-dose toxicity plus carryover from
-  ## the immediately previous dose. Dose 1 has no previous-dose term.
+  ## Legacy adjacent-dose IPDE reference retained in saved outputs. Actual
+  ## recycled-patient toxicity is calculated from that patient's previous dose.
   prev_dose_p <- c(0, p_base[-length(p_base)])
 
   pmin(p_base + alpha_true * prev_dose_p, 1)
@@ -251,6 +251,8 @@ make_aide_folder <- function(task) {
     "-cyc-", fmt_short(task$cycle_max),
     "-rate-", fmt_short(task$arrival_rate),
     "-Nmax-", fmt_short(task$Nmax_eff),
+    "-newfirst-", task$new_pat_first,
+    "-neval-", task$n_eval_escalate,
     "-tried-", as.integer(isTRUE(task$restrict_to_tried)),
     if (isTRUE(task$restrict_to_target)) "-ptarget-1" else ""
   )
@@ -417,11 +419,15 @@ day_obs <- 0
 ## Use continuous enrollment with a backlog queue, matching the AIDE
 ## illustration more closely than just-in-time recruitment.
 continuous_enrollment_equiv <- TRUE
+## Cohort-fill priority: 1 = new patients first; 2 = eligible IPDE patients first.
+new_pat_first_equiv <- 2L
 dlt_dist_equiv <- 2
 dlt_alpha_equiv <- 0.5
 
 d_cap_aide <- 100
 dose_cap_aide <- 3L
+## Escalation is allowed only after more than this many patients are evaluated.
+n_eval_escalate_aide <- 3L
 
 store_raw <- FALSE
 verbose <- FALSE
@@ -845,6 +851,7 @@ run_one_aide_task <- function(task) {
     cat("Seed:", task$seed.block, "\n")
     cat("Target:", task$target, "\n")
     cat("alpha_true:", task$alpha_true, "\n")
+    cat("ipde_alpha:", task$ipde_alpha, "\n")
     cat("r_carry:", task$r_carry, "\n")
     cat("Accrual:", task$arrival_rate, "\n")
     cat("T_assess:", task$T_assess, "\n")
@@ -852,9 +859,11 @@ run_one_aide_task <- function(task) {
     cat("cycle_max:", task$cycle_max, "\n")
     cat("Nmax_eff:", task$Nmax_eff, "\n")
     cat("dose_cap:", task$dose_cap, "\n")
+    cat("n_eval_escalate:", task$n_eval_escalate, "\n")
     cat("restrict_to_tried:", task$restrict_to_tried, "\n")
     cat("restrict_to_target:", task$restrict_to_target, "\n")
     cat("continuous_enrollment:", task$continuous_enrollment, "\n")
+    cat("new_pat_first:", task$new_pat_first, "\n")
     cat("p.true:", paste(task$p.true, collapse = ", "), "\n")
     cat("p.true_ipde:", paste(task$p.true_ipde, collapse = ", "), "\n")
 
@@ -913,6 +922,7 @@ run_one_aide_task <- function(task) {
       target = task$target,
       p.true = task$p.true,
       p.true_ipde = task$p.true_ipde,
+      ipde_alpha = task$ipde_alpha,
 
       ntrial = task$ntrial.block,
       seed = task$seed.block,
@@ -929,11 +939,13 @@ run_one_aide_task <- function(task) {
       arrival_rate = task$arrival_rate,
       t0 = task$t0,
       continuous_enrollment = task$continuous_enrollment,
+      new_pat_first = task$new_pat_first,
 
       cutoff = task$cutoff,
 
       d.cap = task$d.cap,
       dose_cap = task$dose_cap,
+      n_eval_escalate = task$n_eval_escalate,
       day_obs = task$day_obs,
 
       dlt_dist = task$dlt_dist,
@@ -1041,8 +1053,11 @@ run_one_aide_task <- function(task) {
     restrict_to_tried = task$restrict_to_tried,
     restrict_to_target = task$restrict_to_target,
     alpha_true = task$alpha_true,
+    ipde_alpha = task$ipde_alpha,
     r_carry = task$r_carry,
     arrival_rate = task$arrival_rate,
+    new_pat_first = task$new_pat_first,
+    n_eval_escalate = task$n_eval_escalate,
     cycle_max = task$cycle_max,
     continuous_enrollment = task$continuous_enrollment,
     block_id = task$block_id,
@@ -1148,6 +1163,7 @@ for (Nmax_eff_aide in Nmax_eff_list_equiv) {
                         scenario_group = scenario_meta$Scenario_Group[scenario_row],
                         p.true = p_base,
                         p.true_ipde = p_ipde,
+                        ipde_alpha = alpha_true,
 
                         target = target_BOIN,
                         cutoff = cutoff_equiv,
@@ -1167,9 +1183,11 @@ for (Nmax_eff_aide in Nmax_eff_list_equiv) {
                         arrival_rate = accrual,
                         t0 = t0,
                         continuous_enrollment = continuous_enrollment_equiv,
+                        new_pat_first = new_pat_first_equiv,
 
                         d.cap = d_cap_aide,
                         dose_cap = dose_cap_aide,
+                        n_eval_escalate = n_eval_escalate_aide,
                         day_obs = day_obs,
 
                         dlt_dist = dlt_dist_equiv,
@@ -1300,6 +1318,8 @@ group_key <- vapply(
       paste0("cyc", fmt_short(z$cycle_max)),
       paste0("Nmax", fmt_short(z$Nmax_eff)),
       paste0("cont", as.integer(isTRUE(z$continuous_enrollment))),
+      paste0("newfirst", z$new_pat_first),
+      paste0("neval", z$n_eval_escalate),
       paste0("tried", as.integer(isTRUE(z$restrict_to_tried)))
     )
 

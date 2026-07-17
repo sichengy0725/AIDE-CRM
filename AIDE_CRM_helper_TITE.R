@@ -4,10 +4,11 @@
 ## This file layers a TITE event-clock simulation over the updated
 ## likelihoods in AIDE_CRM_helper_modified.R.
 ##
-## Cohort assignment rule:
-##   - eligible IPDE/retreat patients are used before new arrivals
+## Cohort assignment rule (controlled by new_pat_first):
+##   - new arrivals (1) or eligible IPDE/retreat patients (2) are prioritized
 ##   - a recycled patient must have received their most recent dose at the
 ##     immediately lower dose level
+##   - recycled-patient toxicity uses the patient's actual prior dose
 ##   - remaining events wait until a cohort slot opens
 ## ============================================================
 
@@ -15,6 +16,36 @@ if (!exists("crm_fit", mode = "function") ||
     !exists("crm_move", mode = "function") ||
     !exists("select.mtd.crm", mode = "function")) {
   source("AIDE_CRM_helper_modified.R")
+}
+
+if (!exists("aide_ipde_toxicity_probability", mode = "function")) {
+  aide_ipde_toxicity_probability <- function(p_true,
+                                              previous_dose,
+                                              current_dose,
+                                              ipde_alpha = 0) {
+    p_true <- as.numeric(p_true)
+    ndose <- length(p_true)
+
+    if (ndose < 1L || any(!is.finite(p_true)) || any(p_true < 0 | p_true > 1)) {
+      stop("p_true must contain finite toxicity probabilities in [0, 1].")
+    }
+    if (length(previous_dose) != 1L || is.na(previous_dose) ||
+        previous_dose != as.integer(previous_dose) ||
+        previous_dose < 1L || previous_dose > ndose) {
+      stop("previous_dose must be a valid dose index.")
+    }
+    if (length(current_dose) != 1L || is.na(current_dose) ||
+        current_dose != as.integer(current_dose) ||
+        current_dose < 1L || current_dose > ndose) {
+      stop("current_dose must be a valid dose index.")
+    }
+    if (length(ipde_alpha) != 1L || !is.finite(ipde_alpha) || ipde_alpha < 0) {
+      stop("ipde_alpha must be a single finite non-negative value.")
+    }
+
+    min(1, p_true[as.integer(current_dose)] +
+          ipde_alpha * p_true[as.integer(previous_dose)])
+  }
 }
 
 aide_crm_tite_draw_dlt <- function(pi_val,
@@ -122,7 +153,10 @@ aide_crm_tite_make_decision_dat <- function(admin,
 
 simulate_AIDE_CRM_TITE_design <- function(
     p_true,
+    # Retained for backward-compatible reporting; recycled-patient toxicity is
+    # calculated from p_true, the patient's previous dose, and ipde_alpha.
     p_ipde = p_true,
+    ipde_alpha = 0,
     target = 0.30,
     N_pat = 30L,
     Nmax_eff = 30L,
@@ -131,9 +165,13 @@ simulate_AIDE_CRM_TITE_design <- function(
     cycle_max = 2L,
     arrival_rate = 0.2,
     t0 = 0,
+    # 1 = prioritize new arrivals; 2 = prioritize eligible IPDE patients
+    new_pat_first = 2L,
     startdose = 1L,
     cutoff = 0.95,
     dose_cap = 3L,
+    # Escalation requires more than this many evaluated patients at the current dose.
+    n_eval_escalate = 3L,
     dlt_dist = 1,
     dlt_alpha = 0.5,
     seed = NULL,
@@ -186,6 +224,10 @@ simulate_AIDE_CRM_TITE_design <- function(
   if (length(p_ipde) != ndose) {
     stop("p_ipde must have the same length as p_true.")
   }
+  if (length(ipde_alpha) != 1L || !is.finite(ipde_alpha) || ipde_alpha < 0) {
+    stop("ipde_alpha must be a single finite non-negative value.")
+  }
+  ipde_alpha <- as.numeric(ipde_alpha)
   if (length(crm_skeleton) != ndose) {
     stop("crm_skeleton must have the same length as p_true.")
   }
@@ -198,6 +240,16 @@ simulate_AIDE_CRM_TITE_design <- function(
   if (!is.finite(arrival_rate) || arrival_rate <= 0) {
     stop("arrival_rate must be positive.")
   }
+  if (length(new_pat_first) != 1L || is.na(new_pat_first) ||
+      !new_pat_first %in% c(1, 2)) {
+    stop("new_pat_first must be 1 (new patients first) or 2 (IPDE patients first).")
+  }
+  new_pat_first <- as.integer(new_pat_first)
+  if (length(n_eval_escalate) != 1L || !is.finite(n_eval_escalate) ||
+      n_eval_escalate < 0 || n_eval_escalate != as.integer(n_eval_escalate)) {
+    stop("n_eval_escalate must be a single non-negative integer.")
+  }
+  n_eval_escalate <- as.integer(n_eval_escalate)
 
   crm_r_model <- match.arg(crm_r_model)
   crm_r_model <- crm_normalize_r_model(crm_r_model)
@@ -338,20 +390,23 @@ simulate_AIDE_CRM_TITE_design <- function(
   next_waiting_index <- function() {
     if (nrow(waiting) == 0L) return(integer(0))
 
+    new_idx <- which(waiting$type == "new")
     retreat_idx <- which(waiting$type == "retreat")
-    if (length(retreat_idx) > 0L) {
-      eligible_retreat_idx <- retreat_idx[vapply(
-        retreat_idx,
-        function(i) recycle_event_is_eligible(waiting[i, , drop = FALSE]),
-        logical(1)
-      )]
-      if (length(eligible_retreat_idx) > 0L) {
-        return(eligible_retreat_idx[1L])
-      }
+    eligible_retreat_idx <- retreat_idx[vapply(
+      retreat_idx,
+      function(i) recycle_event_is_eligible(waiting[i, , drop = FALSE]),
+      logical(1)
+    )]
+
+    if (new_pat_first == 1L) {
+      if (length(new_idx) > 0L) return(new_idx[1L])
+      if (length(eligible_retreat_idx) > 0L) return(eligible_retreat_idx[1L])
+    } else {
+      if (length(eligible_retreat_idx) > 0L) return(eligible_retreat_idx[1L])
+      if (length(new_idx) > 0L) return(new_idx[1L])
     }
 
-    new_idx <- which(waiting$type == "new")
-    if (length(new_idx) > 0L) new_idx[1L] else integer(0)
+    integer(0)
   }
 
   has_assignable_waiting <- function() {
@@ -385,7 +440,12 @@ simulate_AIDE_CRM_TITE_design <- function(
       hist <- hist[order(hist$t_start, hist$row_id), , drop = FALSE]
       last <- hist[nrow(hist), , drop = FALSE]
       row_cycle <- as.integer(last$ncycle + 1L)
-      pi_val <- p_ipde[current_dose]
+      pi_val <- aide_ipde_toxicity_probability(
+        p_true = p_true,
+        previous_dose = last$dose,
+        current_dose = current_dose,
+        ipde_alpha = ipde_alpha
+      )
       row_type <- "retreat"
     }
 
@@ -456,6 +516,7 @@ simulate_AIDE_CRM_TITE_design <- function(
 
     dat_dec <- aide_crm_tite_make_decision_dat(admin, time, T_assess)
     n_trt_curr <- sum(admin$dose == current_dose & admin$t_start <= time)
+    n_eval_curr <- sum(admin$dose == current_dose & admin$t_eval <= time)
 
     move <- crm_move(
       current_dose = current_dose,
@@ -509,6 +570,12 @@ simulate_AIDE_CRM_TITE_design <- function(
 
     if (!is.null(move$eliminated)) {
       elimi <<- move$eliminated
+    }
+
+    if (isTRUE(move$next_dose > current_dose) &&
+        n_eval_curr <= n_eval_escalate) {
+      move$next_dose <- current_dose
+      move$action <- "stay_insufficient_evaluated"
     }
 
     decision_log <<- rbind(
@@ -570,6 +637,9 @@ simulate_AIDE_CRM_TITE_design <- function(
       waiting = waiting,
       future_events = future_events,
       decision_log = decision_log,
+      new_pat_first = new_pat_first,
+      n_eval_escalate = n_eval_escalate,
+      ipde_alpha = ipde_alpha,
       final = list(
         t_end = NA_real_,
         MTD = 99L,
@@ -651,6 +721,9 @@ simulate_AIDE_CRM_TITE_design <- function(
     waiting = waiting,
     future_events = future_events,
     decision_log = decision_log,
+    new_pat_first = new_pat_first,
+    n_eval_escalate = n_eval_escalate,
+    ipde_alpha = ipde_alpha,
     final = list(
       t_end = t_end,
       MTD = final_fit$MTD,
@@ -676,11 +749,29 @@ get_oc_sim_AIDE_CRM_TITE <- function(
     target,
     p.true,
     p.true_ipde = p.true,
+    ipde_alpha = 0,
     ntrial = 1000,
     seed = 1,
+    new_pat_first = 2L,
+    n_eval_escalate = 3L,
     store_raw = FALSE,
     ...
 ) {
+  if (length(new_pat_first) != 1L || is.na(new_pat_first) ||
+      !new_pat_first %in% c(1, 2)) {
+    stop("new_pat_first must be 1 (new patients first) or 2 (IPDE patients first).")
+  }
+  new_pat_first <- as.integer(new_pat_first)
+  if (length(n_eval_escalate) != 1L || !is.finite(n_eval_escalate) ||
+      n_eval_escalate < 0 || n_eval_escalate != as.integer(n_eval_escalate)) {
+    stop("n_eval_escalate must be a single non-negative integer.")
+  }
+  n_eval_escalate <- as.integer(n_eval_escalate)
+  if (length(ipde_alpha) != 1L || !is.finite(ipde_alpha) || ipde_alpha < 0) {
+    stop("ipde_alpha must be a single finite non-negative value.")
+  }
+  ipde_alpha <- as.numeric(ipde_alpha)
+
   ndose <- length(p.true)
   sel_count <- integer(ndose)
   stop_count <- 0L
@@ -702,8 +793,11 @@ get_oc_sim_AIDE_CRM_TITE <- function(
     fit <- simulate_AIDE_CRM_TITE_design(
       p_true = p.true,
       p_ipde = p.true_ipde,
+      ipde_alpha = ipde_alpha,
       target = target,
       seed = seed + itrial - 1L,
+      new_pat_first = new_pat_first,
+      n_eval_escalate = n_eval_escalate,
       ...
     )
 
@@ -741,8 +835,11 @@ get_oc_sim_AIDE_CRM_TITE <- function(
     target = target,
     p.true = p.true,
     p.true_ipde = p.true_ipde,
+    ipde_alpha = ipde_alpha,
     ntrial = ntrial,
     ndose = ndose,
+    new_pat_first = new_pat_first,
+    n_eval_escalate = n_eval_escalate,
     final_mtd_by_trial = final_mtd_by_trial,
     earlystop_by_trial = earlystop_by_trial,
     n_by_dose = n_by_dose / ntrial,

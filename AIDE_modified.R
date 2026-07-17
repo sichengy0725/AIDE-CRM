@@ -6,6 +6,34 @@
 ## Source this after BOIN helpers and AIDE_CRM_helper_final.R.
 ## ============================================================
 
+aide_ipde_toxicity_probability <- function(p_true,
+                                            previous_dose,
+                                            current_dose,
+                                            ipde_alpha = 0) {
+  p_true <- as.numeric(p_true)
+  ndose <- length(p_true)
+
+  if (ndose < 1L || any(!is.finite(p_true)) || any(p_true < 0 | p_true > 1)) {
+    stop("p_true must contain finite toxicity probabilities in [0, 1].")
+  }
+  if (length(previous_dose) != 1L || is.na(previous_dose) ||
+      previous_dose != as.integer(previous_dose) ||
+      previous_dose < 1L || previous_dose > ndose) {
+    stop("previous_dose must be a valid dose index.")
+  }
+  if (length(current_dose) != 1L || is.na(current_dose) ||
+      current_dose != as.integer(current_dose) ||
+      current_dose < 1L || current_dose > ndose) {
+    stop("current_dose must be a valid dose index.")
+  }
+  if (length(ipde_alpha) != 1L || !is.finite(ipde_alpha) || ipde_alpha < 0) {
+    stop("ipde_alpha must be a single finite non-negative value.")
+  }
+
+  min(1, p_true[as.integer(current_dose)] +
+        ipde_alpha * p_true[as.integer(previous_dose)])
+}
+
 simulate_AIDE_design <- function(
     # --- trial size / timing ---
   N_pat       = 30L,
@@ -18,6 +46,8 @@ simulate_AIDE_design <- function(
   arrival_rate = 0.2,
   t0 = 0,
   continuous_enrollment = TRUE,
+  # 1 = prioritize new arrivals; 2 = prioritize eligible IPDE patients
+  new_pat_first = 2L,
 
   # --- DLT time generation ---
   dlt_dist  = 2,
@@ -25,7 +55,10 @@ simulate_AIDE_design <- function(
 
   # --- truth ---
   p_true,
+  # Retained for backward-compatible reporting; recycled-patient toxicity is
+  # calculated from p_true, the patient's previous dose, and ipde_alpha.
   p_ipde = p_true,
+  ipde_alpha = 0,
   seed = NULL,
   verbose = FALSE,
 
@@ -39,6 +72,8 @@ simulate_AIDE_design <- function(
 
   # --- escalation gate ---
   dose_cap = 3L,
+  # Escalation requires more than this many evaluated patients at the current dose.
+  n_eval_escalate = 3L,
 
   # --- BOIN decision / final selection method ---
   decision_method = c("boin", "approx1", "approx2"),
@@ -117,6 +152,16 @@ simulate_AIDE_design <- function(
   model <- match.arg(model)
   restrict_to_tried <- isTRUE(restrict_to_tried)
   restrict_to_target <- isTRUE(restrict_to_target)
+  if (length(new_pat_first) != 1L || is.na(new_pat_first) ||
+      !new_pat_first %in% c(1, 2)) {
+    stop("new_pat_first must be 1 (new patients first) or 2 (IPDE patients first).")
+  }
+  new_pat_first <- as.integer(new_pat_first)
+  if (length(n_eval_escalate) != 1L || !is.finite(n_eval_escalate) ||
+      n_eval_escalate < 0 || n_eval_escalate != as.integer(n_eval_escalate)) {
+    stop("n_eval_escalate must be a single non-negative integer.")
+  }
+  n_eval_escalate <- as.integer(n_eval_escalate)
 
   if (model == "BOIN") {
     decision_method <- match.arg(decision_method)
@@ -210,6 +255,10 @@ simulate_AIDE_design <- function(
   if (length(p_ipde) != length(p_true)) {
     stop("p_ipde must have the same length as p_true.")
   }
+  if (length(ipde_alpha) != 1L || !is.finite(ipde_alpha) || ipde_alpha < 0) {
+    stop("ipde_alpha must be a single finite non-negative value.")
+  }
+  ipde_alpha <- as.numeric(ipde_alpha)
 
   if (N_pat < C) {
     stop("Need N_pat >= C.")
@@ -872,6 +921,11 @@ simulate_AIDE_design <- function(
     }
 
     next_dose <- move$next_dose
+    if (next_dose > curr_dose && n_curr <= n_eval_escalate) {
+      next_dose <- curr_dose
+      move$next_dose <- curr_dose
+      move$action <- "stay_insufficient_evaluated"
+    }
 
     if (n[curr_dose] >= d.cap && next_dose == curr_dose) {
       break
@@ -898,31 +952,56 @@ simulate_AIDE_design <- function(
       t_available = t_available
     )
 
-    if (length(cand) > 0L) {
-      ret_ids <- head(cand, min(C, length(cand)))
-    }
-
-    need_new <- C - length(ret_ids)
-
-    if (need_new > 0L) {
+    if (new_pat_first == 1L) {
       new_info <- recruit_new_patients(
-        n_needed = need_new,
+        n_needed = C,
         earliest_time = t_available
       )
       new_patients <- new_info$patients
+      new_ids <- new_patients$id
+      t_start <- max(t_start, new_info$t_start)
 
-      if (nrow(new_patients) < need_new) {
+      need_ret <- C - length(new_ids)
+      if (need_ret > 0L && length(cand) > 0L) {
+        ret_ids <- head(cand, min(need_ret, length(cand)))
+      }
+
+      if (length(new_ids) + length(ret_ids) < C) {
         if (verbose) {
           message(
-            "Ran out of new patients: need ", need_new,
-            ", available ", nrow(new_patients), "."
+            "Could not fill cohort after prioritizing new patients: need ", C,
+            ", available ", length(new_ids) + length(ret_ids), "."
           )
         }
         break
       }
+    } else {
+      if (length(cand) > 0L) {
+        ret_ids <- head(cand, min(C, length(cand)))
+      }
 
-      new_ids <- new_patients$id
-      t_start <- max(t_start, new_info$t_start)
+      need_new <- C - length(ret_ids)
+
+      if (need_new > 0L) {
+        new_info <- recruit_new_patients(
+          n_needed = need_new,
+          earliest_time = t_available
+        )
+        new_patients <- new_info$patients
+
+        if (nrow(new_patients) < need_new) {
+          if (verbose) {
+            message(
+              "Ran out of new patients: need ", need_new,
+              ", available ", nrow(new_patients), "."
+            )
+          }
+          break
+        }
+
+        new_ids <- new_patients$id
+        t_start <- max(t_start, new_info$t_start)
+      }
     }
 
     ## append new-patient outcomes
@@ -961,7 +1040,12 @@ simulate_AIDE_design <- function(
         if (nrow(last) != 1L) next
 
         dlt <- draw_dlt_time(
-          pi_val = p_ipde[next_dose],
+          pi_val = aide_ipde_toxicity_probability(
+            p_true = p_true,
+            previous_dose = last$dose,
+            current_dose = next_dose,
+            ipde_alpha = ipde_alpha
+          ),
           t_start = t_start
         )
 
@@ -1008,6 +1092,9 @@ simulate_AIDE_design <- function(
       admin = admin,
       waiting = waiting,
       arrival_times = arrival_times,
+      new_pat_first = new_pat_first,
+      n_eval_escalate = n_eval_escalate,
+      ipde_alpha = ipde_alpha,
       final = list(
         t_end = NA_real_,
         MTD = 99L,
@@ -1185,6 +1272,9 @@ simulate_AIDE_design <- function(
     admin = admin,
     waiting = waiting,
     arrival_times = arrival_times,
+    new_pat_first = new_pat_first,
+    n_eval_escalate = n_eval_escalate,
+    ipde_alpha = ipde_alpha,
     final = list(
       t_end = t_end,
       MTD = final_dose,
@@ -1228,6 +1318,7 @@ get_oc_sim_AIDE <- function(
     target,
     p.true,
     p.true_ipde = p.true,
+    ipde_alpha = 0,
     ntrial = 1000,
     seed = 1,
 
@@ -1243,10 +1334,12 @@ get_oc_sim_AIDE <- function(
     arrival_rate = 0.2,
     t0 = 0,
     continuous_enrollment = TRUE,
+    new_pat_first = 2L,
 
     cutoff = 0.95,
     d.cap = 100,
     dose_cap = 3L,
+    n_eval_escalate = 3L,
     day_obs = 0,
 
     dlt_dist = 2,
@@ -1325,6 +1418,16 @@ get_oc_sim_AIDE <- function(
   model <- match.arg(model)
   restrict_to_tried <- isTRUE(restrict_to_tried)
   restrict_to_target <- isTRUE(restrict_to_target)
+  if (length(new_pat_first) != 1L || is.na(new_pat_first) ||
+      !new_pat_first %in% c(1, 2)) {
+    stop("new_pat_first must be 1 (new patients first) or 2 (IPDE patients first).")
+  }
+  new_pat_first <- as.integer(new_pat_first)
+  if (length(n_eval_escalate) != 1L || !is.finite(n_eval_escalate) ||
+      n_eval_escalate < 0 || n_eval_escalate != as.integer(n_eval_escalate)) {
+    stop("n_eval_escalate must be a single non-negative integer.")
+  }
+  n_eval_escalate <- as.integer(n_eval_escalate)
 
   if (model == "BOIN") {
     decision_method <- match.arg(decision_method)
@@ -1401,6 +1504,10 @@ get_oc_sim_AIDE <- function(
   if (length(p.true_ipde) != ndose) {
     stop("p.true_ipde must have the same length as p.true.")
   }
+  if (length(ipde_alpha) != 1L || !is.finite(ipde_alpha) || ipde_alpha < 0) {
+    stop("ipde_alpha must be a single finite non-negative value.")
+  }
+  ipde_alpha <- as.numeric(ipde_alpha)
 
   sel_count <- integer(ndose)
   stop_count <- 0L
@@ -1436,10 +1543,12 @@ get_oc_sim_AIDE <- function(
       arrival_rate = arrival_rate,
       t0 = t0,
       continuous_enrollment = continuous_enrollment,
+      new_pat_first = new_pat_first,
       dlt_dist = dlt_dist,
       dlt_alpha = dlt_alpha,
       p_true = p.true,
       p_ipde = p.true_ipde,
+      ipde_alpha = ipde_alpha,
       seed = trial_seed,
       verbose = verbose,
       TARGET = target,
@@ -1448,6 +1557,7 @@ get_oc_sim_AIDE <- function(
       ipde_design = ipde_design,
       d.cap = d.cap,
       dose_cap = dose_cap,
+      n_eval_escalate = n_eval_escalate,
       day_obs = day_obs,
       decision_method = decision_method,
       mtd_method = mtd_method,
@@ -1615,13 +1725,16 @@ get_oc_sim_AIDE <- function(
     target = target,
     p.true = p.true,
     p.true_ipde = p.true_ipde,
+    ipde_alpha = ipde_alpha,
     ntrial = ntrial,
     ndose = ndose,
     model = model,
     ipde_design = ipde_design,
     continuous_enrollment = continuous_enrollment,
+    new_pat_first = new_pat_first,
     d.cap = d.cap,
     dose_cap = dose_cap,
+    n_eval_escalate = n_eval_escalate,
     decision_method = decision_method,
     mtd_method = mtd_method,
     r_carry = r_carry,

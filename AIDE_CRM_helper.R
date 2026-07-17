@@ -16,6 +16,7 @@ crm_fit_discount <- function(dat,
                              ndose,
                              skeleton,
                              target = 0.30,
+                             cutoff = 0.95,
                              r_model = c("fixed", "random"),
                              r_carry = 0.10,
                              a_r = 1,
@@ -153,6 +154,8 @@ crm_fit_discount <- function(dat,
   }
 
   r_hat <- if (r_model == "fixed") r_carry else mean(post[, "r"])
+  prob_overtox <- mean(post[, p_cols[1L]] > target)
+  stop_flag <- as.integer(prob_overtox > cutoff)
 
   list(
     p_hat = as.numeric(p_hat),
@@ -161,7 +164,12 @@ crm_fit_discount <- function(dat,
     post = post,
     r_model = r_model,
     target = target,
-    skeleton = skeleton
+    skeleton = skeleton,
+    prob_overtox = prob_overtox,
+    prob_p1_over_target = prob_overtox,
+    stop = stop_flag,
+    earlystop = stop_flag,
+    eliminated = if (stop_flag == 1L) rep(1L, ndose) else rep(0L, ndose)
   )
 }
 
@@ -329,33 +337,12 @@ select.mtd.crm <- function(target,
   }
 
   n <- tabulate(as.integer(dat$dose), nbins = ndose)
-  y <- tabulate(as.integer(dat$dose[dat$y == 1L]), nbins = ndose)
-
-  for (j in seq_len(ndose)) {
-    if (n[j] > 2L) {
-      post_over <- 1 - stats::pbeta(target, y[j] + 1, n[j] - y[j] + 1)
-      if (post_over > cutoff.eli) {
-        elimi[j:ndose] <- 1L
-        break
-      }
-    }
-  }
-
-  if (elimi[1L] == 1L) {
-    return(list(
-      MTD = 99L,
-      phat = phat_out,
-      pj_iso = phat_out,
-      eliminated = elimi,
-      approx = paste0("crm_", r_model)
-    ))
-  }
-
   fit <- crm_fit_discount(
     dat = dat,
     ndose = ndose,
     skeleton = skeleton,
     target = target,
+    cutoff = cutoff.eli,
     r_model = r_model,
     r_carry = r_carry,
     a_r = a_r,
@@ -372,6 +359,31 @@ select.mtd.crm <- function(target,
   )
 
   phat_out <- fit$p_hat
+
+  ## Over-toxicity is determined by the fitted CRM posterior, rather than
+  ## dose-specific beta-binomial calculations.
+  if (!is.null(fit$eliminated)) {
+    elimi <- as.integer(fit$eliminated)
+  } else if (!is.null(fit$stop) && isTRUE(fit$stop == 1L)) {
+    elimi <- rep(1L, ndose)
+  }
+
+  if (elimi[1L] == 1L || (!is.null(fit$stop) && isTRUE(fit$stop == 1L))) {
+    return(list(
+      MTD = 99L,
+      phat = phat_out,
+      pj_iso = phat_out,
+      eliminated = elimi,
+      approx = paste0("crm_", r_model),
+      p_hat = fit$p_hat,
+      theta_ipde_hat = fit$theta_ipde_hat,
+      r_hat = fit$r_hat,
+      prob_overtox = fit$prob_overtox,
+      prob_p1_over_target = fit$prob_overtox,
+      earlystop = 1L,
+      stop = 1L
+    ))
+  }
 
   admissible <- elimi == 0L
   if (restrict_to_tried) admissible <- admissible & (n > 0L)
@@ -393,6 +405,10 @@ select.mtd.crm <- function(target,
     approx = paste0("crm_", r_model),
     p_hat = fit$p_hat,
     theta_ipde_hat = fit$theta_ipde_hat,
-    r_hat = fit$r_hat
+    r_hat = fit$r_hat,
+    prob_overtox = fit$prob_overtox,
+    prob_p1_over_target = fit$prob_overtox,
+    earlystop = if (!is.null(fit$earlystop)) fit$earlystop else fit$stop,
+    stop = fit$stop
   )
 }

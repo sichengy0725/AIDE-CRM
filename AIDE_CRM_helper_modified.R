@@ -1330,23 +1330,11 @@ select.mtd.crm <- function(target,
     followup_col = followup_col
   )
   n <- tabulate(as.integer(dat2$dose), nbins = ndose)
-  y <- tabulate(as.integer(dat2$dose[dat2$y == 1L]), nbins = ndose)
   n_eff <- numeric(ndose)
   for (j in seq_len(ndose)) {
     rows_j <- dat2$dose == j
     n_eff[j] <- sum(dat2$y[rows_j] == 1L) +
       sum(dat2$tite_weight[rows_j & dat2$y == 0L])
-  }
-  
-  ## Weighted overdose elimination: pending non-DLT rows contribute through w.
-  for (j in seq_len(ndose)) {
-    if (n_eff[j] > 2) {
-      post_over <- 1 - stats::pbeta(target, y[j] + 1, n_eff[j] - y[j] + 1)
-      if (post_over > cutoff.eli) {
-        elimi[j:ndose] <- 1L
-        break
-      }
-    }
   }
   
   fit <- crm_fit(
@@ -1396,6 +1384,14 @@ select.mtd.crm <- function(target,
   )
   
   phat_out <- fit$p_hat
+
+  ## Over-toxicity is determined by the fitted CRM model, not a separate
+  ## beta-binomial calculation on the observed dose-specific outcomes.
+  if (!is.null(fit$eliminated)) {
+    elimi <- as.integer(fit$eliminated)
+  } else if (!is.null(fit$stop) && isTRUE(fit$stop == 1L)) {
+    elimi <- rep(1L, ndose)
+  }
   
   if (elimi[1L] == 1L || (!is.null(fit$stop) && isTRUE(fit$stop == 1L))) {
     return(list(
