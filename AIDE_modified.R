@@ -349,6 +349,46 @@ simulate_AIDE_design <- function(
     out
   }
 
+  wait_for_new_patients_from_queue <- function(n_needed, earliest_time) {
+    if (n_needed <= 0L) {
+      return(list(
+        patients = data.frame(id = integer(0), t_arrival = numeric(0), stringsAsFactors = FALSE),
+        t_start = as.numeric(earliest_time)
+      ))
+    }
+
+    ## In continuous-enrollment runs, future arrivals enter the same waiting
+    ## queue used for cohort assignment.  This avoids bypassing eligible IPDE
+    ## patients merely to pre-fill a new-patient cohort.
+    if (continuous_enrollment) {
+      add_arrivals_to_waiting(earliest_time)
+      patients <- take_waiting(n_needed)
+
+      while (nrow(patients) < n_needed && next_new_idx <= N_pat) {
+        next_arrival <- arrival_times[next_new_idx]
+        add_arrivals_to_waiting(next_arrival)
+        patients <- rbind(
+          patients,
+          take_waiting(n_needed - nrow(patients))
+        )
+      }
+
+      rownames(patients) <- NULL
+      return(list(
+        patients = patients,
+        t_start = if (nrow(patients) > 0L) {
+          max(as.numeric(earliest_time), max(patients$t_arrival))
+        } else {
+          as.numeric(earliest_time)
+        }
+      ))
+    }
+
+    ## Without continuous enrollment, no waiting queue exists; retain the
+    ## legacy just-in-time recruitment behavior.
+    recruit_new_patients(n_needed = n_needed, earliest_time = earliest_time)
+  }
+
   recruit_new_patients <- function(n_needed, earliest_time) {
     if (n_needed <= 0L) {
       return(list(
@@ -951,27 +991,40 @@ simulate_AIDE_design <- function(
     )
 
     if (new_pat_first == 1L) {
-      new_info <- recruit_new_patients(
-        n_needed = C,
-        earliest_time = t_available
-      )
-      new_patients <- new_info$patients
+      ## Mirror the TITE priority rule: new patients who have already arrived
+      ## and are in the waiting queue take precedence, but do not pull future
+      ## arrivals ahead of currently eligible IPDE patients.
+      new_patients <- take_waiting(C)
       new_ids <- new_patients$id
-      t_start <- max(t_start, new_info$t_start)
 
       need_ret <- C - length(new_ids)
       if (need_ret > 0L && length(cand) > 0L) {
         ret_ids <- head(cand, min(need_ret, length(cand)))
       }
 
-      if (length(new_ids) + length(ret_ids) < C) {
-        if (verbose) {
-          message(
-            "Could not fill cohort after prioritizing new patients: need ", C,
-            ", available ", length(new_ids) + length(ret_ids), "."
-          )
+      ## Only if the waiting queue and eligible IPDE patients cannot fill the
+      ## cohort do we wait for additional new arrivals.  This preserves the
+      ## non-TITE all-at-once cohort start while applying TITE's queue-first
+      ## allocation priority.
+      need_new <- C - length(new_ids) - length(ret_ids)
+      if (need_new > 0L) {
+        new_info <- wait_for_new_patients_from_queue(
+          n_needed = need_new,
+          earliest_time = t_available
+        )
+        if (nrow(new_info$patients) < need_new) {
+          if (verbose) {
+            message(
+              "Could not fill cohort after using waiting new patients and eligible IPDE patients: need ", C,
+              ", available ", length(new_ids) + length(ret_ids) + nrow(new_info$patients), "."
+            )
+          }
+          break
         }
-        break
+        new_patients <- rbind(new_patients, new_info$patients)
+        rownames(new_patients) <- NULL
+        new_ids <- new_patients$id
+        t_start <- max(t_start, new_info$t_start)
       }
     } else {
       if (length(cand) > 0L) {
@@ -1151,10 +1204,9 @@ simulate_AIDE_design <- function(
     dat_final$dose[dat_final$type == "retreat" & dat_final$y == 1L],
     nbins = K
   )
-
+  browser()
   trial_time <- max(admin$t_eval, na.rm = TRUE) -
     min(admin$t_arrival, na.rm = TRUE)
-  browser()
   phat <- rep(NA_real_, K)
   r_hat <- if (model == "CRM" && crm_r_model == "fixed") r_carry else rep(NA_real_, K)
   r_use <- rep(NA_real_, K)
@@ -1256,7 +1308,7 @@ simulate_AIDE_design <- function(
       final_fit$approx <- paste0("cfo_", cfo_method)
       final_fit$model_file <- if (cfo_method == "pride") cfo_model_file else NA_character_
     }
-
+    
     final_dose <- final_fit$MTD
     phat[seq_along(final_fit$phat)] <- final_fit$phat
     if (!is.null(final_fit$r_hat)) r_hat <- final_fit$r_hat

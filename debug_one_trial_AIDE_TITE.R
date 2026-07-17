@@ -65,59 +65,59 @@ show_recycled_patients <- function(admin, p_true, ipde_alpha) {
   do.call(rbind, out)
 }
 
-# cat("\n========== One non-TITE AIDE trial ==========\n")
-# aide_fit <- simulate_AIDE_design(
+cat("\n========== One non-TITE AIDE trial ==========\n")
+aide_fit <- simulate_AIDE_design(
+  p_true = p_true,
+  ipde_alpha = ipde_alpha,
+  seed = seed,
+  verbose = TRUE,
+  model = "CRM",
+  ## 1 permits recycling from any lower dose; use 2 for adjacent-dose only.
+  ipde_design = 1L,
+  arrival_rate = 1/56,
+  N_pat = n_patients,
+  Nmax_eff = n_patients,
+  crm_skeleton = c(0.1,0.2,0.3,0.4,0.5),
+  crm_r_model = 'r_fixed',
+  C = cohort_size,
+  cycle_max = cycle_max,
+  T_assess = 28,
+  new_pat_first = 1L,
+  n_eval_escalate = 3L,
+  dose_cap = 3,
+  TARGET = target
+)
+
+print(aide_fit$admin)
+print(show_recycled_patients(aide_fit$admin, p_true, ipde_alpha))
+print(aide_fit$final)
+
+# cat("\n========== One TITE AIDE-CRM trial ==========\n")
+# tite_fit <- simulate_AIDE_CRM_TITE_design(
 #   p_true = p_true,
 #   ipde_alpha = ipde_alpha,
+#   target = target,
 #   seed = seed,
 #   verbose = TRUE,
-#   model = "CRM",
-#   ## 1 permits recycling from any lower dose; use 2 for adjacent-dose only.
-#   ipde_design = 1L,
-#   arrival_rate = 1/56,
 #   N_pat = n_patients,
 #   Nmax_eff = n_patients,
-#   crm_skeleton = c(0.1,0.2,0.3,0.4,0.5),
-#   crm_r_model = 'r_fixed',
-#   C = cohort_size,
+#   cohortsize = cohort_size,
 #   cycle_max = cycle_max,
 #   T_assess = 28,
+#   arrival_rate = 1/56,
 #   new_pat_first = 2L,
 #   n_eval_escalate = 3L,
 #   dose_cap = 3,
-#   TARGET = target
+#   ## alpha_crm is deterministic and does not require JAGS/rjags.
+#   ## Change to "fixed" or "random" when debugging a JAGS CRM backend.
+#   crm_r_model = "r_fixed",
+#   r_carry = 0,
+#   crm_skeleton = crm_skeleton,
+#   ## A smaller alpha grid keeps this debugging run quick.
+#   crm_alpha_grid = seq(0.05, 0.95, length.out = 11L)
 # )
 # 
-# print(aide_fit$admin)
-# print(show_recycled_patients(aide_fit$admin, p_true, ipde_alpha))
-# print(aide_fit$final)
-
-cat("\n========== One TITE AIDE-CRM trial ==========\n")
-tite_fit <- simulate_AIDE_CRM_TITE_design(
-  p_true = p_true,
-  ipde_alpha = ipde_alpha,
-  target = target,
-  seed = seed,
-  verbose = TRUE,
-  N_pat = n_patients,
-  Nmax_eff = n_patients,
-  cohortsize = cohort_size,
-  cycle_max = cycle_max,
-  T_assess = 28,
-  arrival_rate = 1/56,
-  new_pat_first = 2L,
-  n_eval_escalate = 3L,
-  dose_cap = 3,
-  ## alpha_crm is deterministic and does not require JAGS/rjags.
-  ## Change to "fixed" or "random" when debugging a JAGS CRM backend.
-  crm_r_model = "r_fixed",
-  r_carry = 0,
-  crm_skeleton = crm_skeleton,
-  ## A smaller alpha grid keeps this debugging run quick.
-  crm_alpha_grid = seq(0.05, 0.95, length.out = 11L)
-)
-
-print(tite_fit$admin)
-print(tite_fit$decision_log)
-print(show_recycled_patients(tite_fit$admin, p_true, ipde_alpha))
-print(tite_fit$final)
+# print(tite_fit$admin)
+# print(tite_fit$decision_log)
+# print(show_recycled_patients(tite_fit$admin, p_true, ipde_alpha))
+# print(tite_fit$final)
