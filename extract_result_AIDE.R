@@ -47,6 +47,8 @@ jobs.expected <- 1:2000
 ## If each LSF job used ntrial.total = 1, expected total is 2000.
 ## Change this if you pass a different trials-per-job argument to the runner.
 ntrial_per_job_expected <- 1L
+seed_base_expected <- 1L
+block_id_expected <- 1L
 ntrial.expected <- length(jobs.expected) * ntrial_per_job_expected
 
 target <- 0.30
@@ -322,25 +324,36 @@ make_group_key <- function(sc,
   )
 }
 
-## Each raw task RDS has the fields used by summarize_aide_files(), so raw
-## files can be summarized directly without reading combined job artifacts.
-make_raw_file_pattern <- function(sc,
-                                  model,
-                                  method_tag,
-                                  alpha_true,
-                                  r_carry,
-                                  cycle_max,
-                                  restrict_to_tried,
-                                  scenario_set = scenario_set_name) {
+## Each raw task RDS has the fields used by summarize_aide_files(), so exact
+## raw files written by run_oc_AIDE.R can be summarized directly.
+make_raw_rds_filenames <- function(sc,
+                                   model,
+                                   method_tag,
+                                   alpha_true,
+                                   r_carry,
+                                   cycle_max,
+                                   restrict_to_tried,
+                                   jobs = jobs.expected,
+                                   block_id = block_id_expected,
+                                   seed_base = seed_base_expected,
+                                   ntrial_per_job = ntrial_per_job_expected,
+                                   scenario_set = scenario_set_name) {
+  jobs <- as.integer(jobs)
+  seed_block <- as.integer(seed_base) + (jobs - 1L) * as.integer(ntrial_per_job)
+
   paste0(
-    "^", scenario_set, "_SC", sc,
+    scenario_set, "_SC", sc,
     "-", model,
     "-", method_tag,
     "-a", fmt_short(alpha_true),
     "-r", fmt_short(r_carry),
     "-cyc", fmt_short(cycle_max),
     "-tried", as.integer(isTRUE(restrict_to_tried)),
-    "-j[0-9]+-b[0-9]+-s[0-9]+-n[0-9]+\\.rds$"
+    "-j", jobs,
+    "-b", block_id,
+    "-s", seed_block,
+    "-n", as.integer(ntrial_per_job),
+    ".rds"
   )
 }
 
@@ -851,34 +864,24 @@ for (setting_i in seq_len(nrow(setting_grid))) {
                     folderpath <- folder_info$folderpath
                     file_method_tag <- folder_info$method_tag
 
-                    raw_pattern <- make_raw_file_pattern(
+                    raw_names <- make_raw_rds_filenames(
                       sc = sc,
                       model = model,
                       method_tag = file_method_tag,
                       alpha_true = alpha_true,
                       r_carry = r_carry,
                       cycle_max = cycle_max,
-                      restrict_to_tried = restrict_to_tried
+                      restrict_to_tried = restrict_to_tried,
+                      jobs = jobs.expected
                     )
-                    files.use <- if (dir.exists(folderpath)) {
-                      list.files(folderpath, pattern = raw_pattern, full.names = TRUE)
-                    } else {
-                      character(0)
-                    }
-                    found_jobs <- if (length(files.use) > 0L) {
-                      as.integer(sub(
-                        ".*-j([0-9]+)-b[0-9]+-s[0-9]+-n[0-9]+\\.rds$",
-                        "\\1",
-                        basename(files.use)
-                      ))
-                    } else {
-                      integer(0)
-                    }
-                    missing.jobs <- setdiff(jobs.expected, unique(found_jobs))
+                    raw_paths <- file.path(folderpath, raw_names)
+                    existing_raw <- file.exists(raw_paths)
+                    files.use <- raw_paths[existing_raw]
+                    missing.jobs <- jobs.expected[!existing_raw]
                     example_file <- if (length(files.use) > 0L) {
                       files.use[1L]
                     } else {
-                      file.path(folderpath, raw_pattern)
+                      raw_paths[1L]
                     }
 
                     cat("\n====================================\n")
@@ -901,7 +904,7 @@ for (setting_i in seq_len(nrow(setting_grid))) {
                     cat("Continuous:", continuous_enrollment, "\n")
                     cat("Restrict to tried:", restrict_to_tried, "\n")
                     cat("Folder:", folderpath, "\n")
-                    cat("Raw-RDS pattern:", example_file, "\n")
+                    cat("Raw-RDS file:", example_file, "\n")
                     cat("Found", length(files.use), "files; missing", length(missing.jobs), "jobs.\n")
                     cat("====================================\n")
 
