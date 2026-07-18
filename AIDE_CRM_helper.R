@@ -98,8 +98,6 @@ crm_fit_discount <- function(dat,
     stop("Cannot find JAGS model file: ", model_file)
   }
 
-  if (!is.null(seed)) set.seed(seed)
-
   rng_names <- c(
     "base::Wichmann-Hill",
     "base::Marsaglia-Multicarry",

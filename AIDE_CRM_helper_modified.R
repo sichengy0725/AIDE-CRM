@@ -524,8 +524,6 @@ crm_fit_discount <- function(dat,
     stop("Cannot find JAGS model file: ", model_file)
   }
   
-  if (!is.null(seed)) set.seed(seed)
-  
   jm <- rjags::jags.model(
     file = model_file,
     data = jags_data,
@@ -694,8 +692,6 @@ crm_fit_alpha_integrate <- function(dat,
   if (theta_prior_sd <= 0 || !is.finite(theta_prior_sd)) {
     stop("theta_prior_sd must be positive.")
   }
-  if (!is.null(seed)) set.seed(seed)
-  
   if (is.null(dat) || nrow(dat) == 0L) {
     theta <- stats::rnorm(n_draw_prior, theta_prior_mean, theta_prior_sd)
     posttox <- vapply(seq_along(skeleton), function(k) mean(skeleton[k]^exp(theta)), 0.0)
@@ -952,8 +948,6 @@ crm_fit_cumu_jags <- function(dat,
     beta1_rate = beta1_rate,
     beta2_rate = beta2_rate
   )
-  
-  if (!is.null(seed)) set.seed(seed)
   
   jm <- rjags::jags.model(
     file = model_file,
@@ -1266,6 +1260,7 @@ select.mtd.crm <- function(target,
                            thin = 1,
                            seed = NULL,
                            restrict_to_tried = TRUE,
+                           restrict_to_target = FALSE,
                            dose_values = NULL,
                            dose_scores = NULL,
                            time_col = NULL,
@@ -1291,6 +1286,8 @@ select.mtd.crm <- function(target,
                            cumu_include_current = FALSE) {
   
   r_model <- crm_normalize_r_model(r_model)
+  restrict_to_tried <- isTRUE(restrict_to_tried)
+  restrict_to_target <- isTRUE(restrict_to_target)
   crm_validate_skeleton(skeleton, ndose)
   
   phat_out <- rep(NA_real_, ndose)
@@ -1316,7 +1313,9 @@ select.mtd.crm <- function(target,
       prob_p1_over_target = NA_real_,
       model_file = model_file,
       earlystop = 0L,
-      stop = 0L
+      stop = 0L,
+      restrict_to_tried = restrict_to_tried,
+      restrict_to_target = restrict_to_target
     ))
   }
   
@@ -1407,12 +1406,18 @@ select.mtd.crm <- function(target,
       model_file = if (!is.null(fit$model_file)) fit$model_file else model_file,
       n_eff = n_eff,
       earlystop = 1L,
-      stop = 1L
+      stop = 1L,
+      restrict_to_tried = restrict_to_tried,
+      restrict_to_target = restrict_to_target
     ))
   }
   
   admissible <- elimi == 0L
   if (restrict_to_tried) admissible <- admissible & (n > 0L)
+  if (restrict_to_target) {
+    target_tol <- sqrt(.Machine$double.eps)
+    admissible <- admissible & is.finite(phat_out) & (phat_out <= target + target_tol)
+  }
   
   dist <- abs(phat_out - target)
   dist[!admissible] <- Inf
@@ -1438,6 +1443,8 @@ select.mtd.crm <- function(target,
     n_eff = n_eff,
     earlystop = if (!is.null(fit$earlystop)) fit$earlystop else fit$stop,
     stop = fit$stop,
+    restrict_to_tried = restrict_to_tried,
+    restrict_to_target = restrict_to_target,
     fit = fit
   )
 }

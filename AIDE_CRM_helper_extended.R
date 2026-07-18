@@ -322,8 +322,6 @@ crm_fit_discount <- function(dat,
     stop("Cannot find JAGS model file: ", model_file)
   }
 
-  if (!is.null(seed)) set.seed(seed)
-
   jm <- rjags::jags.model(
     file = model_file,
     data = jags_data,
@@ -465,8 +463,6 @@ crm_fit_alpha_integrate <- function(dat,
   if (theta_prior_sd <= 0 || !is.finite(theta_prior_sd)) {
     stop("theta_prior_sd must be positive.")
   }
-  if (!is.null(seed)) set.seed(seed)
-
   if (is.null(dat) || nrow(dat) == 0L) {
     theta <- stats::rnorm(n_draw_prior, theta_prior_mean, theta_prior_sd)
     posttox <- vapply(seq_along(skeleton), function(k) mean(skeleton[k]^exp(theta)), 0.0)
@@ -687,8 +683,6 @@ crm_fit_cumu_jags <- function(dat,
     beta1_rate = beta1_rate,
     beta2_rate = beta2_rate
   )
-
-  if (!is.null(seed)) set.seed(seed)
 
   jm <- rjags::jags.model(
     file = model_file,

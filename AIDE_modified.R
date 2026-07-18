@@ -741,7 +741,6 @@ simulate_AIDE_design <- function(
           n_burnin = crm_n_burnin,
           n_iter = crm_n_iter,
           thin = crm_thin,
-          seed = seed,
 
           elimi = elimi,
           n_trt_curr = n_trt_curr,
@@ -1204,7 +1203,7 @@ simulate_AIDE_design <- function(
     dat_final$dose[dat_final$type == "retreat" & dat_final$y == 1L],
     nbins = K
   )
-  browser()
+  # browser()
   trial_time <- max(admin$t_eval, na.rm = TRUE) -
     min(admin$t_arrival, na.rm = TRUE)
   phat <- rep(NA_real_, K)
@@ -1272,7 +1271,6 @@ simulate_AIDE_design <- function(
         n_burnin = crm_n_burnin,
         n_iter = max(5000, crm_n_iter),
         thin = crm_thin,
-        seed = seed,
         restrict_to_tried = restrict_to_tried,
         restrict_to_target = restrict_to_target,
 

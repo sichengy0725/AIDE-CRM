@@ -216,7 +216,8 @@ simulate_AIDE_CRM_TITE_design <- function(
     crm_n_burnin = 500,
     crm_n_iter = 2000,
     crm_thin = 1,
-    restrict_to_tried = TRUE
+    restrict_to_tried = TRUE,
+    restrict_to_target = FALSE
 ) {
   if (!is.null(seed)) set.seed(seed)
 
@@ -257,6 +258,8 @@ simulate_AIDE_CRM_TITE_design <- function(
     stop("n_eval_escalate must be a single non-negative integer.")
   }
   n_eval_escalate <- as.integer(n_eval_escalate)
+  restrict_to_tried <- isTRUE(restrict_to_tried)
+  restrict_to_target <- isTRUE(restrict_to_target)
 
   crm_r_model <- match.arg(crm_r_model)
   crm_r_model <- crm_normalize_r_model(crm_r_model)
@@ -574,7 +577,6 @@ simulate_AIDE_CRM_TITE_design <- function(
       n_burnin = crm_n_burnin,
       n_iter = crm_n_iter,
       thin = crm_thin,
-      seed = seed,
       elimi = elimi,
       n_trt_curr = n_trt_curr,
       dose_cap = dose_cap,
@@ -764,7 +766,14 @@ simulate_AIDE_CRM_TITE_design <- function(
         earlystop = 1L,
         phat = rep(NA_real_, ndose),
         pj_iso = rep(NA_real_, ndose),
+        p_hat = rep(NA_real_, ndose),
+        theta_ipde_hat = rep(NA_real_, ndose),
+        r_hat = if (crm_r_model == "fixed") r_carry else NA_real_,
+        prob_p1_over_target = NA_real_,
         r_model = crm_r_model,
+        restrict_to_tried = restrict_to_tried,
+        restrict_to_target = restrict_to_target,
+        model_file = crm_model_file,
         model = "CRM_TITE"
       )
     ))
@@ -778,12 +787,19 @@ simulate_AIDE_CRM_TITE_design <- function(
       MTD = 99L,
       phat = rep(NA_real_, ndose),
       pj_iso = rep(NA_real_, ndose),
+      p_hat = rep(NA_real_, ndose),
+      theta_ipde_hat = rep(NA_real_, ndose),
       eliminated = elimi,
+      r_hat = if (crm_r_model == "fixed") r_carry else NA_real_,
+      prob_p1_over_target = NA_real_,
+      model_file = crm_model_file,
       earlystop = 1L,
-      stop = 1L
+      stop = 1L,
+      restrict_to_tried = restrict_to_tried,
+      restrict_to_target = restrict_to_target
     )
   } else {
-    browser()
+    # browser()
     final_fit <- select.mtd.crm(
       target = target,
       dat = dat_final,
@@ -804,8 +820,8 @@ simulate_AIDE_CRM_TITE_design <- function(
       n_burnin = crm_n_burnin,
       n_iter = max(5000, crm_n_iter),
       thin = crm_thin,
-      seed = seed,
       restrict_to_tried = restrict_to_tried,
+      restrict_to_target = restrict_to_target,
       dose_values = crm_dose_values,
       dose_scores = crm_dose_scores,
       time_col = crm_time_col,
@@ -849,12 +865,20 @@ simulate_AIDE_CRM_TITE_design <- function(
       phat = final_fit$phat,
       pj_iso = final_fit$pj_iso,
       p_hat = if (!is.null(final_fit$p_hat)) final_fit$p_hat else final_fit$phat,
+      theta_ipde_hat = if (!is.null(final_fit$theta_ipde_hat)) {
+        final_fit$theta_ipde_hat
+      } else {
+        rep(NA_real_, ndose)
+      },
+      r_hat = if (!is.null(final_fit$r_hat)) final_fit$r_hat else NA_real_,
       prob_p1_over_target = if (!is.null(final_fit$prob_p1_over_target)) {
         final_fit$prob_p1_over_target
       } else {
         NA_real_
       },
       r_model = crm_r_model,
+      restrict_to_tried = restrict_to_tried,
+      restrict_to_target = restrict_to_target,
       model_file = if (!is.null(final_fit$model_file)) final_fit$model_file else crm_model_file,
       model = "CRM_TITE"
     )
@@ -871,6 +895,8 @@ get_oc_sim_AIDE_CRM_TITE <- function(
     new_pat_first = 2L,
     ipde_design = 2L,
     n_eval_escalate = 3L,
+    restrict_to_tried = TRUE,
+    restrict_to_target = FALSE,
     store_raw = FALSE,
     ...
 ) {
@@ -889,6 +915,8 @@ get_oc_sim_AIDE_CRM_TITE <- function(
     stop("n_eval_escalate must be a single non-negative integer.")
   }
   n_eval_escalate <- as.integer(n_eval_escalate)
+  restrict_to_tried <- isTRUE(restrict_to_tried)
+  restrict_to_target <- isTRUE(restrict_to_target)
   if (length(ipde_alpha) != 1L || !is.finite(ipde_alpha) || ipde_alpha < 0) {
     stop("ipde_alpha must be a single finite non-negative value.")
   }
@@ -908,8 +936,26 @@ get_oc_sim_AIDE_CRM_TITE <- function(
   duration <- numeric(ntrial)
   final_mtd_by_trial <- rep(NA_integer_, ntrial)
   earlystop_by_trial <- integer(ntrial)
+  p_hat_by_trial <- matrix(NA_real_, nrow = ntrial, ncol = ndose)
+  pj_iso_by_trial <- matrix(NA_real_, nrow = ntrial, ncol = ndose)
+  r_hat_by_trial <- matrix(NA_real_, nrow = ntrial, ncol = ndose)
 
   raw_trials <- if (store_raw) vector("list", ntrial) else NULL
+
+  copy_to_row <- function(mat, row, value) {
+    if (is.null(value) || length(value) == 0L) return(mat)
+    tmp <- rep(NA_real_, ncol(mat))
+    L <- min(length(value), ncol(mat))
+    tmp[seq_len(L)] <- as.numeric(value[seq_len(L)])
+    mat[row, ] <- tmp
+    mat
+  }
+
+  mean_by_col <- function(mat) {
+    apply(mat, 2, function(z) {
+      if (all(is.na(z))) NA_real_ else mean(z, na.rm = TRUE)
+    })
+  }
 
   for (itrial in seq_len(ntrial)) {
     fit <- simulate_AIDE_CRM_TITE_design(
@@ -921,6 +967,8 @@ get_oc_sim_AIDE_CRM_TITE <- function(
       new_pat_first = new_pat_first,
       ipde_design = ipde_design,
       n_eval_escalate = n_eval_escalate,
+      restrict_to_tried = restrict_to_tried,
+      restrict_to_target = restrict_to_target,
       ...
     )
 
@@ -945,6 +993,18 @@ get_oc_sim_AIDE_CRM_TITE <- function(
     mtd <- fit$final$MTD
     final_mtd_by_trial[itrial] <- as.integer(mtd)
     earlystop_by_trial[itrial] <- as.integer(isTRUE(as.logical(fit$final$earlystop)))
+
+    p_i <- fit$final$p_hat
+    if (is.null(p_i)) p_i <- fit$final$phat
+    if (is.null(p_i)) p_i <- fit$final$pj_iso
+    p_hat_by_trial <- copy_to_row(p_hat_by_trial, itrial, p_i)
+
+    pj_i <- fit$final$pj_iso
+    if (is.null(pj_i)) pj_i <- p_i
+    pj_iso_by_trial <- copy_to_row(pj_iso_by_trial, itrial, pj_i)
+
+    r_hat_by_trial <- copy_to_row(r_hat_by_trial, itrial, fit$final$r_hat)
+
     if (isTRUE(as.logical(fit$final$earlystop)) || identical(mtd, 99L)) {
       stop_count <- stop_count + 1L
     } else if (!is.na(mtd) && mtd >= 1L && mtd <= ndose) {
@@ -964,8 +1024,18 @@ get_oc_sim_AIDE_CRM_TITE <- function(
     new_pat_first = new_pat_first,
     ipde_design = ipde_design,
     n_eval_escalate = n_eval_escalate,
+    restrict_to_tried = restrict_to_tried,
+    restrict_to_target = restrict_to_target,
     final_mtd_by_trial = final_mtd_by_trial,
     earlystop_by_trial = earlystop_by_trial,
+    p_hat_by_trial = p_hat_by_trial,
+    p_hat_mean = mean_by_col(p_hat_by_trial),
+    crm_pj_by_trial = p_hat_by_trial,
+    crm_pj_mean = mean_by_col(p_hat_by_trial),
+    pj_iso_by_trial = pj_iso_by_trial,
+    pj_iso_mean = mean_by_col(pj_iso_by_trial),
+    r_hat_by_trial = r_hat_by_trial,
+    r_hat_mean = mean_by_col(r_hat_by_trial),
     n_by_dose = n_by_dose / ntrial,
     unique_n_by_dose = unique_n_by_dose / ntrial,
     nipde_by_dose = nipde_by_dose / ntrial,

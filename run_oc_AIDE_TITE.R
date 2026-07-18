@@ -383,6 +383,29 @@ combine_oc_AIDE_TITE_results <- function(files) {
   total_unique <- unlist(lapply(x, `[[`, "total_unique_by_trial"), use.names = FALSE)
   duration <- unlist(lapply(x, `[[`, "duration_by_trial"), use.names = FALSE)
 
+  bind_trial_matrix <- function(field) {
+    mats <- lapply(x, function(z) z[[field]])
+    mats <- mats[!vapply(mats, is.null, logical(1))]
+    if (length(mats) == 0L) return(NULL)
+    do.call(rbind, mats)
+  }
+
+  mean_by_col <- function(mat) {
+    if (is.null(mat)) return(rep(NA_real_, ndose))
+    apply(mat, 2, function(z) {
+      if (all(is.na(z))) NA_real_ else mean(z, na.rm = TRUE)
+    })
+  }
+
+  p_hat_by_trial <- bind_trial_matrix("p_hat_by_trial")
+  crm_pj_by_trial <- bind_trial_matrix("crm_pj_by_trial")
+  pj_iso_by_trial <- bind_trial_matrix("pj_iso_by_trial")
+  if (is.null(p_hat_by_trial)) p_hat_by_trial <- crm_pj_by_trial
+  if (is.null(p_hat_by_trial)) p_hat_by_trial <- pj_iso_by_trial
+  if (is.null(crm_pj_by_trial)) crm_pj_by_trial <- p_hat_by_trial
+  if (is.null(pj_iso_by_trial)) pj_iso_by_trial <- p_hat_by_trial
+  r_hat_by_trial <- bind_trial_matrix("r_hat_by_trial")
+
   weighted_mean_vec <- function(field) {
     Reduce(
       "+",
@@ -422,6 +445,15 @@ combine_oc_AIDE_TITE_results <- function(files) {
   out$earlystop <- earlystop
   out$earlystop_count <- earlystop_count
   out$final_MTD <- final_mtd
+
+  out$p_hat_by_trial <- p_hat_by_trial
+  out$p_hat_mean <- mean_by_col(p_hat_by_trial)
+  out$crm_pj_by_trial <- crm_pj_by_trial
+  out$crm_pj_mean <- mean_by_col(crm_pj_by_trial)
+  out$pj_iso_by_trial <- pj_iso_by_trial
+  out$pj_iso_mean <- mean_by_col(pj_iso_by_trial)
+  out$r_hat_by_trial <- r_hat_by_trial
+  out$r_hat_mean <- mean_by_col(r_hat_by_trial)
 
   out$n_by_dose <- n_by_dose
   out$unique_n_by_dose <- unique_n_by_dose
@@ -1004,6 +1036,7 @@ run_one_aide_task <- function(task) {
       dlt_alpha = task$dlt_alpha,
 
       restrict_to_tried = task$restrict_to_tried,
+      restrict_to_target = task$restrict_to_target,
       r_carry = task$r_carry,
 
       crm_r_model = task$crm_r_model,
