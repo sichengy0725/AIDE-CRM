@@ -10,11 +10,9 @@
 ##   cyc-{cycle_max}-rate-{arrival_rate}-Nmax-{Nmax_eff}-ipde-{1/2}-
 ##   newfirst-{1/2}-neval-{n_eval_escalate}-tried-{0/1}/
 ##
-## Combined file:
-##   {scenario_set_name}_SC{sc}_{model}_{method_tag}_a{alpha_true}_r{r_carry}_
-##   rate{arrival_rate}_cyc{cycle_max}_Nmax{Nmax_eff}_ipde{1/2}_cont{0/1}_
-##   newfirst{1/2}_neval{n_eval_escalate}_tried{0/1}-
-##   job-{job}-combined.rds
+## Raw RDS file written by run_oc_AIDE.R:
+##   {scenario_set_name}_SC{sc}-{model}-{method_tag}-a{alpha_true}-r{r_carry}-
+##   cyc{cycle_max}-tried{0/1}-j{job}-b{block}-s{seed}-n{ntrial}.rds
 ##
 ## Supports:
 ##   BOIN: boin / approx1 / approx2 with r_fixed, r_mle, or r_adaptive
@@ -324,44 +322,8 @@ make_group_key <- function(sc,
   )
 }
 
-make_filename <- function(sc,
-                          model,
-                          method_tag,
-                          alpha_true,
-                          r_carry,
-                           arrival_rate,
-                           cycle_max,
-                           Nmax_eff,
-                           ipde_design,
-                           continuous_enrollment,
-                           new_pat_first,
-                           n_eval_escalate,
-                           restrict_to_tried,
-                          job) {
-  paste0(
-    make_group_key(
-      sc = sc,
-      model = model,
-      method_tag = method_tag,
-      alpha_true = alpha_true,
-      r_carry = r_carry,
-       arrival_rate = arrival_rate,
-       cycle_max = cycle_max,
-       Nmax_eff = Nmax_eff,
-       ipde_design = ipde_design,
-       continuous_enrollment = continuous_enrollment,
-       new_pat_first = new_pat_first,
-       n_eval_escalate = n_eval_escalate,
-       restrict_to_tried = restrict_to_tried
-    ),
-    "-job-", job,
-    "-combined.rds"
-  )
-}
-
-## Legacy cluster runs saved one raw RDS per trial/block instead of a
-## per-job "-combined.rds" file. These RDS objects have the same fields used
-## by summarize_aide_files(), so they can be summarized directly.
+## Each raw task RDS has the fields used by summarize_aide_files(), so raw
+## files can be summarized directly without reading combined job artifacts.
 make_raw_file_pattern <- function(sc,
                                   model,
                                   method_tag,
@@ -889,96 +851,34 @@ for (setting_i in seq_len(nrow(setting_grid))) {
                     folderpath <- folder_info$folderpath
                     file_method_tag <- folder_info$method_tag
 
-                    files <- file.path(
-                      folderpath,
-                      vapply(
-                        jobs.expected,
-                        function(j) {
-                          make_filename(
-                            sc = sc,
-                            model = model,
-                            method_tag = file_method_tag,
-                            alpha_true = alpha_true,
-                            r_carry = r_carry,
-                             arrival_rate = arrival_rate,
-                             cycle_max = cycle_max,
-                             Nmax_eff = Nmax_eff,
-                             ipde_design = ipde_design,
-                             continuous_enrollment = continuous_enrollment,
-                             new_pat_first = new_pat_first,
-                             n_eval_escalate = n_eval_escalate,
-                             restrict_to_tried = restrict_to_tried,
-                            job = j
-                          )
-                        },
-                        character(1)
-                      )
+                    raw_pattern <- make_raw_file_pattern(
+                      sc = sc,
+                      model = model,
+                      method_tag = file_method_tag,
+                      alpha_true = alpha_true,
+                      r_carry = r_carry,
+                      cycle_max = cycle_max,
+                      restrict_to_tried = restrict_to_tried
                     )
-
-                    exists.vec <- file.exists(files)
-                    files.use <- files[exists.vec]
-                    missing.jobs <- jobs.expected[!exists.vec]
-
-                    ## Fallback: discover matching combined files in the folder.
-                    ## This is useful if a run was started at a non-1 job index,
-                    ## or if jobs.expected does not exactly match the submitted array.
-                    if (length(files.use) == 0L && dir.exists(folderpath)) {
-                      strict_key <- make_group_key(
-                        sc = sc,
-                        model = model,
-                        method_tag = file_method_tag,
-                        alpha_true = alpha_true,
-                        r_carry = r_carry,
-                         arrival_rate = arrival_rate,
-                         cycle_max = cycle_max,
-                         Nmax_eff = Nmax_eff,
-                         ipde_design = ipde_design,
-                         continuous_enrollment = continuous_enrollment,
-                         new_pat_first = new_pat_first,
-                         n_eval_escalate = n_eval_escalate,
-                         restrict_to_tried = restrict_to_tried
-                      )
-                      pattern <- paste0("^", strict_key, "-job-[0-9]+-combined\\.rds$")
-                      files.use <- list.files(
-                        folderpath,
-                        pattern = pattern,
-                        full.names = TRUE
-                      )
-                      if (length(files.use) > 0L) {
-                        found_jobs <- as.integer(sub(
-                          paste0(".*-job-([0-9]+)-combined\\.rds$"),
-                          "\\1",
-                          basename(files.use)
-                        ))
-                        missing.jobs <- setdiff(jobs.expected, found_jobs)
-                      }
-
-                      ## Older runs have one raw RDS per job/block, such as
-                      ## ...-j1536-b1-s1536-n1.rds, with no combined suffix.
-                      if (length(files.use) == 0L) {
-                        raw_pattern <- make_raw_file_pattern(
-                          sc = sc,
-                          model = model,
-                          method_tag = file_method_tag,
-                          alpha_true = alpha_true,
-                          r_carry = r_carry,
-                          cycle_max = cycle_max,
-                          restrict_to_tried = restrict_to_tried
-                        )
-                        files.use <- list.files(
-                          folderpath,
-                          pattern = raw_pattern,
-                          full.names = TRUE
-                        )
-                        if (length(files.use) > 0L) {
-                          found_jobs <- as.integer(sub(
-                            ".*-j([0-9]+)-b[0-9]+-s[0-9]+-n[0-9]+\\.rds$",
-                            "\\1",
-                            basename(files.use)
-                          ))
-                          missing.jobs <- setdiff(jobs.expected, unique(found_jobs))
-                        }
-                      }
+                    files.use <- if (dir.exists(folderpath)) {
+                      list.files(folderpath, pattern = raw_pattern, full.names = TRUE)
+                    } else {
+                      character(0)
+                    }
+                    found_jobs <- if (length(files.use) > 0L) {
+                      as.integer(sub(
+                        ".*-j([0-9]+)-b[0-9]+-s[0-9]+-n[0-9]+\\.rds$",
+                        "\\1",
+                        basename(files.use)
+                      ))
+                    } else {
+                      integer(0)
+                    }
+                    missing.jobs <- setdiff(jobs.expected, unique(found_jobs))
+                    example_file <- if (length(files.use) > 0L) {
+                      files.use[1L]
+                    } else {
+                      file.path(folderpath, raw_pattern)
                     }
 
                     cat("\n====================================\n")
@@ -1001,7 +901,7 @@ for (setting_i in seq_len(nrow(setting_grid))) {
                     cat("Continuous:", continuous_enrollment, "\n")
                     cat("Restrict to tried:", restrict_to_tried, "\n")
                     cat("Folder:", folderpath, "\n")
-                    cat("Example file:", files[1], "\n")
+                    cat("Raw-RDS pattern:", example_file, "\n")
                     cat("Found", length(files.use), "files; missing", length(missing.jobs), "jobs.\n")
                     cat("====================================\n")
 
@@ -1032,7 +932,7 @@ for (setting_i in seq_len(nrow(setting_grid))) {
                       Continuous_Enrollment = as.integer(isTRUE(continuous_enrollment)),
                       Restrict_To_Tried = as.integer(isTRUE(restrict_to_tried)),
                       Folder = folderpath,
-                      Example_file = files[1],
+                      Example_file = example_file,
                       n_found = length(files.use),
                       n_missing = length(missing.jobs),
                       missing_jobs = paste(missing.jobs, collapse = ","),
