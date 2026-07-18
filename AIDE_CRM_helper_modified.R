@@ -1336,7 +1336,6 @@ select.mtd.crm <- function(target,
     n_eff[j] <- sum(dat2$y[rows_j] == 1L) +
       sum(dat2$tite_weight[rows_j & dat2$y == 0L])
   }
-  
   fit <- crm_fit(
     dat = dat2,
     ndose = ndose,

@@ -18,7 +18,9 @@
 ##
 ## Supports:
 ##   BOIN: boin / approx1 / approx2 with r_fixed, r_mle, or r_adaptive
-##   CRM : fixed / random / level / alpha_crm / cumu_crm
+##   CRM : fixed / random / level / alpha_crm / cumu_crm.  Current
+##         run_oc_AIDE.R writes fixed CRM as crm_r_fixed; older result folders
+##         may use the r_fixed alias and are discovered automatically.
 ##   CFO : empirical / pride
 ## ============================================================
 
@@ -246,6 +248,48 @@ resolve_folderpath <- function(foldername) {
     return(nested)
   }
   foldername
+}
+
+method_tag_candidates <- function(model, method_tag) {
+  if (identical(model, "CRM") && identical(method_tag, "crm_r_fixed")) {
+    ## crm_r_fixed is the tag emitted by the current runner.  Keep r_fixed as
+    ## a legacy read-only alias for previously submitted result folders.
+    return(c("crm_r_fixed", "r_fixed"))
+  }
+  method_tag
+}
+
+resolve_result_folder <- function(model,
+                                  method_tag,
+                                  cycle_max,
+                                  arrival_rate,
+                                  Nmax_eff,
+                                  ipde_design,
+                                  new_pat_first,
+                                  n_eval_escalate,
+                                  restrict_to_tried) {
+  tags <- method_tag_candidates(model, method_tag)
+  attempts <- lapply(tags, function(tag) {
+    foldername <- make_foldername(
+      model = model,
+      method_tag = tag,
+      cycle_max = cycle_max,
+      arrival_rate = arrival_rate,
+      Nmax_eff = Nmax_eff,
+      ipde_design = ipde_design,
+      new_pat_first = new_pat_first,
+      n_eval_escalate = n_eval_escalate,
+      restrict_to_tried = restrict_to_tried
+    )
+    list(
+      method_tag = tag,
+      foldername = foldername,
+      folderpath = resolve_folderpath(foldername)
+    )
+  })
+
+  found <- vapply(attempts, function(x) dir.exists(x$folderpath), logical(1))
+  attempts[[if (any(found)) which(found)[1L] else 1L]]
 }
 
 make_group_key <- function(sc,
@@ -831,7 +875,7 @@ for (setting_i in seq_len(nrow(setting_grid))) {
                       cfo_method = if (model == "CFO") cfo_method else NULL
                     )
 
-                    foldername <- make_foldername(
+                    folder_info <- resolve_result_folder(
                       model = model,
                       method_tag = method_tag,
                       cycle_max = cycle_max,
@@ -842,8 +886,8 @@ for (setting_i in seq_len(nrow(setting_grid))) {
                       n_eval_escalate = n_eval_escalate,
                       restrict_to_tried = restrict_to_tried
                     )
-
-                    folderpath <- resolve_folderpath(foldername)
+                    folderpath <- folder_info$folderpath
+                    file_method_tag <- folder_info$method_tag
 
                     files <- file.path(
                       folderpath,
@@ -853,7 +897,7 @@ for (setting_i in seq_len(nrow(setting_grid))) {
                           make_filename(
                             sc = sc,
                             model = model,
-                            method_tag = method_tag,
+                            method_tag = file_method_tag,
                             alpha_true = alpha_true,
                             r_carry = r_carry,
                              arrival_rate = arrival_rate,
@@ -882,7 +926,7 @@ for (setting_i in seq_len(nrow(setting_grid))) {
                       strict_key <- make_group_key(
                         sc = sc,
                         model = model,
-                        method_tag = method_tag,
+                        method_tag = file_method_tag,
                         alpha_true = alpha_true,
                         r_carry = r_carry,
                          arrival_rate = arrival_rate,
@@ -915,7 +959,7 @@ for (setting_i in seq_len(nrow(setting_grid))) {
                         raw_pattern <- make_raw_file_pattern(
                           sc = sc,
                           model = model,
-                          method_tag = method_tag,
+                          method_tag = file_method_tag,
                           alpha_true = alpha_true,
                           r_carry = r_carry,
                           cycle_max = cycle_max,

@@ -783,6 +783,7 @@ simulate_AIDE_CRM_TITE_design <- function(
       stop = 1L
     )
   } else {
+    browser()
     final_fit <- select.mtd.crm(
       target = target,
       dat = dat_final,
