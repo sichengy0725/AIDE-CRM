@@ -13,6 +13,8 @@
 ##   7. average overdose selection
 ##   8. average overdose allocation
 ##   9. average underdose allocation
+##  10. MCSE of the average MTD selection rate
+##  11. paired MTD-selection difference from the oracle (mean and SD)
 ##
 ## Selection metrics are percentages. Allocation metrics use n_by_dose,
 ## the AIDE dose-administration allocation stored by get_oc_sim_AIDE().
@@ -66,18 +68,26 @@ boin_r_carry_list_r_mle <- c(0)
 boin_r_carry_list_fixed <- c(0)
 
 crm_r_model_list <- if (scenario_dose_count == 5L) {
-  c("fixed", "random", "level", "alpha_crm", "cumu_crm")
+  c("r_fixed", "random", "level", "alpha_crm", "cumu_crm")
 } else {
-  c("fixed", "random", "alpha_crm", "cumu_crm")
+  c("r_fixed", "random", "alpha_crm", "cumu_crm")
 }
 
 crm_r_carry_values <- list(
-  fixed     = c(0),
+  r_fixed   = c(0),
   random    = c(0),
   level     = c(0),
   alpha_crm = c(0),
   cumu_crm  = c(0)
 )
+
+## The reference in the paired comparison is the no-carryover fixed CRM.
+## It is taken from the alpha_true = 0 setting, regardless of the alpha_true
+## value for the method being compared.
+oracle_model <- "CRM"
+oracle_crm_r_model <- "r_fixed"
+oracle_alpha_true <- 0
+oracle_r_carry <- 0
 
 cfo_method_list <- c("empirical", "pride")
 
@@ -198,6 +208,11 @@ make_method_tag <- function(model,
     return(paste0(boin_method, "-", boin_r_estimator))
   }
   if (model == "CRM") {
+    ## The runner writes the fixed-r CRM as crm_r_fixed.  Accept the older
+    ## aliases here as well so the extracted label is always unambiguous.
+    if (crm_r_model %in% c("fixed", "r_fixed", "crm_fixed", "crm_r_fixed")) {
+      return("crm_r_fixed")
+    }
     return(paste0("crm_", crm_r_model))
   }
   paste0("cfo_", cfo_method)
@@ -307,6 +322,33 @@ sum_count_finite <- function(x) {
   z <- as.numeric(x)
   keep <- is.finite(z)
   c(sum = sum(z[keep]), count = sum(keep))
+}
+
+calc_mtd_selection_mcse_pct <- function(mtd_selection_pct, ntrial) {
+  ## The reported MTD-selection percentage is the equally weighted mean of
+  ## scenario-level rates.  Conditional on the sampled scenarios, its Monte
+  ## Carlo variance is sum_s p_s (1 - p_s) / n_s divided by S^2.
+  keep <- is.finite(mtd_selection_pct) & is.finite(ntrial) & ntrial > 0
+  if (!any(keep)) return(NA_real_)
+
+  p_hat <- pmin(pmax(mtd_selection_pct[keep] / 100, 0), 1)
+  n_s <- ntrial[keep]
+  100 * sqrt(sum(p_hat * (1 - p_hat) / n_s) / length(p_hat)^2)
+}
+
+make_data_key <- function(dat, columns) {
+  if (nrow(dat) == 0L) return(character(0))
+
+  pieces <- lapply(columns, function(nm) {
+    x <- dat[[nm]]
+    if (is.numeric(x)) {
+      return(formatC(x, digits = 15, format = "fg", flag = "#"))
+    }
+    x <- as.character(x)
+    x[is.na(x)] <- "<NA>"
+    x
+  })
+  do.call(paste, c(pieces, sep = "\r"))
 }
 
 collapse_integer_ranges <- function(x) {
@@ -430,13 +472,21 @@ make_setting_meta <- function(model,
                               restrict_to_tried,
                               restrict_to_target,
                               scenario_set_name) {
+  crm_r_model_label <- if (
+    model == "CRM" && crm_r_model %in% c("fixed", "r_fixed", "crm_fixed", "crm_r_fixed")
+  ) {
+    "r_fixed"
+  } else {
+    crm_r_model
+  }
+
   data.frame(
     Scenario_Set = scenario_set_name,
     Model = model,
     Method = method_tag,
     BOIN_Method = if (model == "BOIN") boin_method else NA_character_,
     BOIN_r_estimator = if (model == "BOIN") boin_r_estimator else NA_character_,
-    CRM_r_model = if (model == "CRM") crm_r_model else NA_character_,
+    CRM_r_model = if (model == "CRM") crm_r_model_label else NA_character_,
     CFO_Method = if (model == "CFO") cfo_method else NA_character_,
     Alpha_true = alpha_true,
     r_carry = r_carry,
@@ -473,6 +523,16 @@ summarize_accumulator <- function(acc, scenario_meta, setting_meta, n_files_foun
   avg_overdose_selection <- NA_real_
   avg_overdose_allocation <- NA_real_
   avg_underdose_allocation <- NA_real_
+  mcse_mtd_selection <- NA_real_
+  scenario_mtd_summary <- cbind(
+    setting_meta[0, , drop = FALSE],
+    data.frame(
+      Scenario = integer(0),
+      ntrial = numeric(0),
+      MTD_Selection_pct = numeric(0),
+      stringsAsFactors = FALSE
+    )
+  )
 
   if (n_found > 0L) {
     ntrial_found <- acc$ntrial[found_idx]
@@ -544,6 +604,20 @@ summarize_accumulator <- function(acc, scenario_meta, setting_meta, n_files_foun
     avg_overdose_selection <- mean(overdose_selection, na.rm = TRUE)
     avg_overdose_allocation <- mean(overdose_allocation, na.rm = TRUE)
     avg_underdose_allocation <- mean(underdose_allocation, na.rm = TRUE)
+    mcse_mtd_selection <- calc_mtd_selection_mcse_pct(
+      mtd_selection_pct = mtd_selection,
+      ntrial = ntrial_found
+    )
+
+    scenario_mtd_summary <- cbind(
+      setting_meta[rep(1L, n_found), , drop = FALSE],
+      data.frame(
+        Scenario = scenario_id_list[found_idx],
+        ntrial = ntrial_found,
+        MTD_Selection_pct = mtd_selection,
+        stringsAsFactors = FALSE
+      )
+    )
   }
 
   wide_summary <- cbind(
@@ -569,6 +643,7 @@ summarize_accumulator <- function(acc, scenario_meta, setting_meta, n_files_foun
   wide_summary$Avg_Total_Unique_Patients <- avg_total_unique
   wide_summary$Avg_Trial_Duration <- avg_duration
   wide_summary$Avg_MTD_Selection_pct <- avg_mtd_selection
+  wide_summary$MCSE_MTD_Selection_pct <- mcse_mtd_selection
   wide_summary$Avg_MTD_Allocation <- avg_mtd_allocation
   wide_summary$Avg_Overdose_Selection_pct <- avg_overdose_selection
   wide_summary$Avg_Overdose_Allocation <- avg_overdose_allocation
@@ -581,10 +656,13 @@ summarize_accumulator <- function(acc, scenario_meta, setting_meta, n_files_foun
     "Average total unique patients",
     "Average trial duration",
     "Average MTD selection %",
+    "MCSE of MTD selection %",
     "Average MTD allocation",
     "Average overdose selection %",
     "Average overdose allocation",
-    "Average underdose allocation"
+    "Average underdose allocation",
+    "Mean paired MTD selection difference vs oracle %",
+    "SD paired MTD selection difference vs oracle %"
   )
 
   table_summary <- setting_meta[rep(1L, length(metrics)), , drop = FALSE]
@@ -599,16 +677,19 @@ summarize_accumulator <- function(acc, scenario_meta, setting_meta, n_files_foun
   table_summary$n_scenarios_missing <- length(missing_ids)
   table_summary$n_files_found <- n_files_found
   table_summary$ntrial_total_from_files <- sum(acc$ntrial)
+  table_summary$Oracle_Reference <- NA_character_
+  table_summary$n_scenarios_paired_with_oracle <- NA_integer_
 
   table_summary[1, dose_cols] <- avg_selection_by_dose
   table_summary[2, dose_cols] <- avg_allocation_by_dose
   table_summary[3, "Total"] <- avg_total_unique
   table_summary[4, "Duration"] <- avg_duration
   table_summary[5, "Total"] <- avg_mtd_selection
-  table_summary[6, "Total"] <- avg_mtd_allocation
-  table_summary[7, "Total"] <- avg_overdose_selection
-  table_summary[8, "Total"] <- avg_overdose_allocation
-  table_summary[9, "Total"] <- avg_underdose_allocation
+  table_summary[6, "Total"] <- mcse_mtd_selection
+  table_summary[7, "Total"] <- avg_mtd_allocation
+  table_summary[8, "Total"] <- avg_overdose_selection
+  table_summary[9, "Total"] <- avg_overdose_allocation
+  table_summary[10, "Total"] <- avg_underdose_allocation
 
   missing_summary <- cbind(
     setting_meta,
@@ -625,7 +706,8 @@ summarize_accumulator <- function(acc, scenario_meta, setting_meta, n_files_foun
   list(
     wide_summary = wide_summary,
     table_summary = table_summary,
-    missing_summary = missing_summary
+    missing_summary = missing_summary,
+    scenario_mtd_summary = scenario_mtd_summary
   )
 }
 
@@ -679,6 +761,7 @@ cat("Allocation field:", allocation_field, "\n")
 all.wide.summary <- list()
 all.table.summary <- list()
 all.missing.summary <- list()
+all.scenario.mtd.summary <- list()
 
 summary_idx <- 1L
 missing_idx <- 1L
@@ -855,6 +938,7 @@ for (Nmax_eff in Nmax_eff_list) {
 
                         all.wide.summary[[summary_idx]] <- one$wide_summary
                         all.table.summary[[summary_idx]] <- one$table_summary
+                        all.scenario.mtd.summary[[summary_idx]] <- one$scenario_mtd_summary
                         summary_idx <- summary_idx + 1L
 
                         cat(
@@ -885,6 +969,150 @@ if (length(all.wide.summary) == 0L) {
 wide.summary.df <- do.call(rbind, all.wide.summary)
 table.summary.df <- do.call(rbind, all.table.summary)
 missing.summary.df <- do.call(rbind, all.missing.summary)
+scenario.mtd.summary.df <- do.call(rbind, all.scenario.mtd.summary)
+
+## ------------------------------------------------------------
+## Pair every method with the alpha_true = 0 fixed-CRM oracle
+## ------------------------------------------------------------
+
+setting_key_cols <- c(
+  "Scenario_Set", "Model", "Method", "BOIN_Method", "BOIN_r_estimator",
+  "CRM_r_model", "CFO_Method", "Alpha_true", "r_carry", "Accrual",
+  "T_assess", "Nmax_eff", "Dose_Cap", "Cycle_Max",
+  "Continuous_Enrollment", "Restrict_To_Tried", "Restrict_To_Target"
+)
+oracle_match_key_cols <- c(
+  "Scenario_Set", "Accrual", "T_assess", "Nmax_eff", "Dose_Cap",
+  "Cycle_Max", "Continuous_Enrollment", "Restrict_To_Tried",
+  "Restrict_To_Target"
+)
+
+scenario.mtd.summary.df$.setting_key <- make_data_key(
+  scenario.mtd.summary.df,
+  setting_key_cols
+)
+scenario.mtd.summary.df$.oracle_match_key <- make_data_key(
+  scenario.mtd.summary.df,
+  oracle_match_key_cols
+)
+wide.summary.df$.setting_key <- make_data_key(wide.summary.df, setting_key_cols)
+table.summary.df$.setting_key <- make_data_key(table.summary.df, setting_key_cols)
+
+is_oracle <-
+  scenario.mtd.summary.df$Model == oracle_model &
+  scenario.mtd.summary.df$CRM_r_model == oracle_crm_r_model &
+  abs(scenario.mtd.summary.df$Alpha_true - oracle_alpha_true) < 1e-12 &
+  abs(scenario.mtd.summary.df$r_carry - oracle_r_carry) < 1e-12
+
+oracle_setting_map <- unique(scenario.mtd.summary.df[
+  is_oracle,
+  c(".setting_key", ".oracle_match_key"),
+  drop = FALSE
+])
+oracle_key_count <- table(oracle_setting_map$.oracle_match_key)
+ambiguous_oracle_keys <- names(oracle_key_count)[oracle_key_count > 1L]
+if (length(ambiguous_oracle_keys) > 0L) {
+  warning(
+    "Multiple alpha_true = 0 fixed-CRM oracle settings were found for ",
+    length(ambiguous_oracle_keys),
+    " design setting(s); oracle differences are reported as NA for those settings."
+  )
+}
+
+setting_keys <- unique(scenario.mtd.summary.df$.setting_key)
+oracle_comparison <- lapply(setting_keys, function(setting_key) {
+  method_data <- scenario.mtd.summary.df[
+    scenario.mtd.summary.df$.setting_key == setting_key,
+    c("Scenario", "MTD_Selection_pct", ".oracle_match_key"),
+    drop = FALSE
+  ]
+  match_key <- method_data$.oracle_match_key[1L]
+  candidate_oracles <- oracle_setting_map$.setting_key[
+    oracle_setting_map$.oracle_match_key == match_key
+  ]
+
+  out <- data.frame(
+    .setting_key = setting_key,
+    Oracle_Reference = NA_character_,
+    n_scenarios_paired_with_oracle = NA_integer_,
+    Mean_Paired_MTD_Selection_Diff_vs_Oracle_pct = NA_real_,
+    SD_Paired_MTD_Selection_Diff_vs_Oracle_pct = NA_real_,
+    stringsAsFactors = FALSE
+  )
+
+  if (length(candidate_oracles) != 1L) {
+    return(out)
+  }
+
+  oracle_data <- scenario.mtd.summary.df[
+    scenario.mtd.summary.df$.setting_key == candidate_oracles,
+    c("Scenario", "MTD_Selection_pct"),
+    drop = FALSE
+  ]
+  names(oracle_data)[2L] <- "Oracle_MTD_Selection_pct"
+  names(method_data)[2L] <- "Method_MTD_Selection_pct"
+
+  paired <- merge(method_data, oracle_data, by = "Scenario", all = FALSE)
+  paired <- paired[
+    is.finite(paired$Method_MTD_Selection_pct) &
+      is.finite(paired$Oracle_MTD_Selection_pct),
+    , drop = FALSE
+  ]
+
+  if (nrow(paired) == 0L) {
+    return(out)
+  }
+
+  ## Positive values mean the method has higher MTD selection than the
+  ## alpha_true = 0 fixed-CRM oracle for the same random scenario.
+  delta <- paired$Method_MTD_Selection_pct - paired$Oracle_MTD_Selection_pct
+  out$Oracle_Reference <- "CRM r_fixed (alpha_true = 0, r_carry = 0)"
+  out$n_scenarios_paired_with_oracle <- nrow(paired)
+  out$Mean_Paired_MTD_Selection_Diff_vs_Oracle_pct <- mean(delta)
+  out$SD_Paired_MTD_Selection_Diff_vs_Oracle_pct <- if (length(delta) > 1L) {
+    stats::sd(delta)
+  } else {
+    NA_real_
+  }
+  out
+})
+oracle_comparison.df <- do.call(rbind, oracle_comparison)
+
+comparison_index <- match(
+  wide.summary.df$.setting_key,
+  oracle_comparison.df$.setting_key
+)
+wide.summary.df$Oracle_Reference <- oracle_comparison.df$Oracle_Reference[comparison_index]
+wide.summary.df$n_scenarios_paired_with_oracle <-
+  oracle_comparison.df$n_scenarios_paired_with_oracle[comparison_index]
+wide.summary.df$Mean_Paired_MTD_Selection_Diff_vs_Oracle_pct <-
+  oracle_comparison.df$Mean_Paired_MTD_Selection_Diff_vs_Oracle_pct[comparison_index]
+wide.summary.df$SD_Paired_MTD_Selection_Diff_vs_Oracle_pct <-
+  oracle_comparison.df$SD_Paired_MTD_Selection_Diff_vs_Oracle_pct[comparison_index]
+
+comparison_index <- match(
+  table.summary.df$.setting_key,
+  oracle_comparison.df$.setting_key
+)
+table.summary.df$Oracle_Reference <- oracle_comparison.df$Oracle_Reference[comparison_index]
+table.summary.df$n_scenarios_paired_with_oracle <-
+  oracle_comparison.df$n_scenarios_paired_with_oracle[comparison_index]
+
+mean_diff_rows <- table.summary.df$Metric ==
+  "Mean paired MTD selection difference vs oracle %"
+sd_diff_rows <- table.summary.df$Metric ==
+  "SD paired MTD selection difference vs oracle %"
+table.summary.df$Total[mean_diff_rows] <-
+  oracle_comparison.df$Mean_Paired_MTD_Selection_Diff_vs_Oracle_pct[
+    comparison_index[mean_diff_rows]
+  ]
+table.summary.df$Total[sd_diff_rows] <-
+  oracle_comparison.df$SD_Paired_MTD_Selection_Diff_vs_Oracle_pct[
+    comparison_index[sd_diff_rows]
+  ]
+
+wide.summary.df$.setting_key <- NULL
+table.summary.df$.setting_key <- NULL
 
 wide.summary.out <- round_numeric_df(wide.summary.df, digits = 4)
 table.summary.out <- round_numeric_df(table.summary.df, digits = 4)

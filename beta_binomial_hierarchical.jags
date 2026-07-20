@@ -1,0 +1,27 @@
+model {
+  ## The supplied a0 and b0 define weak hyperpriors for the two group means.
+  mu_regular ~ dbeta(a0, b0)
+  kappa_regular ~ dgamma(1, 1 / kappa0)
+  mu_ipde ~ dbeta(a0, b0)
+  kappa_ipde ~ dgamma(1, 1 / kappa0)
+
+  for (j in 1:ndose) {
+    p_regular[j] ~ dbeta(
+      mu_regular * kappa_regular,
+      (1 - mu_regular) * kappa_regular
+    )
+    y_regular[j] ~ dbin(p_regular[j], n_regular[j])
+  }
+
+  ## Regular and IPDE efficacy probabilities are identical at dose 1.
+  p_ipde[1] <- p_regular[1]
+  y_ipde[1] ~ dbin(p_ipde[1], n_ipde[1])
+
+  for (j in 2:ndose) {
+    p_ipde[j] ~ dbeta(
+      mu_ipde * kappa_ipde,
+      (1 - mu_ipde) * kappa_ipde
+    )
+    y_ipde[j] ~ dbin(p_ipde[j], n_ipde[j])
+  }
+}
