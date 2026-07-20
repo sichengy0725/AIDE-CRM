@@ -50,31 +50,30 @@ if (!target_gap %in% c(0.05, 0.10, 0.15)) {
 ## run_oc_AIDE.R defaults
 T_assess <- 28
 C <- 3L
-cycle_max_list <- c(1L, 2L, 3L)
+cycle_max_list <- c(2L)
 Nmax_eff_list <- c(30L)
 dose_cap <- 3L
 continuous_enrollment <- TRUE
+ipde_design <- 1L
+new_pat_first <- 1L
+n_eval_escalate <- 3L
 restrict_to_tried_list <- c(TRUE)
 restrict_to_target_list <- c(FALSE)
 
-## CFO results are available only for alpha_true = 0.6 and 0.9; retain the
-## full alpha grid for BOIN and CRM.
+## CFO is disabled for this extraction.  Set this to c(0.6, 0.9) when CFO
+## result files are available; BOIN and CRM retain the full alpha grid.
 alpha_true_list_non_cfo <- c(0, 0.3, 0.6, 0.9)
-alpha_true_list_cfo <- c(0.6, 0.9)
-arrival_rate_list <- c(1 / 14)
+alpha_true_list_cfo <- c()
+arrival_rate_list <- c(1 / 56)
 
 model_list <- c("BOIN", "CRM", "CFO")
 
-boin_method_list <- c("approx1", "approx2")
+boin_method_list <- c("boin")
 boin_r_estimator_list <- c("r_fixed")
 boin_r_carry_list_r_mle <- c(0)
 boin_r_carry_list_fixed <- c(0)
 
-crm_r_model_list <- if (scenario_dose_count == 5L) {
-  c("r_fixed", "random", "level", "alpha_crm", "cumu_crm")
-} else {
-  c("r_fixed", "random", "alpha_crm", "cumu_crm")
-}
+crm_r_model_list <- c("r_fixed", "random", "alpha_crm", "cumu_crm")
 
 crm_r_carry_values <- list(
   r_fixed   = c(0),
@@ -92,7 +91,7 @@ oracle_crm_r_model <- "r_fixed"
 oracle_alpha_true <- 0
 oracle_r_carry <- 0
 
-cfo_method_list <- c("empirical", "pride")
+cfo_method_list <- c("pride")
 
 ## Allocation metric requested here. This matches the existing extractor's
 ## "# Pts Treated" / n_by_dose metric, which is dose administrations.
@@ -216,7 +215,7 @@ make_method_tag <- function(model,
     if (crm_r_model %in% c("fixed", "r_fixed", "crm_fixed", "crm_r_fixed")) {
       return("crm_r_fixed")
     }
-    return(paste0("crm_", crm_r_model))
+    return(crm_r_model)
   }
   paste0("cfo_", cfo_method)
 }
@@ -226,6 +225,9 @@ make_foldername <- function(model,
                             cycle_max,
                             arrival_rate,
                             Nmax_eff,
+                            ipde_design,
+                            new_pat_first,
+                            n_eval_escalate,
                             restrict_to_tried,
                             restrict_to_target,
                             scenario_set) {
@@ -238,6 +240,9 @@ make_foldername <- function(model,
     "-cyc-", fmt_short(cycle_max),
     "-rate-", fmt_short(arrival_rate),
     "-Nmax-", fmt_short(Nmax_eff),
+    "-ipde-", as.integer(ipde_design),
+    "-newfirst-", as.integer(new_pat_first),
+    "-neval-", as.integer(n_eval_escalate),
     "-tried-", as.integer(isTRUE(restrict_to_tried)),
     if (isTRUE(restrict_to_target)) "-ptarget-1" else ""
   )
@@ -263,7 +268,10 @@ make_file_pattern <- function(scenario_set,
                               arrival_rate,
                               cycle_max,
                               Nmax_eff,
+                              ipde_design,
                               continuous_enrollment,
+                              new_pat_first,
+                              n_eval_escalate,
                               restrict_to_tried,
                               restrict_to_target) {
   paste0(
@@ -283,8 +291,14 @@ make_file_pattern <- function(scenario_set,
     regex_escape(fmt_short(cycle_max)),
     "_Nmax",
     regex_escape(fmt_short(Nmax_eff)),
+    "_ipde",
+    as.integer(ipde_design),
     "_cont",
     as.integer(isTRUE(continuous_enrollment)),
+    "_newfirst",
+    as.integer(new_pat_first),
+    "_neval",
+    as.integer(n_eval_escalate),
     "_tried",
     as.integer(isTRUE(restrict_to_tried)),
     if (isTRUE(restrict_to_target)) "_ptarget1" else "",
@@ -471,7 +485,10 @@ make_setting_meta <- function(model,
                               arrival_rate,
                               Nmax_eff,
                               cycle_max,
+                              ipde_design,
                               continuous_enrollment,
+                              new_pat_first,
+                              n_eval_escalate,
                               restrict_to_tried,
                               restrict_to_target,
                               scenario_set_name) {
@@ -498,7 +515,10 @@ make_setting_meta <- function(model,
     Nmax_eff = Nmax_eff,
     Dose_Cap = dose_cap,
     Cycle_Max = cycle_max,
+    IPDE_Design = as.integer(ipde_design),
     Continuous_Enrollment = as.integer(isTRUE(continuous_enrollment)),
+    New_Pat_First = as.integer(new_pat_first),
+    N_Eval_Escalate = as.integer(n_eval_escalate),
     Restrict_To_Tried = as.integer(isTRUE(restrict_to_tried)),
     Restrict_To_Target = as.integer(isTRUE(restrict_to_target)),
     stringsAsFactors = FALSE
@@ -734,7 +754,7 @@ scenario_file <- make_random_scenario_filename(
 )
 
 scenario_set_name <- tools::file_path_sans_ext(basename(scenario_file))
-results_root <- paste0("oc_results_cluster_AIDE_", scenario_set_name)
+results_root <- paste0("oc_results_cluster_AIDE_new", scenario_set_name)
 
 scenario_meta <- load_scenario_file(scenario_file)
 dose_col_names <- paste0("Dose", seq_len(scenario_dose_count))
@@ -830,6 +850,9 @@ for (Nmax_eff in Nmax_eff_list) {
                           cycle_max = cycle_max,
                           arrival_rate = arrival_rate,
                           Nmax_eff = Nmax_eff,
+                          ipde_design = ipde_design,
+                          new_pat_first = new_pat_first,
+                          n_eval_escalate = n_eval_escalate,
                           restrict_to_tried = restrict_to_tried,
                           restrict_to_target = restrict_to_target,
                           scenario_set = scenario_set_name
@@ -849,7 +872,10 @@ for (Nmax_eff in Nmax_eff_list) {
                           arrival_rate = arrival_rate,
                           Nmax_eff = Nmax_eff,
                           cycle_max = cycle_max,
+                          ipde_design = ipde_design,
                           continuous_enrollment = continuous_enrollment,
+                          new_pat_first = new_pat_first,
+                          n_eval_escalate = n_eval_escalate,
                           restrict_to_tried = restrict_to_tried,
                           restrict_to_target = restrict_to_target,
                           scenario_set_name = scenario_set_name
@@ -988,12 +1014,13 @@ setting_key_cols <- c(
   "Scenario_Set", "Model", "Method", "BOIN_Method", "BOIN_r_estimator",
   "CRM_r_model", "CFO_Method", "Alpha_true", "r_carry", "Accrual",
   "T_assess", "Nmax_eff", "Dose_Cap", "Cycle_Max",
-  "Continuous_Enrollment", "Restrict_To_Tried", "Restrict_To_Target"
+  "IPDE_Design", "Continuous_Enrollment", "New_Pat_First",
+  "N_Eval_Escalate", "Restrict_To_Tried", "Restrict_To_Target"
 )
 oracle_match_key_cols <- c(
   "Scenario_Set", "Accrual", "T_assess", "Nmax_eff", "Dose_Cap",
-  "Cycle_Max", "Continuous_Enrollment", "Restrict_To_Tried",
-  "Restrict_To_Target"
+  "Cycle_Max", "IPDE_Design", "Continuous_Enrollment", "New_Pat_First",
+  "N_Eval_Escalate", "Restrict_To_Tried", "Restrict_To_Target"
 )
 
 scenario.mtd.summary.df$.setting_key <- make_data_key(
