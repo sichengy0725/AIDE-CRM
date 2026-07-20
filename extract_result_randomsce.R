@@ -57,10 +57,13 @@ continuous_enrollment <- TRUE
 restrict_to_tried_list <- c(TRUE)
 restrict_to_target_list <- c(FALSE)
 
-alpha_true_list <- c(0, 0.3, 0.6, 0.9)
+## CFO results are available only for alpha_true = 0.6 and 0.9; retain the
+## full alpha grid for BOIN and CRM.
+alpha_true_list_non_cfo <- c(0, 0.3, 0.6, 0.9)
+alpha_true_list_cfo <- c(0.6, 0.9)
 arrival_rate_list <- c(1 / 14)
 
-model_list <- c("BOIN", "CRM")
+model_list <- c("BOIN", "CRM", "CFO")
 
 boin_method_list <- c("approx1", "approx2")
 boin_r_estimator_list <- c("r_fixed")
@@ -770,6 +773,12 @@ for (Nmax_eff in Nmax_eff_list) {
   for (restrict_to_tried in restrict_to_tried_list) {
     for (restrict_to_target in restrict_to_target_list) {
       for (model in model_list) {
+        alpha_true_loop <- if (model == "CFO") {
+          alpha_true_list_cfo
+        } else {
+          alpha_true_list_non_cfo
+        }
+
         if (model == "BOIN") {
           method_loop <- boin_method_list
           boin_r_estimator_loop <- boin_r_estimator_list
@@ -787,7 +796,7 @@ for (Nmax_eff in Nmax_eff_list) {
           cfo_loop <- cfo_method_list
         }
 
-        for (alpha_true in alpha_true_list) {
+        for (alpha_true in alpha_true_loop) {
           for (arrival_rate in arrival_rate_list) {
             for (cycle_max in cycle_max_list) {
               for (method0 in method_loop) {
