@@ -1,0 +1,550 @@
+"Plot_Alpha","Source_Alpha","Gap","Display_Method","Model","CRM_r_model","CFO_Method","Metric","Raw_Value","Plot_Value","Nmax_eff","n_scenarios_found","n_scenarios_paired_with_oracle"
+0,0,"0.05","CRM","CRM","r_fixed",NA,"Average MTD selection %",34.5191,34.5191,30,10000,10000
+0,0,"0.05","Alpha-CRM","CRM","alpha_crm",NA,"Average MTD selection %",34.2254,34.2254,30,10000,10000
+0,0,"0.05","IPCRM","CRM","cumu_crm",NA,"Average MTD selection %",35.6222,35.6222,30,10000,10000
+0,0,"0.05","Discount CRM","CRM","random",NA,"Average MTD selection %",34.695,34.695,30,10000,10000
+0,0,"0.10","CRM","CRM","r_fixed",NA,"Average MTD selection %",50.3331,50.3331,30,10000,10000
+0,0,"0.10","Alpha-CRM","CRM","alpha_crm",NA,"Average MTD selection %",49.0603,49.0603,30,10000,10000
+0,0,"0.10","IPCRM","CRM","cumu_crm",NA,"Average MTD selection %",49.747,49.747,30,10000,10000
+0,0,"0.10","Discount CRM","CRM","random",NA,"Average MTD selection %",49.752,49.752,30,10000,10000
+0,0,"0.15","CRM","CRM","r_fixed",NA,"Average MTD selection %",59.4232,59.4232,30,9980,9980
+0,0,"0.15","Alpha-CRM","CRM","alpha_crm",NA,"Average MTD selection %",57.7153,57.7153,30,5670,5650
+0,0,"0.15","IPCRM","CRM","cumu_crm",NA,"Average MTD selection %",59.6681,59.6681,30,10000,9980
+0,0,"0.15","Discount CRM","CRM","random",NA,"Average MTD selection %",58.359,58.359,30,9980,9980
+0,0,"0.15","CFO (PRIDE; gap 0.15)","CFO",NA,"pride","Average MTD selection %",59.2,59.2,30,9790,9770
+0,0,"0.05","CRM","CRM","r_fixed",NA,"Average MTD allocation",8.4198,28.066,30,10000,10000
+0,0,"0.05","Alpha-CRM","CRM","alpha_crm",NA,"Average MTD allocation",8.4273,28.091,30,10000,10000
+0,0,"0.05","IPCRM","CRM","cumu_crm",NA,"Average MTD allocation",8.6528,28.8426666666667,30,10000,10000
+0,0,"0.05","Discount CRM","CRM","random",NA,"Average MTD allocation",8.4128,28.0426666666667,30,10000,10000
+0,0,"0.10","CRM","CRM","r_fixed",NA,"Average MTD allocation",11.159,37.1966666666667,30,10000,10000
+0,0,"0.10","Alpha-CRM","CRM","alpha_crm",NA,"Average MTD allocation",10.9767,36.589,30,10000,10000
+0,0,"0.10","IPCRM","CRM","cumu_crm",NA,"Average MTD allocation",10.9637,36.5456666666667,30,10000,10000
+0,0,"0.10","Discount CRM","CRM","random",NA,"Average MTD allocation",11.0045,36.6816666666667,30,10000,10000
+0,0,"0.15","CRM","CRM","r_fixed",NA,"Average MTD allocation",12.8756,42.9186666666667,30,9980,9980
+0,0,"0.15","Alpha-CRM","CRM","alpha_crm",NA,"Average MTD allocation",12.5449,41.8163333333333,30,5670,5650
+0,0,"0.15","IPCRM","CRM","cumu_crm",NA,"Average MTD allocation",12.5448,41.816,30,10000,9980
+0,0,"0.15","Discount CRM","CRM","random",NA,"Average MTD allocation",12.5884,41.9613333333333,30,9980,9980
+0,0,"0.15","CFO (PRIDE; gap 0.15)","CFO",NA,"pride","Average MTD allocation",11.8135,39.3783333333333,30,9790,9770
+0,0,"0.05","CRM","CRM","r_fixed",NA,"Average overdose selection %",25.2668,25.2668,30,10000,10000
+0,0,"0.05","Alpha-CRM","CRM","alpha_crm",NA,"Average overdose selection %",29.9013,29.9013,30,10000,10000
+0,0,"0.05","IPCRM","CRM","cumu_crm",NA,"Average overdose selection %",40.3064,40.3064,30,10000,10000
+0,0,"0.05","Discount CRM","CRM","random",NA,"Average overdose selection %",27.9067,27.9067,30,10000,10000
+0,0,"0.10","CRM","CRM","r_fixed",NA,"Average overdose selection %",23.819,23.819,30,10000,10000
+0,0,"0.10","Alpha-CRM","CRM","alpha_crm",NA,"Average overdose selection %",28.5656,28.5656,30,10000,10000
+0,0,"0.10","IPCRM","CRM","cumu_crm",NA,"Average overdose selection %",35.003,35.003,30,10000,10000
+0,0,"0.10","Discount CRM","CRM","random",NA,"Average overdose selection %",26.1511,26.1511,30,10000,10000
+0,0,"0.15","CRM","CRM","r_fixed",NA,"Average overdose selection %",20.7364,20.7364,30,9980,9980
+0,0,"0.15","Alpha-CRM","CRM","alpha_crm",NA,"Average overdose selection %",24.6168,24.6168,30,5670,5650
+0,0,"0.15","IPCRM","CRM","cumu_crm",NA,"Average overdose selection %",27.8932,27.8932,30,10000,9980
+0,0,"0.15","Discount CRM","CRM","random",NA,"Average overdose selection %",22.5308,22.5308,30,9980,9980
+0,0,"0.15","CFO (PRIDE; gap 0.15)","CFO",NA,"pride","Average overdose selection %",22.2099,22.2099,30,9790,9770
+0,0,"0.05","CRM","CRM","r_fixed",NA,"Average overdose allocation",6.0891,20.297,30,10000,10000
+0,0,"0.05","Alpha-CRM","CRM","alpha_crm",NA,"Average overdose allocation",6.9782,23.2606666666667,30,10000,10000
+0,0,"0.05","IPCRM","CRM","cumu_crm",NA,"Average overdose allocation",9.5564,31.8546666666667,30,10000,10000
+0,0,"0.05","Discount CRM","CRM","random",NA,"Average overdose allocation",6.7416,22.472,30,10000,10000
+0,0,"0.10","CRM","CRM","r_fixed",NA,"Average overdose allocation",6.5258,21.7526666666667,30,10000,10000
+0,0,"0.10","Alpha-CRM","CRM","alpha_crm",NA,"Average overdose allocation",7.5475,25.1583333333333,30,10000,10000
+0,0,"0.10","IPCRM","CRM","cumu_crm",NA,"Average overdose allocation",9.4465,31.4883333333333,30,10000,10000
+0,0,"0.10","Discount CRM","CRM","random",NA,"Average overdose allocation",7.2187,24.0623333333333,30,10000,10000
+0,0,"0.15","CRM","CRM","r_fixed",NA,"Average overdose allocation",6.5784,21.928,30,9980,9980
+0,0,"0.15","Alpha-CRM","CRM","alpha_crm",NA,"Average overdose allocation",7.5402,25.134,30,5670,5650
+0,0,"0.15","IPCRM","CRM","cumu_crm",NA,"Average overdose allocation",8.8177,29.3923333333333,30,10000,9980
+0,0,"0.15","Discount CRM","CRM","random",NA,"Average overdose allocation",7.2274,24.0913333333333,30,9980,9980
+0,0,"0.15","CFO (PRIDE; gap 0.15)","CFO",NA,"pride","Average overdose allocation",9.501,31.67,30,9790,9770
+0,0,"0.05","CRM","CRM","r_fixed",NA,"Average total unique patients",21.9033,21.9033,30,10000,10000
+0,0,"0.05","Alpha-CRM","CRM","alpha_crm",NA,"Average total unique patients",21.9157,21.9157,30,10000,10000
+0,0,"0.05","IPCRM","CRM","cumu_crm",NA,"Average total unique patients",22.5664,22.5664,30,10000,10000
+0,0,"0.05","Discount CRM","CRM","random",NA,"Average total unique patients",21.8355,21.8355,30,10000,10000
+0,0,"0.10","CRM","CRM","r_fixed",NA,"Average total unique patients",22.0211,22.0211,30,10000,10000
+0,0,"0.10","Alpha-CRM","CRM","alpha_crm",NA,"Average total unique patients",22.1333,22.1333,30,10000,10000
+0,0,"0.10","IPCRM","CRM","cumu_crm",NA,"Average total unique patients",22.8063,22.8063,30,10000,10000
+0,0,"0.10","Discount CRM","CRM","random",NA,"Average total unique patients",22.0157,22.0157,30,10000,10000
+0,0,"0.15","CRM","CRM","r_fixed",NA,"Average total unique patients",22.218,22.218,30,9980,9980
+0,0,"0.15","Alpha-CRM","CRM","alpha_crm",NA,"Average total unique patients",22.3321,22.3321,30,5670,5650
+0,0,"0.15","IPCRM","CRM","cumu_crm",NA,"Average total unique patients",22.9673,22.9673,30,10000,9980
+0,0,"0.15","Discount CRM","CRM","random",NA,"Average total unique patients",22.2154,22.2154,30,9980,9980
+0,0,"0.15","CFO (PRIDE; gap 0.15)","CFO",NA,"pride","Average total unique patients",23.1525,23.1525,30,9790,9770
+0,0,"0.05","CRM","CRM","r_fixed",NA,"Average trial duration",1201.1582,171.594028571429,30,10000,10000
+0,0,"0.05","Alpha-CRM","CRM","alpha_crm",NA,"Average trial duration",1201.9336,171.7048,30,10000,10000
+0,0,"0.05","IPCRM","CRM","cumu_crm",NA,"Average trial duration",1238.2509,176.892985714286,30,10000,10000
+0,0,"0.05","Discount CRM","CRM","random",NA,"Average trial duration",1197.4476,171.063942857143,30,10000,10000
+0,0,"0.10","CRM","CRM","r_fixed",NA,"Average trial duration",1207.7772,172.5396,30,10000,10000
+0,0,"0.10","Alpha-CRM","CRM","alpha_crm",NA,"Average trial duration",1213.9942,173.427742857143,30,10000,10000
+0,0,"0.10","IPCRM","CRM","cumu_crm",NA,"Average trial duration",1251.6214,178.803057142857,30,10000,10000
+0,0,"0.10","Discount CRM","CRM","random",NA,"Average trial duration",1207.4381,172.491157142857,30,10000,10000
+0,0,"0.15","CRM","CRM","r_fixed",NA,"Average trial duration",1218.9829,174.140414285714,30,9980,9980
+0,0,"0.15","Alpha-CRM","CRM","alpha_crm",NA,"Average trial duration",1226.0053,175.143614285714,30,5670,5650
+0,0,"0.15","IPCRM","CRM","cumu_crm",NA,"Average trial duration",1260.8018,180.114542857143,30,10000,9980
+0,0,"0.15","Discount CRM","CRM","random",NA,"Average trial duration",1218.9481,174.135442857143,30,9980,9980
+0,0,"0.15","CFO (PRIDE; gap 0.15)","CFO",NA,"pride","Average trial duration",1271.1439,181.591985714286,30,9790,9770
+0,0,"0.05","CRM","CRM","r_fixed",NA,"MCSE of MTD selection %",0.0463,0.0463,30,10000,10000
+0,0,"0.05","Alpha-CRM","CRM","alpha_crm",NA,"MCSE of MTD selection %",0.0458,0.0458,30,10000,10000
+0,0,"0.05","IPCRM","CRM","cumu_crm",NA,"MCSE of MTD selection %",0.0452,0.0452,30,10000,10000
+0,0,"0.05","Discount CRM","CRM","random",NA,"MCSE of MTD selection %",0.0463,0.0463,30,10000,10000
+0,0,"0.10","CRM","CRM","r_fixed",NA,"MCSE of MTD selection %",0.0476,0.0476,30,10000,10000
+0,0,"0.10","Alpha-CRM","CRM","alpha_crm",NA,"MCSE of MTD selection %",0.0467,0.0467,30,10000,10000
+0,0,"0.10","IPCRM","CRM","cumu_crm",NA,"MCSE of MTD selection %",0.0464,0.0464,30,10000,10000
+0,0,"0.10","Discount CRM","CRM","random",NA,"MCSE of MTD selection %",0.0474,0.0474,30,10000,10000
+0,0,"0.15","CRM","CRM","r_fixed",NA,"MCSE of MTD selection %",0.0464,0.0464,30,9980,9980
+0,0,"0.15","Alpha-CRM","CRM","alpha_crm",NA,"MCSE of MTD selection %",0.0606,0.0606,30,5670,5650
+0,0,"0.15","IPCRM","CRM","cumu_crm",NA,"MCSE of MTD selection %",0.0456,0.0456,30,10000,9980
+0,0,"0.15","Discount CRM","CRM","random",NA,"MCSE of MTD selection %",0.0463,0.0463,30,9980,9980
+0,0,"0.15","CFO (PRIDE; gap 0.15)","CFO",NA,"pride","MCSE of MTD selection %",0.0475,0.0475,30,9790,9770
+0,0,"0.05","CRM","CRM","r_fixed",NA,"Mean paired MTD selection difference vs oracle %",0,0,30,10000,10000
+0,0,"0.05","Alpha-CRM","CRM","alpha_crm",NA,"Mean paired MTD selection difference vs oracle %",-0.2937,-0.2937,30,10000,10000
+0,0,"0.05","IPCRM","CRM","cumu_crm",NA,"Mean paired MTD selection difference vs oracle %",1.1031,1.1031,30,10000,10000
+0,0,"0.05","Discount CRM","CRM","random",NA,"Mean paired MTD selection difference vs oracle %",0.1759,0.1759,30,10000,10000
+0,0,"0.10","CRM","CRM","r_fixed",NA,"Mean paired MTD selection difference vs oracle %",0,0,30,10000,10000
+0,0,"0.10","Alpha-CRM","CRM","alpha_crm",NA,"Mean paired MTD selection difference vs oracle %",-1.2728,-1.2728,30,10000,10000
+0,0,"0.10","IPCRM","CRM","cumu_crm",NA,"Mean paired MTD selection difference vs oracle %",-0.5861,-0.5861,30,10000,10000
+0,0,"0.10","Discount CRM","CRM","random",NA,"Mean paired MTD selection difference vs oracle %",-0.5811,-0.5811,30,10000,10000
+0,0,"0.15","CRM","CRM","r_fixed",NA,"Mean paired MTD selection difference vs oracle %",0,0,30,9980,9980
+0,0,"0.15","Alpha-CRM","CRM","alpha_crm",NA,"Mean paired MTD selection difference vs oracle %",-1.7825,-1.7825,30,5670,5650
+0,0,"0.15","IPCRM","CRM","cumu_crm",NA,"Mean paired MTD selection difference vs oracle %",0.2374,0.2374,30,10000,9980
+0,0,"0.15","Discount CRM","CRM","random",NA,"Mean paired MTD selection difference vs oracle %",-1.0642,-1.0642,30,9980,9980
+0,0,"0.15","CFO (PRIDE; gap 0.15)","CFO",NA,"pride","Mean paired MTD selection difference vs oracle %",-0.2772,-0.2772,30,9790,9770
+0,0,"0.05","CRM","CRM","r_fixed",NA,"SD paired MTD selection difference vs oracle %",0,0,30,10000,10000
+0,0,"0.05","Alpha-CRM","CRM","alpha_crm",NA,"SD paired MTD selection difference vs oracle %",5.9534,5.9534,30,10000,10000
+0,0,"0.05","IPCRM","CRM","cumu_crm",NA,"SD paired MTD selection difference vs oracle %",12.0244,12.0244,30,10000,10000
+0,0,"0.05","Discount CRM","CRM","random",NA,"SD paired MTD selection difference vs oracle %",3.4942,3.4942,30,10000,10000
+0,0,"0.10","CRM","CRM","r_fixed",NA,"SD paired MTD selection difference vs oracle %",0,0,30,10000,10000
+0,0,"0.10","Alpha-CRM","CRM","alpha_crm",NA,"SD paired MTD selection difference vs oracle %",5.6791,5.6791,30,10000,10000
+0,0,"0.10","IPCRM","CRM","cumu_crm",NA,"SD paired MTD selection difference vs oracle %",8.6615,8.6615,30,10000,10000
+0,0,"0.10","Discount CRM","CRM","random",NA,"SD paired MTD selection difference vs oracle %",3.4978,3.4978,30,10000,10000
+0,0,"0.15","CRM","CRM","r_fixed",NA,"SD paired MTD selection difference vs oracle %",0,0,30,9980,9980
+0,0,"0.15","Alpha-CRM","CRM","alpha_crm",NA,"SD paired MTD selection difference vs oracle %",5.2264,5.2264,30,5670,5650
+0,0,"0.15","IPCRM","CRM","cumu_crm",NA,"SD paired MTD selection difference vs oracle %",7.605,7.605,30,10000,9980
+0,0,"0.15","Discount CRM","CRM","random",NA,"SD paired MTD selection difference vs oracle %",3.4235,3.4235,30,9980,9980
+0,0,"0.15","CFO (PRIDE; gap 0.15)","CFO",NA,"pride","SD paired MTD selection difference vs oracle %",10.0188,10.0188,30,9790,9770
+0.3,0.3,"0.05","CRM","CRM","r_fixed",NA,"Average MTD selection %",34.1348,34.1348,30,10000,10000
+0.3,0.3,"0.05","Alpha-CRM","CRM","alpha_crm",NA,"Average MTD selection %",34.5358,34.5358,30,10000,10000
+0.3,0.3,"0.05","IPCRM","CRM","cumu_crm",NA,"Average MTD selection %",36.83,36.83,30,10000,10000
+0.3,0.3,"0.05","Discount CRM","CRM","random",NA,"Average MTD selection %",34.5974,34.5974,30,10000,10000
+0.3,0,"0.05","Oracle (CRM, alpha = 0)","CRM","r_fixed",NA,"Average MTD selection %",34.5191,34.5191,30,10000,10000
+0.3,0.3,"0.10","CRM","CRM","r_fixed",NA,"Average MTD selection %",51.0221,51.0221,30,10000,10000
+0.3,0.3,"0.10","Alpha-CRM","CRM","alpha_crm",NA,"Average MTD selection %",50.5552,50.5552,30,10000,10000
+0.3,0.3,"0.10","IPCRM","CRM","cumu_crm",NA,"Average MTD selection %",51.6382,51.6382,30,10000,10000
+0.3,0.3,"0.10","Discount CRM","CRM","random",NA,"Average MTD selection %",50.5886,50.5886,30,10000,10000
+0.3,0,"0.10","Oracle (CRM, alpha = 0)","CRM","r_fixed",NA,"Average MTD selection %",50.3331,50.3331,30,10000,10000
+0.3,0.3,"0.15","CRM","CRM","r_fixed",NA,"Average MTD selection %",60.6721,60.6721,30,9980,9980
+0.3,0.3,"0.15","Alpha-CRM","CRM","alpha_crm",NA,"Average MTD selection %",59.19,59.19,30,10000,9980
+0.3,0.3,"0.15","IPCRM","CRM","cumu_crm",NA,"Average MTD selection %",61.3074,61.3074,30,10000,9980
+0.3,0.3,"0.15","Discount CRM","CRM","random",NA,"Average MTD selection %",59.3005,59.3005,30,9980,9980
+0.3,0.3,"0.15","CFO (PRIDE; gap 0.15)","CFO",NA,"pride","Average MTD selection %",60.7513,60.7513,30,9730,9710
+0.3,0,"0.15","Oracle (CRM, alpha = 0)","CRM","r_fixed",NA,"Average MTD selection %",59.4232,59.4232,30,9980,9980
+0.3,0.3,"0.05","CRM","CRM","r_fixed",NA,"Average MTD allocation",8.4208,28.0693333333333,30,10000,10000
+0.3,0.3,"0.05","Alpha-CRM","CRM","alpha_crm",NA,"Average MTD allocation",8.5111,28.3703333333333,30,10000,10000
+0.3,0.3,"0.05","IPCRM","CRM","cumu_crm",NA,"Average MTD allocation",8.8524,29.508,30,10000,10000
+0.3,0.3,"0.05","Discount CRM","CRM","random",NA,"Average MTD allocation",8.4485,28.1616666666667,30,10000,10000
+0.3,0,"0.05","Oracle (CRM, alpha = 0)","CRM","r_fixed",NA,"Average MTD allocation",8.4198,28.066,30,10000,10000
+0.3,0.3,"0.10","CRM","CRM","r_fixed",NA,"Average MTD allocation",11.3729,37.9096666666667,30,10000,10000
+0.3,0.3,"0.10","Alpha-CRM","CRM","alpha_crm",NA,"Average MTD allocation",11.2826,37.6086666666667,30,10000,10000
+0.3,0.3,"0.10","IPCRM","CRM","cumu_crm",NA,"Average MTD allocation",11.3499,37.833,30,10000,10000
+0.3,0.3,"0.10","Discount CRM","CRM","random",NA,"Average MTD allocation",11.2095,37.365,30,10000,10000
+0.3,0,"0.10","Oracle (CRM, alpha = 0)","CRM","r_fixed",NA,"Average MTD allocation",11.159,37.1966666666667,30,10000,10000
+0.3,0.3,"0.15","CRM","CRM","r_fixed",NA,"Average MTD allocation",13.2081,44.027,30,9980,9980
+0.3,0.3,"0.15","Alpha-CRM","CRM","alpha_crm",NA,"Average MTD allocation",12.8773,42.9243333333333,30,10000,9980
+0.3,0.3,"0.15","IPCRM","CRM","cumu_crm",NA,"Average MTD allocation",12.9447,43.149,30,10000,9980
+0.3,0.3,"0.15","Discount CRM","CRM","random",NA,"Average MTD allocation",12.8494,42.8313333333333,30,9980,9980
+0.3,0.3,"0.15","CFO (PRIDE; gap 0.15)","CFO",NA,"pride","Average MTD allocation",12.3622,41.2073333333333,30,9730,9710
+0.3,0,"0.15","Oracle (CRM, alpha = 0)","CRM","r_fixed",NA,"Average MTD allocation",12.8756,42.9186666666667,30,9980,9980
+0.3,0.3,"0.05","CRM","CRM","r_fixed",NA,"Average overdose selection %",18.9063,18.9063,30,10000,10000
+0.3,0.3,"0.05","Alpha-CRM","CRM","alpha_crm",NA,"Average overdose selection %",23.9912,23.9912,30,10000,10000
+0.3,0.3,"0.05","IPCRM","CRM","cumu_crm",NA,"Average overdose selection %",34.947,34.947,30,10000,10000
+0.3,0.3,"0.05","Discount CRM","CRM","random",NA,"Average overdose selection %",22.6563,22.6563,30,10000,10000
+0.3,0,"0.05","Oracle (CRM, alpha = 0)","CRM","r_fixed",NA,"Average overdose selection %",25.2668,25.2668,30,10000,10000
+0.3,0.3,"0.10","CRM","CRM","r_fixed",NA,"Average overdose selection %",18.536,18.536,30,10000,10000
+0.3,0.3,"0.10","Alpha-CRM","CRM","alpha_crm",NA,"Average overdose selection %",23.7355,23.7355,30,10000,10000
+0.3,0.3,"0.10","IPCRM","CRM","cumu_crm",NA,"Average overdose selection %",30.8909,30.8909,30,10000,10000
+0.3,0.3,"0.10","Discount CRM","CRM","random",NA,"Average overdose selection %",21.7094,21.7094,30,10000,10000
+0.3,0,"0.10","Oracle (CRM, alpha = 0)","CRM","r_fixed",NA,"Average overdose selection %",23.819,23.819,30,10000,10000
+0.3,0.3,"0.15","CRM","CRM","r_fixed",NA,"Average overdose selection %",16.7485,16.7485,30,9980,9980
+0.3,0.3,"0.15","Alpha-CRM","CRM","alpha_crm",NA,"Average overdose selection %",21.2672,21.2672,30,10000,9980
+0.3,0.3,"0.15","IPCRM","CRM","cumu_crm",NA,"Average overdose selection %",24.9695,24.9695,30,10000,9980
+0.3,0.3,"0.15","Discount CRM","CRM","random",NA,"Average overdose selection %",19.3563,19.3563,30,9980,9980
+0.3,0.3,"0.15","CFO (PRIDE; gap 0.15)","CFO",NA,"pride","Average overdose selection %",18.0066,18.0066,30,9730,9710
+0.3,0,"0.15","Oracle (CRM, alpha = 0)","CRM","r_fixed",NA,"Average overdose selection %",20.7364,20.7364,30,9980,9980
+0.3,0.3,"0.05","CRM","CRM","r_fixed",NA,"Average overdose allocation",4.9643,16.5476666666667,30,10000,10000
+0.3,0.3,"0.05","Alpha-CRM","CRM","alpha_crm",NA,"Average overdose allocation",5.9403,19.801,30,10000,10000
+0.3,0.3,"0.05","IPCRM","CRM","cumu_crm",NA,"Average overdose allocation",8.5261,28.4203333333333,30,10000,10000
+0.3,0.3,"0.05","Discount CRM","CRM","random",NA,"Average overdose allocation",5.858,19.5266666666667,30,10000,10000
+0.3,0,"0.05","Oracle (CRM, alpha = 0)","CRM","r_fixed",NA,"Average overdose allocation",6.0891,20.297,30,10000,10000
+0.3,0.3,"0.10","CRM","CRM","r_fixed",NA,"Average overdose allocation",5.5198,18.3993333333333,30,10000,10000
+0.3,0.3,"0.10","Alpha-CRM","CRM","alpha_crm",NA,"Average overdose allocation",6.6406,22.1353333333333,30,10000,10000
+0.3,0.3,"0.10","IPCRM","CRM","cumu_crm",NA,"Average overdose allocation",8.6026,28.6753333333333,30,10000,10000
+0.3,0.3,"0.10","Discount CRM","CRM","random",NA,"Average overdose allocation",6.4295,21.4316666666667,30,10000,10000
+0.3,0,"0.10","Oracle (CRM, alpha = 0)","CRM","r_fixed",NA,"Average overdose allocation",6.5258,21.7526666666667,30,10000,10000
+0.3,0.3,"0.15","CRM","CRM","r_fixed",NA,"Average overdose allocation",5.7712,19.2373333333333,30,9980,9980
+0.3,0.3,"0.15","Alpha-CRM","CRM","alpha_crm",NA,"Average overdose allocation",6.8692,22.8973333333333,30,10000,9980
+0.3,0.3,"0.15","IPCRM","CRM","cumu_crm",NA,"Average overdose allocation",8.1611,27.2036666666667,30,10000,9980
+0.3,0.3,"0.15","Discount CRM","CRM","random",NA,"Average overdose allocation",6.6122,22.0406666666667,30,9980,9980
+0.3,0.3,"0.15","CFO (PRIDE; gap 0.15)","CFO",NA,"pride","Average overdose allocation",8.5742,28.5806666666667,30,9730,9710
+0.3,0,"0.15","Oracle (CRM, alpha = 0)","CRM","r_fixed",NA,"Average overdose allocation",6.5784,21.928,30,9980,9980
+0.3,0.3,"0.05","CRM","CRM","r_fixed",NA,"Average total unique patients",21.9502,21.9502,30,10000,10000
+0.3,0.3,"0.05","Alpha-CRM","CRM","alpha_crm",NA,"Average total unique patients",21.9144,21.9144,30,10000,10000
+0.3,0.3,"0.05","IPCRM","CRM","cumu_crm",NA,"Average total unique patients",22.4949,22.4949,30,10000,10000
+0.3,0.3,"0.05","Discount CRM","CRM","random",NA,"Average total unique patients",21.81,21.81,30,10000,10000
+0.3,0,"0.05","Oracle (CRM, alpha = 0)","CRM","r_fixed",NA,"Average total unique patients",21.9033,21.9033,30,10000,10000
+0.3,0.3,"0.10","CRM","CRM","r_fixed",NA,"Average total unique patients",21.9977,21.9977,30,10000,10000
+0.3,0.3,"0.10","Alpha-CRM","CRM","alpha_crm",NA,"Average total unique patients",22.096,22.096,30,10000,10000
+0.3,0.3,"0.10","IPCRM","CRM","cumu_crm",NA,"Average total unique patients",22.7355,22.7355,30,10000,10000
+0.3,0.3,"0.10","Discount CRM","CRM","random",NA,"Average total unique patients",21.9522,21.9522,30,10000,10000
+0.3,0,"0.10","Oracle (CRM, alpha = 0)","CRM","r_fixed",NA,"Average total unique patients",22.0211,22.0211,30,10000,10000
+0.3,0.3,"0.15","CRM","CRM","r_fixed",NA,"Average total unique patients",22.1915,22.1915,30,9980,9980
+0.3,0.3,"0.15","Alpha-CRM","CRM","alpha_crm",NA,"Average total unique patients",22.2979,22.2979,30,10000,9980
+0.3,0.3,"0.15","IPCRM","CRM","cumu_crm",NA,"Average total unique patients",22.9144,22.9144,30,10000,9980
+0.3,0.3,"0.15","Discount CRM","CRM","random",NA,"Average total unique patients",22.1537,22.1537,30,9980,9980
+0.3,0.3,"0.15","CFO (PRIDE; gap 0.15)","CFO",NA,"pride","Average total unique patients",23.2179,23.2179,30,9730,9710
+0.3,0,"0.15","Oracle (CRM, alpha = 0)","CRM","r_fixed",NA,"Average total unique patients",22.218,22.218,30,9980,9980
+0.3,0.3,"0.05","CRM","CRM","r_fixed",NA,"Average trial duration",1203.7616,171.965942857143,30,10000,10000
+0.3,0.3,"0.05","Alpha-CRM","CRM","alpha_crm",NA,"Average trial duration",1201.8987,171.699814285714,30,10000,10000
+0.3,0.3,"0.05","IPCRM","CRM","cumu_crm",NA,"Average trial duration",1234.3167,176.330957142857,30,10000,10000
+0.3,0.3,"0.05","Discount CRM","CRM","random",NA,"Average trial duration",1195.9278,170.846828571429,30,10000,10000
+0.3,0,"0.05","Oracle (CRM, alpha = 0)","CRM","r_fixed",NA,"Average trial duration",1201.1582,171.594028571429,30,10000,10000
+0.3,0.3,"0.10","CRM","CRM","r_fixed",NA,"Average trial duration",1206.4105,172.344357142857,30,10000,10000
+0.3,0.3,"0.10","Alpha-CRM","CRM","alpha_crm",NA,"Average trial duration",1211.7867,173.112385714286,30,10000,10000
+0.3,0.3,"0.10","IPCRM","CRM","cumu_crm",NA,"Average trial duration",1247.6109,178.230128571429,30,10000,10000
+0.3,0.3,"0.10","Discount CRM","CRM","random",NA,"Average trial duration",1203.7996,171.971371428571,30,10000,10000
+0.3,0,"0.10","Oracle (CRM, alpha = 0)","CRM","r_fixed",NA,"Average trial duration",1207.7772,172.5396,30,10000,10000
+0.3,0.3,"0.15","CRM","CRM","r_fixed",NA,"Average trial duration",1217.4261,173.918014285714,30,9980,9980
+0.3,0.3,"0.15","Alpha-CRM","CRM","alpha_crm",NA,"Average trial duration",1223.3437,174.763385714286,30,10000,9980
+0.3,0.3,"0.15","IPCRM","CRM","cumu_crm",NA,"Average trial duration",1257.8362,179.690885714286,30,10000,9980
+0.3,0.3,"0.15","Discount CRM","CRM","random",NA,"Average trial duration",1215.4026,173.628942857143,30,9980,9980
+0.3,0.3,"0.15","CFO (PRIDE; gap 0.15)","CFO",NA,"pride","Average trial duration",1274.9161,182.130871428571,30,9730,9710
+0.3,0,"0.15","Oracle (CRM, alpha = 0)","CRM","r_fixed",NA,"Average trial duration",1218.9829,174.140414285714,30,9980,9980
+0.3,0.3,"0.05","CRM","CRM","r_fixed",NA,"MCSE of MTD selection %",0.0458,0.0458,30,10000,10000
+0.3,0.3,"0.05","Alpha-CRM","CRM","alpha_crm",NA,"MCSE of MTD selection %",0.0461,0.0461,30,10000,10000
+0.3,0.3,"0.05","IPCRM","CRM","cumu_crm",NA,"MCSE of MTD selection %",0.0463,0.0463,30,10000,10000
+0.3,0.3,"0.05","Discount CRM","CRM","random",NA,"MCSE of MTD selection %",0.0462,0.0462,30,10000,10000
+0.3,0,"0.05","Oracle (CRM, alpha = 0)","CRM","r_fixed",NA,"MCSE of MTD selection %",0.0463,0.0463,30,10000,10000
+0.3,0.3,"0.10","CRM","CRM","r_fixed",NA,"MCSE of MTD selection %",0.0479,0.0479,30,10000,10000
+0.3,0.3,"0.10","Alpha-CRM","CRM","alpha_crm",NA,"MCSE of MTD selection %",0.0472,0.0472,30,10000,10000
+0.3,0.3,"0.10","IPCRM","CRM","cumu_crm",NA,"MCSE of MTD selection %",0.0469,0.0469,30,10000,10000
+0.3,0.3,"0.10","Discount CRM","CRM","random",NA,"MCSE of MTD selection %",0.0477,0.0477,30,10000,10000
+0.3,0,"0.10","Oracle (CRM, alpha = 0)","CRM","r_fixed",NA,"MCSE of MTD selection %",0.0476,0.0476,30,10000,10000
+0.3,0.3,"0.15","CRM","CRM","r_fixed",NA,"MCSE of MTD selection %",0.0464,0.0464,30,9980,9980
+0.3,0.3,"0.15","Alpha-CRM","CRM","alpha_crm",NA,"MCSE of MTD selection %",0.0459,0.0459,30,10000,9980
+0.3,0.3,"0.15","IPCRM","CRM","cumu_crm",NA,"MCSE of MTD selection %",0.0457,0.0457,30,10000,9980
+0.3,0.3,"0.15","Discount CRM","CRM","random",NA,"MCSE of MTD selection %",0.0465,0.0465,30,9980,9980
+0.3,0.3,"0.15","CFO (PRIDE; gap 0.15)","CFO",NA,"pride","MCSE of MTD selection %",0.0477,0.0477,30,9730,9710
+0.3,0,"0.15","Oracle (CRM, alpha = 0)","CRM","r_fixed",NA,"MCSE of MTD selection %",0.0464,0.0464,30,9980,9980
+0.3,0.3,"0.05","CRM","CRM","r_fixed",NA,"Mean paired MTD selection difference vs oracle %",-0.3843,-0.3843,30,10000,10000
+0.3,0.3,"0.05","Alpha-CRM","CRM","alpha_crm",NA,"Mean paired MTD selection difference vs oracle %",0.0167,0.0167,30,10000,10000
+0.3,0.3,"0.05","IPCRM","CRM","cumu_crm",NA,"Mean paired MTD selection difference vs oracle %",2.3109,2.3109,30,10000,10000
+0.3,0.3,"0.05","Discount CRM","CRM","random",NA,"Mean paired MTD selection difference vs oracle %",0.0783,0.0783,30,10000,10000
+0.3,0,"0.05","Oracle (CRM, alpha = 0)","CRM","r_fixed",NA,"Mean paired MTD selection difference vs oracle %",0,0,30,10000,10000
+0.3,0.3,"0.10","CRM","CRM","r_fixed",NA,"Mean paired MTD selection difference vs oracle %",0.689,0.689,30,10000,10000
+0.3,0.3,"0.10","Alpha-CRM","CRM","alpha_crm",NA,"Mean paired MTD selection difference vs oracle %",0.2221,0.2221,30,10000,10000
+0.3,0.3,"0.10","IPCRM","CRM","cumu_crm",NA,"Mean paired MTD selection difference vs oracle %",1.3051,1.3051,30,10000,10000
+0.3,0.3,"0.10","Discount CRM","CRM","random",NA,"Mean paired MTD selection difference vs oracle %",0.2555,0.2555,30,10000,10000
+0.3,0,"0.10","Oracle (CRM, alpha = 0)","CRM","r_fixed",NA,"Mean paired MTD selection difference vs oracle %",0,0,30,10000,10000
+0.3,0.3,"0.15","CRM","CRM","r_fixed",NA,"Mean paired MTD selection difference vs oracle %",1.2489,1.2489,30,9980,9980
+0.3,0.3,"0.15","Alpha-CRM","CRM","alpha_crm",NA,"Mean paired MTD selection difference vs oracle %",-0.2345,-0.2345,30,10000,9980
+0.3,0.3,"0.15","IPCRM","CRM","cumu_crm",NA,"Mean paired MTD selection difference vs oracle %",1.8782,1.8782,30,10000,9980
+0.3,0.3,"0.15","Discount CRM","CRM","random",NA,"Mean paired MTD selection difference vs oracle %",-0.1227,-0.1227,30,9980,9980
+0.3,0.3,"0.15","CFO (PRIDE; gap 0.15)","CFO",NA,"pride","Mean paired MTD selection difference vs oracle %",1.2871,1.2871,30,9730,9710
+0.3,0,"0.15","Oracle (CRM, alpha = 0)","CRM","r_fixed",NA,"Mean paired MTD selection difference vs oracle %",0,0,30,9980,9980
+0.3,0.3,"0.05","CRM","CRM","r_fixed",NA,"SD paired MTD selection difference vs oracle %",6.3443,6.3443,30,10000,10000
+0.3,0.3,"0.05","Alpha-CRM","CRM","alpha_crm",NA,"SD paired MTD selection difference vs oracle %",4.2558,4.2558,30,10000,10000
+0.3,0.3,"0.05","IPCRM","CRM","cumu_crm",NA,"SD paired MTD selection difference vs oracle %",8.851,8.851,30,10000,10000
+0.3,0.3,"0.05","Discount CRM","CRM","random",NA,"SD paired MTD selection difference vs oracle %",4.3987,4.3987,30,10000,10000
+0.3,0,"0.05","Oracle (CRM, alpha = 0)","CRM","r_fixed",NA,"SD paired MTD selection difference vs oracle %",0,0,30,10000,10000
+0.3,0.3,"0.10","CRM","CRM","r_fixed",NA,"SD paired MTD selection difference vs oracle %",5.4606,5.4606,30,10000,10000
+0.3,0.3,"0.10","Alpha-CRM","CRM","alpha_crm",NA,"SD paired MTD selection difference vs oracle %",4.7615,4.7615,30,10000,10000
+0.3,0.3,"0.10","IPCRM","CRM","cumu_crm",NA,"SD paired MTD selection difference vs oracle %",7.2769,7.2769,30,10000,10000
+0.3,0.3,"0.10","Discount CRM","CRM","random",NA,"SD paired MTD selection difference vs oracle %",4.4924,4.4924,30,10000,10000
+0.3,0,"0.10","Oracle (CRM, alpha = 0)","CRM","r_fixed",NA,"SD paired MTD selection difference vs oracle %",0,0,30,10000,10000
+0.3,0.3,"0.15","CRM","CRM","r_fixed",NA,"SD paired MTD selection difference vs oracle %",4.7917,4.7917,30,9980,9980
+0.3,0.3,"0.15","Alpha-CRM","CRM","alpha_crm",NA,"SD paired MTD selection difference vs oracle %",4.8575,4.8575,30,10000,9980
+0.3,0.3,"0.15","IPCRM","CRM","cumu_crm",NA,"SD paired MTD selection difference vs oracle %",6.9639,6.9639,30,10000,9980
+0.3,0.3,"0.15","Discount CRM","CRM","random",NA,"SD paired MTD selection difference vs oracle %",4.4662,4.4662,30,9980,9980
+0.3,0.3,"0.15","CFO (PRIDE; gap 0.15)","CFO",NA,"pride","SD paired MTD selection difference vs oracle %",11.3986,11.3986,30,9730,9710
+0.3,0,"0.15","Oracle (CRM, alpha = 0)","CRM","r_fixed",NA,"SD paired MTD selection difference vs oracle %",0,0,30,9980,9980
+0.6,0.6,"0.05","CRM","CRM","r_fixed",NA,"Average MTD selection %",32.9182,32.9182,30,10000,10000
+0.6,0.6,"0.05","Alpha-CRM","CRM","alpha_crm",NA,"Average MTD selection %",34.201,34.201,30,10000,10000
+0.6,0.6,"0.05","IPCRM","CRM","cumu_crm",NA,"Average MTD selection %",37.6517,37.6517,30,10000,10000
+0.6,0.6,"0.05","Discount CRM","CRM","random",NA,"Average MTD selection %",33.9491,33.9491,30,10000,10000
+0.6,0,"0.05","Oracle (CRM, alpha = 0)","CRM","r_fixed",NA,"Average MTD selection %",34.5191,34.5191,30,10000,10000
+0.6,0.6,"0.10","CRM","CRM","r_fixed",NA,"Average MTD selection %",50.7401,50.7401,30,10000,10000
+0.6,0.6,"0.10","Alpha-CRM","CRM","alpha_crm",NA,"Average MTD selection %",51.3123,51.3123,30,8130,8130
+0.6,0.6,"0.10","IPCRM","CRM","cumu_crm",NA,"Average MTD selection %",52.9696,52.9696,30,10000,10000
+0.6,0.6,"0.10","Discount CRM","CRM","random",NA,"Average MTD selection %",50.5386,50.5386,30,10000,10000
+0.6,0,"0.10","Oracle (CRM, alpha = 0)","CRM","r_fixed",NA,"Average MTD selection %",50.3331,50.3331,30,10000,10000
+0.6,0.6,"0.15","CRM","CRM","r_fixed",NA,"Average MTD selection %",61.072,61.072,30,9980,9980
+0.6,0.6,"0.15","Alpha-CRM","CRM","alpha_crm",NA,"Average MTD selection %",60.24,60.24,30,10000,9980
+0.6,0.6,"0.15","IPCRM","CRM","cumu_crm",NA,"Average MTD selection %",62.488,62.488,30,10000,9980
+0.6,0.6,"0.15","Discount CRM","CRM","random",NA,"Average MTD selection %",59.4252,59.4252,30,9980,9980
+0.6,0.6,"0.15","CFO (PRIDE; gap 0.15)","CFO",NA,"pride","Average MTD selection %",61.5709,61.5709,30,7740,7720
+0.6,0,"0.15","Oracle (CRM, alpha = 0)","CRM","r_fixed",NA,"Average MTD selection %",59.4232,59.4232,30,9980,9980
+0.6,0.6,"0.05","CRM","CRM","r_fixed",NA,"Average MTD allocation",8.3216,27.7386666666667,30,10000,10000
+0.6,0.6,"0.05","Alpha-CRM","CRM","alpha_crm",NA,"Average MTD allocation",8.5205,28.4016666666667,30,10000,10000
+0.6,0.6,"0.05","IPCRM","CRM","cumu_crm",NA,"Average MTD allocation",9.01,30.0333333333333,30,10000,10000
+0.6,0.6,"0.05","Discount CRM","CRM","random",NA,"Average MTD allocation",8.4045,28.015,30,10000,10000
+0.6,0,"0.05","Oracle (CRM, alpha = 0)","CRM","r_fixed",NA,"Average MTD allocation",8.4198,28.066,30,10000,10000
+0.6,0.6,"0.10","CRM","CRM","r_fixed",NA,"Average MTD allocation",11.48,38.2666666666667,30,10000,10000
+0.6,0.6,"0.10","Alpha-CRM","CRM","alpha_crm",NA,"Average MTD allocation",11.5383,38.461,30,8130,8130
+0.6,0.6,"0.10","IPCRM","CRM","cumu_crm",NA,"Average MTD allocation",11.6779,38.9263333333333,30,10000,10000
+0.6,0.6,"0.10","Discount CRM","CRM","random",NA,"Average MTD allocation",11.3158,37.7193333333333,30,10000,10000
+0.6,0,"0.10","Oracle (CRM, alpha = 0)","CRM","r_fixed",NA,"Average MTD allocation",11.159,37.1966666666667,30,10000,10000
+0.6,0.6,"0.15","CRM","CRM","r_fixed",NA,"Average MTD allocation",13.4556,44.852,30,9980,9980
+0.6,0.6,"0.15","Alpha-CRM","CRM","alpha_crm",NA,"Average MTD allocation",13.1972,43.9906666666667,30,10000,9980
+0.6,0.6,"0.15","IPCRM","CRM","cumu_crm",NA,"Average MTD allocation",13.3038,44.346,30,10000,9980
+0.6,0.6,"0.15","Discount CRM","CRM","random",NA,"Average MTD allocation",13.0288,43.4293333333333,30,9980,9980
+0.6,0.6,"0.15","CFO (PRIDE; gap 0.15)","CFO",NA,"pride","Average MTD allocation",12.9033,43.011,30,7740,7720
+0.6,0,"0.15","Oracle (CRM, alpha = 0)","CRM","r_fixed",NA,"Average MTD allocation",12.8756,42.9186666666667,30,9980,9980
+0.6,0.6,"0.05","CRM","CRM","r_fixed",NA,"Average overdose selection %",13.375,13.375,30,10000,10000
+0.6,0.6,"0.05","Alpha-CRM","CRM","alpha_crm",NA,"Average overdose selection %",18.5457,18.5457,30,10000,10000
+0.6,0.6,"0.05","IPCRM","CRM","cumu_crm",NA,"Average overdose selection %",29.8567,29.8567,30,10000,10000
+0.6,0.6,"0.05","Discount CRM","CRM","random",NA,"Average overdose selection %",18.2063,18.2063,30,10000,10000
+0.6,0,"0.05","Oracle (CRM, alpha = 0)","CRM","r_fixed",NA,"Average overdose selection %",25.2668,25.2668,30,10000,10000
+0.6,0.6,"0.10","CRM","CRM","r_fixed",NA,"Average overdose selection %",13.8384,13.8384,30,10000,10000
+0.6,0.6,"0.10","Alpha-CRM","CRM","alpha_crm",NA,"Average overdose selection %",19.2859,19.2859,30,8130,8130
+0.6,0.6,"0.10","IPCRM","CRM","cumu_crm",NA,"Average overdose selection %",27.1728,27.1728,30,10000,10000
+0.6,0.6,"0.10","Discount CRM","CRM","random",NA,"Average overdose selection %",18.1197,18.1197,30,10000,10000
+0.6,0,"0.10","Oracle (CRM, alpha = 0)","CRM","r_fixed",NA,"Average overdose selection %",23.819,23.819,30,10000,10000
+0.6,0.6,"0.15","CRM","CRM","r_fixed",NA,"Average overdose selection %",13.306,13.306,30,9980,9980
+0.6,0.6,"0.15","Alpha-CRM","CRM","alpha_crm",NA,"Average overdose selection %",18.0673,18.0673,30,10000,9980
+0.6,0.6,"0.15","IPCRM","CRM","cumu_crm",NA,"Average overdose selection %",22.3545,22.3545,30,10000,9980
+0.6,0.6,"0.15","Discount CRM","CRM","random",NA,"Average overdose selection %",16.7936,16.7936,30,9980,9980
+0.6,0.6,"0.15","CFO (PRIDE; gap 0.15)","CFO",NA,"pride","Average overdose selection %",14.3588,14.3588,30,7740,7720
+0.6,0,"0.15","Oracle (CRM, alpha = 0)","CRM","r_fixed",NA,"Average overdose selection %",20.7364,20.7364,30,9980,9980
+0.6,0.6,"0.05","CRM","CRM","r_fixed",NA,"Average overdose allocation",3.9358,13.1193333333333,30,10000,10000
+0.6,0.6,"0.05","Alpha-CRM","CRM","alpha_crm",NA,"Average overdose allocation",4.9463,16.4876666666667,30,10000,10000
+0.6,0.6,"0.05","IPCRM","CRM","cumu_crm",NA,"Average overdose allocation",7.5295,25.0983333333333,30,10000,10000
+0.6,0.6,"0.05","Discount CRM","CRM","random",NA,"Average overdose allocation",5.0838,16.946,30,10000,10000
+0.6,0,"0.05","Oracle (CRM, alpha = 0)","CRM","r_fixed",NA,"Average overdose allocation",6.0891,20.297,30,10000,10000
+0.6,0.6,"0.10","CRM","CRM","r_fixed",NA,"Average overdose allocation",4.5781,15.2603333333333,30,10000,10000
+0.6,0.6,"0.10","Alpha-CRM","CRM","alpha_crm",NA,"Average overdose allocation",5.7886,19.2953333333333,30,8130,8130
+0.6,0.6,"0.10","IPCRM","CRM","cumu_crm",NA,"Average overdose allocation",7.7956,25.9853333333333,30,10000,10000
+0.6,0.6,"0.10","Discount CRM","CRM","random",NA,"Average overdose allocation",5.7387,19.129,30,10000,10000
+0.6,0,"0.10","Oracle (CRM, alpha = 0)","CRM","r_fixed",NA,"Average overdose allocation",6.5258,21.7526666666667,30,10000,10000
+0.6,0.6,"0.15","CRM","CRM","r_fixed",NA,"Average overdose allocation",5.0087,16.6956666666667,30,9980,9980
+0.6,0.6,"0.15","Alpha-CRM","CRM","alpha_crm",NA,"Average overdose allocation",6.1809,20.603,30,10000,9980
+0.6,0.6,"0.15","IPCRM","CRM","cumu_crm",NA,"Average overdose allocation",7.5303,25.101,30,10000,9980
+0.6,0.6,"0.15","Discount CRM","CRM","random",NA,"Average overdose allocation",6.0662,20.2206666666667,30,9980,9980
+0.6,0.6,"0.15","CFO (PRIDE; gap 0.15)","CFO",NA,"pride","Average overdose allocation",7.7173,25.7243333333333,30,7740,7720
+0.6,0,"0.15","Oracle (CRM, alpha = 0)","CRM","r_fixed",NA,"Average overdose allocation",6.5784,21.928,30,9980,9980
+0.6,0.6,"0.05","CRM","CRM","r_fixed",NA,"Average total unique patients",22.0398,22.0398,30,10000,10000
+0.6,0.6,"0.05","Alpha-CRM","CRM","alpha_crm",NA,"Average total unique patients",21.9479,21.9479,30,10000,10000
+0.6,0.6,"0.05","IPCRM","CRM","cumu_crm",NA,"Average total unique patients",22.4474,22.4474,30,10000,10000
+0.6,0.6,"0.05","Discount CRM","CRM","random",NA,"Average total unique patients",21.7947,21.7947,30,10000,10000
+0.6,0,"0.05","Oracle (CRM, alpha = 0)","CRM","r_fixed",NA,"Average total unique patients",21.9033,21.9033,30,10000,10000
+0.6,0.6,"0.10","CRM","CRM","r_fixed",NA,"Average total unique patients",21.9901,21.9901,30,10000,10000
+0.6,0.6,"0.10","Alpha-CRM","CRM","alpha_crm",NA,"Average total unique patients",22.0712,22.0712,30,8130,8130
+0.6,0.6,"0.10","IPCRM","CRM","cumu_crm",NA,"Average total unique patients",22.6616,22.6616,30,10000,10000
+0.6,0.6,"0.10","Discount CRM","CRM","random",NA,"Average total unique patients",21.8832,21.8832,30,10000,10000
+0.6,0,"0.10","Oracle (CRM, alpha = 0)","CRM","r_fixed",NA,"Average total unique patients",22.0211,22.0211,30,10000,10000
+0.6,0.6,"0.15","CRM","CRM","r_fixed",NA,"Average total unique patients",22.1692,22.1692,30,9980,9980
+0.6,0.6,"0.15","Alpha-CRM","CRM","alpha_crm",NA,"Average total unique patients",22.2759,22.2759,30,10000,9980
+0.6,0.6,"0.15","IPCRM","CRM","cumu_crm",NA,"Average total unique patients",22.858,22.858,30,10000,9980
+0.6,0.6,"0.15","Discount CRM","CRM","random",NA,"Average total unique patients",22.0851,22.0851,30,9980,9980
+0.6,0.6,"0.15","CFO (PRIDE; gap 0.15)","CFO",NA,"pride","Average total unique patients",23.3206,23.3206,30,7740,7720
+0.6,0,"0.15","Oracle (CRM, alpha = 0)","CRM","r_fixed",NA,"Average total unique patients",22.218,22.218,30,9980,9980
+0.6,0.6,"0.05","CRM","CRM","r_fixed",NA,"Average trial duration",1208.6695,172.667071428571,30,10000,10000
+0.6,0.6,"0.05","Alpha-CRM","CRM","alpha_crm",NA,"Average trial duration",1203.643,171.949,30,10000,10000
+0.6,0.6,"0.05","IPCRM","CRM","cumu_crm",NA,"Average trial duration",1231.4458,175.920828571429,30,10000,10000
+0.6,0.6,"0.05","Discount CRM","CRM","random",NA,"Average trial duration",1194.9924,170.7132,30,10000,10000
+0.6,0,"0.05","Oracle (CRM, alpha = 0)","CRM","r_fixed",NA,"Average trial duration",1201.1582,171.594028571429,30,10000,10000
+0.6,0.6,"0.10","CRM","CRM","r_fixed",NA,"Average trial duration",1205.9761,172.2823,30,10000,10000
+0.6,0.6,"0.10","Alpha-CRM","CRM","alpha_crm",NA,"Average trial duration",1209.7716,172.824514285714,30,8130,8130
+0.6,0.6,"0.10","IPCRM","CRM","cumu_crm",NA,"Average trial duration",1243.4595,177.637071428571,30,10000,10000
+0.6,0.6,"0.10","Discount CRM","CRM","random",NA,"Average trial duration",1199.9306,171.418657142857,30,10000,10000
+0.6,0,"0.10","Oracle (CRM, alpha = 0)","CRM","r_fixed",NA,"Average trial duration",1207.7772,172.5396,30,10000,10000
+0.6,0.6,"0.15","CRM","CRM","r_fixed",NA,"Average trial duration",1216.1645,173.737785714286,30,9980,9980
+0.6,0.6,"0.15","Alpha-CRM","CRM","alpha_crm",NA,"Average trial duration",1222.0926,174.584657142857,30,10000,9980
+0.6,0.6,"0.15","IPCRM","CRM","cumu_crm",NA,"Average trial duration",1254.6169,179.230985714286,30,10000,9980
+0.6,0.6,"0.15","Discount CRM","CRM","random",NA,"Average trial duration",1211.4768,173.068114285714,30,9980,9980
+0.6,0.6,"0.15","CFO (PRIDE; gap 0.15)","CFO",NA,"pride","Average trial duration",1280.7151,182.9593,30,7740,7720
+0.6,0,"0.15","Oracle (CRM, alpha = 0)","CRM","r_fixed",NA,"Average trial duration",1218.9829,174.140414285714,30,9980,9980
+0.6,0.6,"0.05","CRM","CRM","r_fixed",NA,"MCSE of MTD selection %",0.0444,0.0444,30,10000,10000
+0.6,0.6,"0.05","Alpha-CRM","CRM","alpha_crm",NA,"MCSE of MTD selection %",0.0457,0.0457,30,10000,10000
+0.6,0.6,"0.05","IPCRM","CRM","cumu_crm",NA,"MCSE of MTD selection %",0.0469,0.0469,30,10000,10000
+0.6,0.6,"0.05","Discount CRM","CRM","random",NA,"MCSE of MTD selection %",0.0456,0.0456,30,10000,10000
+0.6,0,"0.05","Oracle (CRM, alpha = 0)","CRM","r_fixed",NA,"MCSE of MTD selection %",0.0463,0.0463,30,10000,10000
+0.6,0.6,"0.10","CRM","CRM","r_fixed",NA,"MCSE of MTD selection %",0.0478,0.0478,30,10000,10000
+0.6,0.6,"0.10","Alpha-CRM","CRM","alpha_crm",NA,"MCSE of MTD selection %",0.0526,0.0526,30,8130,8130
+0.6,0.6,"0.10","IPCRM","CRM","cumu_crm",NA,"MCSE of MTD selection %",0.0473,0.0473,30,10000,10000
+0.6,0.6,"0.10","Discount CRM","CRM","random",NA,"MCSE of MTD selection %",0.0479,0.0479,30,10000,10000
+0.6,0,"0.10","Oracle (CRM, alpha = 0)","CRM","r_fixed",NA,"MCSE of MTD selection %",0.0476,0.0476,30,10000,10000
+0.6,0.6,"0.15","CRM","CRM","r_fixed",NA,"MCSE of MTD selection %",0.0464,0.0464,30,9980,9980
+0.6,0.6,"0.15","Alpha-CRM","CRM","alpha_crm",NA,"MCSE of MTD selection %",0.0459,0.0459,30,10000,9980
+0.6,0.6,"0.15","IPCRM","CRM","cumu_crm",NA,"MCSE of MTD selection %",0.0457,0.0457,30,10000,9980
+0.6,0.6,"0.15","Discount CRM","CRM","random",NA,"MCSE of MTD selection %",0.0467,0.0467,30,9980,9980
+0.6,0.6,"0.15","CFO (PRIDE; gap 0.15)","CFO",NA,"pride","MCSE of MTD selection %",0.0534,0.0534,30,7740,7720
+0.6,0,"0.15","Oracle (CRM, alpha = 0)","CRM","r_fixed",NA,"MCSE of MTD selection %",0.0464,0.0464,30,9980,9980
+0.6,0.6,"0.05","CRM","CRM","r_fixed",NA,"Mean paired MTD selection difference vs oracle %",-1.6009,-1.6009,30,10000,10000
+0.6,0.6,"0.05","Alpha-CRM","CRM","alpha_crm",NA,"Mean paired MTD selection difference vs oracle %",-0.3181,-0.3181,30,10000,10000
+0.6,0.6,"0.05","IPCRM","CRM","cumu_crm",NA,"Mean paired MTD selection difference vs oracle %",3.1326,3.1326,30,10000,10000
+0.6,0.6,"0.05","Discount CRM","CRM","random",NA,"Mean paired MTD selection difference vs oracle %",-0.57,-0.57,30,10000,10000
+0.6,0,"0.05","Oracle (CRM, alpha = 0)","CRM","r_fixed",NA,"Mean paired MTD selection difference vs oracle %",0,0,30,10000,10000
+0.6,0.6,"0.10","CRM","CRM","r_fixed",NA,"Mean paired MTD selection difference vs oracle %",0.407,0.407,30,10000,10000
+0.6,0.6,"0.10","Alpha-CRM","CRM","alpha_crm",NA,"Mean paired MTD selection difference vs oracle %",1.0486,1.0486,30,8130,8130
+0.6,0.6,"0.10","IPCRM","CRM","cumu_crm",NA,"Mean paired MTD selection difference vs oracle %",2.6365,2.6365,30,10000,10000
+0.6,0.6,"0.10","Discount CRM","CRM","random",NA,"Mean paired MTD selection difference vs oracle %",0.2055,0.2055,30,10000,10000
+0.6,0,"0.10","Oracle (CRM, alpha = 0)","CRM","r_fixed",NA,"Mean paired MTD selection difference vs oracle %",0,0,30,10000,10000
+0.6,0.6,"0.15","CRM","CRM","r_fixed",NA,"Mean paired MTD selection difference vs oracle %",1.6488,1.6488,30,9980,9980
+0.6,0.6,"0.15","Alpha-CRM","CRM","alpha_crm",NA,"Mean paired MTD selection difference vs oracle %",0.8175,0.8175,30,10000,9980
+0.6,0.6,"0.15","IPCRM","CRM","cumu_crm",NA,"Mean paired MTD selection difference vs oracle %",3.0594,3.0594,30,10000,9980
+0.6,0.6,"0.15","Discount CRM","CRM","random",NA,"Mean paired MTD selection difference vs oracle %",0.0019,0.0019,30,9980,9980
+0.6,0.6,"0.15","CFO (PRIDE; gap 0.15)","CFO",NA,"pride","Mean paired MTD selection difference vs oracle %",2.1803,2.1803,30,7740,7720
+0.6,0,"0.15","Oracle (CRM, alpha = 0)","CRM","r_fixed",NA,"Mean paired MTD selection difference vs oracle %",0,0,30,9980,9980
+0.6,0.6,"0.05","CRM","CRM","r_fixed",NA,"SD paired MTD selection difference vs oracle %",11.0922,11.0922,30,10000,10000
+0.6,0.6,"0.05","Alpha-CRM","CRM","alpha_crm",NA,"SD paired MTD selection difference vs oracle %",6.5314,6.5314,30,10000,10000
+0.6,0.6,"0.05","IPCRM","CRM","cumu_crm",NA,"SD paired MTD selection difference vs oracle %",6.8217,6.8217,30,10000,10000
+0.6,0.6,"0.05","Discount CRM","CRM","random",NA,"SD paired MTD selection difference vs oracle %",7.4932,7.4932,30,10000,10000
+0.6,0,"0.05","Oracle (CRM, alpha = 0)","CRM","r_fixed",NA,"SD paired MTD selection difference vs oracle %",0,0,30,10000,10000
+0.6,0.6,"0.10","CRM","CRM","r_fixed",NA,"SD paired MTD selection difference vs oracle %",9.0778,9.0778,30,10000,10000
+0.6,0.6,"0.10","Alpha-CRM","CRM","alpha_crm",NA,"SD paired MTD selection difference vs oracle %",5.6473,5.6473,30,8130,8130
+0.6,0.6,"0.10","IPCRM","CRM","cumu_crm",NA,"SD paired MTD selection difference vs oracle %",6.4989,6.4989,30,10000,10000
+0.6,0.6,"0.10","Discount CRM","CRM","random",NA,"SD paired MTD selection difference vs oracle %",6.4332,6.4332,30,10000,10000
+0.6,0,"0.10","Oracle (CRM, alpha = 0)","CRM","r_fixed",NA,"SD paired MTD selection difference vs oracle %",0,0,30,10000,10000
+0.6,0.6,"0.15","CRM","CRM","r_fixed",NA,"SD paired MTD selection difference vs oracle %",7.3336,7.3336,30,9980,9980
+0.6,0.6,"0.15","Alpha-CRM","CRM","alpha_crm",NA,"SD paired MTD selection difference vs oracle %",5.3189,5.3189,30,10000,9980
+0.6,0.6,"0.15","IPCRM","CRM","cumu_crm",NA,"SD paired MTD selection difference vs oracle %",6.6519,6.6519,30,10000,9980
+0.6,0.6,"0.15","Discount CRM","CRM","random",NA,"SD paired MTD selection difference vs oracle %",5.7822,5.7822,30,9980,9980
+0.6,0.6,"0.15","CFO (PRIDE; gap 0.15)","CFO",NA,"pride","SD paired MTD selection difference vs oracle %",13.3484,13.3484,30,7740,7720
+0.6,0,"0.15","Oracle (CRM, alpha = 0)","CRM","r_fixed",NA,"SD paired MTD selection difference vs oracle %",0,0,30,9980,9980
+0.9,0.9,"0.05","CRM","CRM","r_fixed",NA,"Average MTD selection %",30.9659,30.9659,30,10000,10000
+0.9,0.9,"0.05","Alpha-CRM","CRM","alpha_crm",NA,"Average MTD selection %",33.2368,33.2368,30,10000,10000
+0.9,0.9,"0.05","IPCRM","CRM","cumu_crm",NA,"Average MTD selection %",37.906,37.906,30,10000,10000
+0.9,0.9,"0.05","Discount CRM","CRM","random",NA,"Average MTD selection %",32.7298,32.7298,30,10000,10000
+0.9,0,"0.05","Oracle (CRM, alpha = 0)","CRM","r_fixed",NA,"Average MTD selection %",34.5191,34.5191,30,10000,10000
+0.9,0.9,"0.10","CRM","CRM","r_fixed",NA,"Average MTD selection %",49.3405,49.3405,30,10000,10000
+0.9,0.9,"0.10","Alpha-CRM","CRM","alpha_crm",NA,"Average MTD selection %",51.2679,51.2679,30,9280,9280
+0.9,0.9,"0.10","IPCRM","CRM","cumu_crm",NA,"Average MTD selection %",53.8764,53.8764,30,10000,10000
+0.9,0.9,"0.10","Discount CRM","CRM","random",NA,"Average MTD selection %",49.5752,49.5752,30,10000,10000
+0.9,0,"0.10","Oracle (CRM, alpha = 0)","CRM","r_fixed",NA,"Average MTD selection %",50.3331,50.3331,30,10000,10000
+0.9,0.9,"0.15","CRM","CRM","r_fixed",NA,"Average MTD selection %",60.7172,60.7172,30,9980,9980
+0.9,0.9,"0.15","Alpha-CRM","CRM","alpha_crm",NA,"Average MTD selection %",60.8172,60.8172,30,10000,9980
+0.9,0.9,"0.15","IPCRM","CRM","cumu_crm",NA,"Average MTD selection %",63.0909,63.0909,30,10000,9980
+0.9,0.9,"0.15","Discount CRM","CRM","random",NA,"Average MTD selection %",58.8831,58.8831,30,9980,9980
+0.9,0.9,"0.15","CFO (PRIDE; gap 0.15)","CFO",NA,"pride","Average MTD selection %",61.732,61.732,30,9910,9890
+0.9,0,"0.15","Oracle (CRM, alpha = 0)","CRM","r_fixed",NA,"Average MTD selection %",59.4232,59.4232,30,9980,9980
+0.9,0.9,"0.05","CRM","CRM","r_fixed",NA,"Average MTD allocation",8.1357,27.119,30,10000,10000
+0.9,0.9,"0.05","Alpha-CRM","CRM","alpha_crm",NA,"Average MTD allocation",8.4516,28.172,30,10000,10000
+0.9,0.9,"0.05","IPCRM","CRM","cumu_crm",NA,"Average MTD allocation",9.1029,30.343,30,10000,10000
+0.9,0.9,"0.05","Discount CRM","CRM","random",NA,"Average MTD allocation",8.302,27.6733333333333,30,10000,10000
+0.9,0,"0.05","Oracle (CRM, alpha = 0)","CRM","r_fixed",NA,"Average MTD allocation",8.4198,28.066,30,10000,10000
+0.9,0.9,"0.10","CRM","CRM","r_fixed",NA,"Average MTD allocation",11.4603,38.201,30,10000,10000
+0.9,0.9,"0.10","Alpha-CRM","CRM","alpha_crm",NA,"Average MTD allocation",11.6489,38.8296666666667,30,9280,9280
+0.9,0.9,"0.10","IPCRM","CRM","cumu_crm",NA,"Average MTD allocation",11.9553,39.851,30,10000,10000
+0.9,0.9,"0.10","Discount CRM","CRM","random",NA,"Average MTD allocation",11.3309,37.7696666666667,30,10000,10000
+0.9,0,"0.10","Oracle (CRM, alpha = 0)","CRM","r_fixed",NA,"Average MTD allocation",11.159,37.1966666666667,30,10000,10000
+0.9,0.9,"0.15","CRM","CRM","r_fixed",NA,"Average MTD allocation",13.6031,45.3436666666667,30,9980,9980
+0.9,0.9,"0.15","Alpha-CRM","CRM","alpha_crm",NA,"Average MTD allocation",13.4497,44.8323333333333,30,10000,9980
+0.9,0.9,"0.15","IPCRM","CRM","cumu_crm",NA,"Average MTD allocation",13.601,45.3366666666667,30,10000,9980
+0.9,0.9,"0.15","Discount CRM","CRM","random",NA,"Average MTD allocation",13.1313,43.771,30,9980,9980
+0.9,0.9,"0.15","CFO (PRIDE; gap 0.15)","CFO",NA,"pride","Average MTD allocation",13.3875,44.625,30,9910,9890
+0.9,0,"0.15","Oracle (CRM, alpha = 0)","CRM","r_fixed",NA,"Average MTD allocation",12.8756,42.9186666666667,30,9980,9980
+0.9,0.9,"0.05","CRM","CRM","r_fixed",NA,"Average overdose selection %",8.9031,8.9031,30,10000,10000
+0.9,0.9,"0.05","Alpha-CRM","CRM","alpha_crm",NA,"Average overdose selection %",13.7115,13.7115,30,10000,10000
+0.9,0.9,"0.05","IPCRM","CRM","cumu_crm",NA,"Average overdose selection %",25.333,25.333,30,10000,10000
+0.9,0.9,"0.05","Discount CRM","CRM","random",NA,"Average overdose selection %",14.8028,14.8028,30,10000,10000
+0.9,0,"0.05","Oracle (CRM, alpha = 0)","CRM","r_fixed",NA,"Average overdose selection %",25.2668,25.2668,30,10000,10000
+0.9,0.9,"0.10","CRM","CRM","r_fixed",NA,"Average overdose selection %",10.0213,10.0213,30,10000,10000
+0.9,0.9,"0.10","Alpha-CRM","CRM","alpha_crm",NA,"Average overdose selection %",15.2648,15.2648,30,9280,9280
+0.9,0.9,"0.10","IPCRM","CRM","cumu_crm",NA,"Average overdose selection %",23.8041,23.8041,30,10000,10000
+0.9,0.9,"0.10","Discount CRM","CRM","random",NA,"Average overdose selection %",15.3173,15.3173,30,10000,10000
+0.9,0,"0.10","Oracle (CRM, alpha = 0)","CRM","r_fixed",NA,"Average overdose selection %",23.819,23.819,30,10000,10000
+0.9,0.9,"0.15","CRM","CRM","r_fixed",NA,"Average overdose selection %",10.4353,10.4353,30,9980,9980
+0.9,0.9,"0.15","Alpha-CRM","CRM","alpha_crm",NA,"Average overdose selection %",15.2305,15.2305,30,10000,9980
+0.9,0.9,"0.15","IPCRM","CRM","cumu_crm",NA,"Average overdose selection %",20.2774,20.2774,30,10000,9980
+0.9,0.9,"0.15","Discount CRM","CRM","random",NA,"Average overdose selection %",14.9213,14.9213,30,9980,9980
+0.9,0.9,"0.15","CFO (PRIDE; gap 0.15)","CFO",NA,"pride","Average overdose selection %",11.1394,11.1394,30,9910,9890
+0.9,0,"0.15","Oracle (CRM, alpha = 0)","CRM","r_fixed",NA,"Average overdose selection %",20.7364,20.7364,30,9980,9980
+0.9,0.9,"0.05","CRM","CRM","r_fixed",NA,"Average overdose allocation",3.0317,10.1056666666667,30,10000,10000
+0.9,0.9,"0.05","Alpha-CRM","CRM","alpha_crm",NA,"Average overdose allocation",4.0246,13.4153333333333,30,10000,10000
+0.9,0.9,"0.05","IPCRM","CRM","cumu_crm",NA,"Average overdose allocation",6.5908,21.9693333333333,30,10000,10000
+0.9,0.9,"0.05","Discount CRM","CRM","random",NA,"Average overdose allocation",4.4259,14.753,30,10000,10000
+0.9,0,"0.05","Oracle (CRM, alpha = 0)","CRM","r_fixed",NA,"Average overdose allocation",6.0891,20.297,30,10000,10000
+0.9,0.9,"0.10","CRM","CRM","r_fixed",NA,"Average overdose allocation",3.7361,12.4536666666667,30,10000,10000
+0.9,0.9,"0.10","Alpha-CRM","CRM","alpha_crm",NA,"Average overdose allocation",4.9343,16.4476666666667,30,9280,9280
+0.9,0.9,"0.10","IPCRM","CRM","cumu_crm",NA,"Average overdose allocation",7.0171,23.3903333333333,30,10000,10000
+0.9,0.9,"0.10","Discount CRM","CRM","random",NA,"Average overdose allocation",5.1421,17.1403333333333,30,10000,10000
+0.9,0,"0.10","Oracle (CRM, alpha = 0)","CRM","r_fixed",NA,"Average overdose allocation",6.5258,21.7526666666667,30,10000,10000
+0.9,0.9,"0.15","CRM","CRM","r_fixed",NA,"Average overdose allocation",4.3232,14.4106666666667,30,9980,9980
+0.9,0.9,"0.15","Alpha-CRM","CRM","alpha_crm",NA,"Average overdose allocation",5.539,18.4633333333333,30,10000,9980
+0.9,0.9,"0.15","IPCRM","CRM","cumu_crm",NA,"Average overdose allocation",6.9482,23.1606666666667,30,10000,9980
+0.9,0.9,"0.15","Discount CRM","CRM","random",NA,"Average overdose allocation",5.597,18.6566666666667,30,9980,9980
+0.9,0.9,"0.15","CFO (PRIDE; gap 0.15)","CFO",NA,"pride","Average overdose allocation",6.7413,22.471,30,9910,9890
+0.9,0,"0.15","Oracle (CRM, alpha = 0)","CRM","r_fixed",NA,"Average overdose allocation",6.5784,21.928,30,9980,9980
+0.9,0.9,"0.05","CRM","CRM","r_fixed",NA,"Average total unique patients",22.1535,22.1535,30,10000,10000
+0.9,0.9,"0.05","Alpha-CRM","CRM","alpha_crm",NA,"Average total unique patients",22.0121,22.0121,30,10000,10000
+0.9,0.9,"0.05","IPCRM","CRM","cumu_crm",NA,"Average total unique patients",22.4061,22.4061,30,10000,10000
+0.9,0.9,"0.05","Discount CRM","CRM","random",NA,"Average total unique patients",21.7749,21.7749,30,10000,10000
+0.9,0,"0.05","Oracle (CRM, alpha = 0)","CRM","r_fixed",NA,"Average total unique patients",21.9033,21.9033,30,10000,10000
+0.9,0.9,"0.10","CRM","CRM","r_fixed",NA,"Average total unique patients",21.9899,21.9899,30,10000,10000
+0.9,0.9,"0.10","Alpha-CRM","CRM","alpha_crm",NA,"Average total unique patients",22.0548,22.0548,30,9280,9280
+0.9,0.9,"0.10","IPCRM","CRM","cumu_crm",NA,"Average total unique patients",22.5928,22.5928,30,10000,10000
+0.9,0.9,"0.10","Discount CRM","CRM","random",NA,"Average total unique patients",21.8117,21.8117,30,10000,10000
+0.9,0,"0.10","Oracle (CRM, alpha = 0)","CRM","r_fixed",NA,"Average total unique patients",22.0211,22.0211,30,10000,10000
+0.9,0.9,"0.15","CRM","CRM","r_fixed",NA,"Average total unique patients",22.1518,22.1518,30,9980,9980
+0.9,0.9,"0.15","Alpha-CRM","CRM","alpha_crm",NA,"Average total unique patients",22.2584,22.2584,30,10000,9980
+0.9,0.9,"0.15","IPCRM","CRM","cumu_crm",NA,"Average total unique patients",22.7996,22.7996,30,10000,9980
+0.9,0.9,"0.15","Discount CRM","CRM","random",NA,"Average total unique patients",22.0089,22.0089,30,9980,9980
+0.9,0.9,"0.15","CFO (PRIDE; gap 0.15)","CFO",NA,"pride","Average total unique patients",23.3926,23.3926,30,9910,9890
+0.9,0,"0.15","Oracle (CRM, alpha = 0)","CRM","r_fixed",NA,"Average total unique patients",22.218,22.218,30,9980,9980
+0.9,0.9,"0.05","CRM","CRM","r_fixed",NA,"Average trial duration",1215.0402,173.577171428571,30,10000,10000
+0.9,0.9,"0.05","Alpha-CRM","CRM","alpha_crm",NA,"Average trial duration",1207.1968,172.456685714286,30,10000,10000
+0.9,0.9,"0.05","IPCRM","CRM","cumu_crm",NA,"Average trial duration",1229.0204,175.574342857143,30,10000,10000
+0.9,0.9,"0.05","Discount CRM","CRM","random",NA,"Average trial duration",1193.8857,170.5551,30,10000,10000
+0.9,0,"0.05","Oracle (CRM, alpha = 0)","CRM","r_fixed",NA,"Average trial duration",1201.1582,171.594028571429,30,10000,10000
+0.9,0.9,"0.10","CRM","CRM","r_fixed",NA,"Average trial duration",1205.9559,172.279414285714,30,10000,10000
+0.9,0.9,"0.10","Alpha-CRM","CRM","alpha_crm",NA,"Average trial duration",1209.5542,172.793457142857,30,9280,9280
+0.9,0.9,"0.10","IPCRM","CRM","cumu_crm",NA,"Average trial duration",1239.5874,177.083914285714,30,10000,10000
+0.9,0.9,"0.10","Discount CRM","CRM","random",NA,"Average trial duration",1195.9743,170.853471428571,30,10000,10000
+0.9,0,"0.10","Oracle (CRM, alpha = 0)","CRM","r_fixed",NA,"Average trial duration",1207.7772,172.5396,30,10000,10000
+0.9,0.9,"0.15","CRM","CRM","r_fixed",NA,"Average trial duration",1215.1872,173.598171428571,30,9980,9980
+0.9,0.9,"0.15","Alpha-CRM","CRM","alpha_crm",NA,"Average trial duration",1221.0987,174.442671428571,30,10000,9980
+0.9,0.9,"0.15","IPCRM","CRM","cumu_crm",NA,"Average trial duration",1251.3897,178.769957142857,30,10000,9980
+0.9,0.9,"0.15","Discount CRM","CRM","random",NA,"Average trial duration",1207.1859,172.455128571429,30,9980,9980
+0.9,0.9,"0.15","CFO (PRIDE; gap 0.15)","CFO",NA,"pride","Average trial duration",1284.834,183.547714285714,30,9910,9890
+0.9,0,"0.15","Oracle (CRM, alpha = 0)","CRM","r_fixed",NA,"Average trial duration",1218.9829,174.140414285714,30,9980,9980
+0.9,0.9,"0.05","CRM","CRM","r_fixed",NA,"MCSE of MTD selection %",0.0422,0.0422,30,10000,10000
+0.9,0.9,"0.05","Alpha-CRM","CRM","alpha_crm",NA,"MCSE of MTD selection %",0.0446,0.0446,30,10000,10000
+0.9,0.9,"0.05","IPCRM","CRM","cumu_crm",NA,"MCSE of MTD selection %",0.047,0.047,30,10000,10000
+0.9,0.9,"0.05","Discount CRM","CRM","random",NA,"MCSE of MTD selection %",0.0446,0.0446,30,10000,10000
+0.9,0,"0.05","Oracle (CRM, alpha = 0)","CRM","r_fixed",NA,"MCSE of MTD selection %",0.0463,0.0463,30,10000,10000
+0.9,0.9,"0.10","CRM","CRM","r_fixed",NA,"MCSE of MTD selection %",0.0474,0.0474,30,10000,10000
+0.9,0.9,"0.10","Alpha-CRM","CRM","alpha_crm",NA,"MCSE of MTD selection %",0.0492,0.0492,30,9280,9280
+0.9,0.9,"0.10","IPCRM","CRM","cumu_crm",NA,"MCSE of MTD selection %",0.0475,0.0475,30,10000,10000
+0.9,0.9,"0.10","Discount CRM","CRM","random",NA,"MCSE of MTD selection %",0.0479,0.0479,30,10000,10000
+0.9,0,"0.10","Oracle (CRM, alpha = 0)","CRM","r_fixed",NA,"MCSE of MTD selection %",0.0476,0.0476,30,10000,10000
+0.9,0.9,"0.15","CRM","CRM","r_fixed",NA,"MCSE of MTD selection %",0.0464,0.0464,30,9980,9980
+0.9,0.9,"0.15","Alpha-CRM","CRM","alpha_crm",NA,"MCSE of MTD selection %",0.0459,0.0459,30,10000,9980
+0.9,0.9,"0.15","IPCRM","CRM","cumu_crm",NA,"MCSE of MTD selection %",0.0458,0.0458,30,10000,9980
+0.9,0.9,"0.15","Discount CRM","CRM","random",NA,"MCSE of MTD selection %",0.0468,0.0468,30,9980,9980
+0.9,0.9,"0.15","CFO (PRIDE; gap 0.15)","CFO",NA,"pride","MCSE of MTD selection %",0.047,0.047,30,9910,9890
+0.9,0,"0.15","Oracle (CRM, alpha = 0)","CRM","r_fixed",NA,"MCSE of MTD selection %",0.0464,0.0464,30,9980,9980
+0.9,0.9,"0.05","CRM","CRM","r_fixed",NA,"Mean paired MTD selection difference vs oracle %",-3.5532,-3.5532,30,10000,10000
+0.9,0.9,"0.05","Alpha-CRM","CRM","alpha_crm",NA,"Mean paired MTD selection difference vs oracle %",-1.2823,-1.2823,30,10000,10000
+0.9,0.9,"0.05","IPCRM","CRM","cumu_crm",NA,"Mean paired MTD selection difference vs oracle %",3.3869,3.3869,30,10000,10000
+0.9,0.9,"0.05","Discount CRM","CRM","random",NA,"Mean paired MTD selection difference vs oracle %",-1.7893,-1.7893,30,10000,10000
+0.9,0,"0.05","Oracle (CRM, alpha = 0)","CRM","r_fixed",NA,"Mean paired MTD selection difference vs oracle %",0,0,30,10000,10000
+0.9,0.9,"0.10","CRM","CRM","r_fixed",NA,"Mean paired MTD selection difference vs oracle %",-0.9926,-0.9926,30,10000,10000
+0.9,0.9,"0.10","Alpha-CRM","CRM","alpha_crm",NA,"Mean paired MTD selection difference vs oracle %",0.9495,0.9495,30,9280,9280
+0.9,0.9,"0.10","IPCRM","CRM","cumu_crm",NA,"Mean paired MTD selection difference vs oracle %",3.5433,3.5433,30,10000,10000
+0.9,0.9,"0.10","Discount CRM","CRM","random",NA,"Mean paired MTD selection difference vs oracle %",-0.7579,-0.7579,30,10000,10000
+0.9,0,"0.10","Oracle (CRM, alpha = 0)","CRM","r_fixed",NA,"Mean paired MTD selection difference vs oracle %",0,0,30,10000,10000
+0.9,0.9,"0.15","CRM","CRM","r_fixed",NA,"Mean paired MTD selection difference vs oracle %",1.294,1.294,30,9980,9980
+0.9,0.9,"0.15","Alpha-CRM","CRM","alpha_crm",NA,"Mean paired MTD selection difference vs oracle %",1.3937,1.3937,30,10000,9980
+0.9,0.9,"0.15","IPCRM","CRM","cumu_crm",NA,"Mean paired MTD selection difference vs oracle %",3.6614,3.6614,30,10000,9980
+0.9,0.9,"0.15","Discount CRM","CRM","random",NA,"Mean paired MTD selection difference vs oracle %",-0.5402,-0.5402,30,9980,9980
+0.9,0.9,"0.15","CFO (PRIDE; gap 0.15)","CFO",NA,"pride","Mean paired MTD selection difference vs oracle %",2.3212,2.3212,30,9910,9890
+0.9,0,"0.15","Oracle (CRM, alpha = 0)","CRM","r_fixed",NA,"Mean paired MTD selection difference vs oracle %",0,0,30,9980,9980
+0.9,0.9,"0.05","CRM","CRM","r_fixed",NA,"SD paired MTD selection difference vs oracle %",14.9905,14.9905,30,10000,10000
+0.9,0.9,"0.05","Alpha-CRM","CRM","alpha_crm",NA,"SD paired MTD selection difference vs oracle %",9.79,9.79,30,10000,10000
+0.9,0.9,"0.05","IPCRM","CRM","cumu_crm",NA,"SD paired MTD selection difference vs oracle %",6.4062,6.4062,30,10000,10000
+0.9,0.9,"0.05","Discount CRM","CRM","random",NA,"SD paired MTD selection difference vs oracle %",10.1031,10.1031,30,10000,10000
+0.9,0,"0.05","Oracle (CRM, alpha = 0)","CRM","r_fixed",NA,"SD paired MTD selection difference vs oracle %",0,0,30,10000,10000
+0.9,0.9,"0.10","CRM","CRM","r_fixed",NA,"SD paired MTD selection difference vs oracle %",12.2091,12.2091,30,10000,10000
+0.9,0.9,"0.10","Alpha-CRM","CRM","alpha_crm",NA,"SD paired MTD selection difference vs oracle %",7.516,7.516,30,9280,9280
+0.9,0.9,"0.10","IPCRM","CRM","cumu_crm",NA,"SD paired MTD selection difference vs oracle %",6.6126,6.6126,30,10000,10000
+0.9,0.9,"0.10","Discount CRM","CRM","random",NA,"SD paired MTD selection difference vs oracle %",8.3235,8.3235,30,10000,10000
+0.9,0,"0.10","Oracle (CRM, alpha = 0)","CRM","r_fixed",NA,"SD paired MTD selection difference vs oracle %",0,0,30,10000,10000
+0.9,0.9,"0.15","CRM","CRM","r_fixed",NA,"SD paired MTD selection difference vs oracle %",9.8405,9.8405,30,9980,9980
+0.9,0.9,"0.15","Alpha-CRM","CRM","alpha_crm",NA,"SD paired MTD selection difference vs oracle %",6.5755,6.5755,30,10000,9980
+0.9,0.9,"0.15","IPCRM","CRM","cumu_crm",NA,"SD paired MTD selection difference vs oracle %",6.7127,6.7127,30,10000,9980
+0.9,0.9,"0.15","Discount CRM","CRM","random",NA,"SD paired MTD selection difference vs oracle %",7.227,7.227,30,9980,9980
+0.9,0.9,"0.15","CFO (PRIDE; gap 0.15)","CFO",NA,"pride","SD paired MTD selection difference vs oracle %",15.8286,15.8286,30,9910,9890
+0.9,0,"0.15","Oracle (CRM, alpha = 0)","CRM","r_fixed",NA,"SD paired MTD selection difference vs oracle %",0,0,30,9980,9980

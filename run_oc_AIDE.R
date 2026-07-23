@@ -64,6 +64,16 @@ fmt_short <- function(x, digits = 2) {
   out
 }
 
+is_random_crm <- function(model, crm_r_model) {
+  identical(as.character(model), "CRM") &&
+    identical(as.character(crm_r_model), "random")
+}
+
+random_crm_prior_tag <- function(model, crm_r_model, a_r, b_r) {
+  if (!is_random_crm(model, crm_r_model)) return("")
+  paste0("ar", fmt_param(a_r), "-br", fmt_param(b_r))
+}
+
 make_random_scenario_filename <- function(
     ndose,
     nscenario,
@@ -241,11 +251,15 @@ make_aide_folder <- function(task) {
   ## Keep folder names short to avoid filesystem path limits on the cluster.
   ## Per-setting details are still recorded in each task log and saved RDS object.
   scenario_set <- if (!is.null(task$scenario_set)) task$scenario_set else "default"
+  prior_tag <- random_crm_prior_tag(
+    task$model, task$crm_r_model, task$crm_a_r, task$crm_b_r
+  )
 
   paste0(
     scenario_set,
     "-model-", task$model,
     "-opt-", method_tag,
+    if (nzchar(prior_tag)) paste0("-", prior_tag) else "",
     "-w-", fmt_short(task$T_assess),
     "-c-", fmt_short(task$C),
     "-cyc-", fmt_short(task$cycle_max),
@@ -409,7 +423,7 @@ C_equiv <- 3L
 
 ## Maximum number of cycles/dosings per patient to evaluate.
 ## Set to c(1L, 2L, 3L) to compare no-IPDE vs 2-dose vs 3-dose IPDE.
-cycle_max_list_equiv <- c(1L, 2L, 3L)
+cycle_max_list_equiv <- c(2L)
 
 Nmax_eff_list_equiv <- c(30L)
 ## 1 = recycle eligible patients from any lower dose; 2 = adjacent lower dose only.
@@ -437,15 +451,15 @@ verbose <- FALSE
 
 ## Choose AIDE models here.
 ## Backfill standard BOIN/CRM for selected scenarios.
-model_list_aide <- c("BOIN", "CRM")
+model_list_aide <- c("CFO")
 ## model_list_aide <- c("BOIN")
 ## model_list_aide <- c("BOIN", "CRM", "CFO")
 ## model_list_aide <- c("CRM")
 ## model_list_aide <- c("CFO")
 
 ## BOIN methods and r estimator.
-method_list_boin <- c("approx1", "approx2")
-## method_list_boin <- c("boin", "approx1", "approx2")
+# method_list_boin <- c("approx1", "approx2")
+method_list_boin <- c("boin")
 
 ## BOIN r options:
 ##   r_fixed    : use fixed r_carry
@@ -462,15 +476,17 @@ r_estimator_list_boin <- c("r_fixed")
 ##   level         : level-specific random r, available only for 5-dose runs
 ##   alpha_crm     : alpha-CRM effective-dose model
 ##   cumu_crm      : logistic cumulative-dose CRM/IPCRM
-crm_r_model_list <- if (scenario_dose_count == 5L) {
-  c("fixed", "random", "level", "alpha_crm", "cumu_crm")
-} else {
-  c("fixed", "random", "alpha_crm", "cumu_crm")
-}
+# crm_r_model_list <- if (scenario_dose_count == 5L) {
+#   c("fixed", "random", "alpha_crm", "cumu_crm")
+# } else {
+#   c("fixed", "random", "alpha_crm", "cumu_crm")
+# }
 ## For quick tests, use for example:
-## crm_r_model_list <- c("alpha_crm")
+crm_r_model_list <- c("r_fixed")
 ## crm_r_model_list <- c("cumu_crm")
 ## crm_r_model_list <- c("fixed")
+## To use the prior grid below, set crm_r_model_list <- c("random") and
+## include "CRM" in model_list_aide.
 
 ## Final MTD selection gate.
 ## TRUE: select among tried/non-eliminated doses.
@@ -509,6 +525,19 @@ crm_skeleton_default <- q_skeleton
 crm_alpha_sd_default <- theta_sd
 crm_a_r_default <- target_BOIN / 2
 crm_b_r_default <- 1 - crm_a_r_default
+
+## Beta(a_r, b_r) priors for the one-random-r CRM model. Each row generates
+## a separate set of tasks only when model = "CRM" and crm_r_model = "random".
+## Add additional positive (a_r, b_r) pairs here as needed.
+crm_random_prior_grid <- rbind(
+  c(a_r = 0.15, b_r = 0.85),
+  c(a_r = 0.50, b_r = 0.50)
+)
+if (!is.matrix(crm_random_prior_grid) || ncol(crm_random_prior_grid) != 2L ||
+    !identical(colnames(crm_random_prior_grid), c("a_r", "b_r")) ||
+    any(!is.finite(crm_random_prior_grid)) || any(crm_random_prior_grid <= 0)) {
+  stop("crm_random_prior_grid must be a two-column positive numeric matrix named a_r and b_r.")
+}
 
 ## New CRM helper uses one uniform model_file argument.
 ## Keep NULL to use defaults:
@@ -558,7 +587,7 @@ crm_cumu_beta2_rate_default <- 1
 crm_cumu_include_current_default <- FALSE
 
 ## CFO / PRIDE settings from methods_prior.R.
-cfo_method_list_aide <- c("empirical", "pride")
+cfo_method_list_aide <- c("pride")
 cfo_model_file_default <- "PRIDE.bug"
 cfo_sigma2_beta_default <- 30
 cfo_eta_default <- 1
@@ -579,8 +608,8 @@ cfo_n_burnin <- 2000
 cfo_n_iter <- 5000
 cfo_thin <- 2
 
-alpha_true_list <- c(0, 0.3, 0.6, 0.9)
-accrual_list <- c(1 / 14)
+alpha_true_list <- c(0.3)
+accrual_list <- c(1/56)
 ## For BOIN with r_estimator = "r_mle", r_carry is not used.
 ## Keep one placeholder value to avoid duplicate identical BOIN runs.
 r_carry_list_boin <- c(0)
@@ -646,7 +675,7 @@ if (isTRUE(use_random_scenario_file)) {
   scenario_file <- file.path(scenario_dir, paste0(scenario_set_name, ".csv"))
 
   ## Default 5-dose run: newly added high-gap scenarios.
-  scenarios <- 26:37
+  scenarios <- 1:6
 } else if (scenario_dose_count == 8L) {
   scenario_set_name <- "Set_8dose_adaptive_r_40"
   scenario_file <- file.path(scenario_dir, paste0(scenario_set_name, ".csv"))
@@ -805,6 +834,9 @@ run_one_aide_task <- function(task) {
   }
 
   scenario_name <- paste0(task$scenario_set, "_SC", task$scenario_id)
+  prior_tag <- random_crm_prior_tag(
+    task$model, task$crm_r_model, task$crm_a_r, task$crm_b_r
+  )
 
   filename <- paste0(
     scenario_name,
@@ -812,6 +844,7 @@ run_one_aide_task <- function(task) {
     "-", method_tag,
     "-a", fmt_short(task$alpha_true),
     "-r", fmt_short(task$r_carry),
+    if (nzchar(prior_tag)) paste0("-", prior_tag) else "",
     "-cyc", fmt_short(task$cycle_max),
     "-tried", as.integer(isTRUE(task$restrict_to_tried)),
     if (isTRUE(task$restrict_to_target)) "-ptarget1" else "",
@@ -830,6 +863,7 @@ run_one_aide_task <- function(task) {
       scenario_name,
       "-", task$model,
       "-", method_tag,
+      if (nzchar(prior_tag)) paste0("-", prior_tag) else "",
       "-cyc", fmt_short(task$cycle_max),
       "-tried", as.integer(isTRUE(task$restrict_to_tried)),
       if (isTRUE(task$restrict_to_target)) "-ptarget1" else "",
@@ -1053,6 +1087,8 @@ run_one_aide_task <- function(task) {
     mtd_method = task$mtd_method,
     r_estimator = task$r_estimator,
     crm_r_model = task$crm_r_model,
+    crm_a_r = task$crm_a_r,
+    crm_b_r = task$crm_b_r,
     cfo_method = task$cfo_method,
     restrict_to_tried = task$restrict_to_tried,
     restrict_to_target = task$restrict_to_target,
@@ -1078,7 +1114,7 @@ run_one_aide_task <- function(task) {
 workdir <- getwd()
 
 ## Save runs under a scenario-specific output root so old files are not overwritten.
-outdir_root <- paste0("oc_results_cluster_AIDE_", scenario_set_name)
+outdir_root <- paste0("oc_results_cluster_AIDE_new", scenario_set_name)
 if (!dir.exists(outdir_root)) {
   dir.create(outdir_root, recursive = TRUE)
 }
@@ -1145,7 +1181,21 @@ for (Nmax_eff_aide in Nmax_eff_list_equiv) {
                     r_carry_loop <- c(0)
                   }
 
-                  for (r_carry_aide in r_carry_loop) {
+                  crm_prior_grid <- if (is_random_crm(model_aide, crm_r_model_aide)) {
+                    crm_random_prior_grid
+                  } else {
+                    matrix(
+                      c(crm_a_r_default, crm_b_r_default),
+                      nrow = 1L,
+                      dimnames = list(NULL, c("a_r", "b_r"))
+                    )
+                  }
+
+                  for (crm_prior_i in seq_len(nrow(crm_prior_grid))) {
+                    crm_a_r_aide <- crm_prior_grid[crm_prior_i, "a_r"]
+                    crm_b_r_aide <- crm_prior_grid[crm_prior_i, "b_r"]
+
+                    for (r_carry_aide in r_carry_loop) {
                     for (block_id in seq_along(trial_blocks)) {
                       ntrial.block <- trial_blocks[block_id]
 
@@ -1213,8 +1263,8 @@ for (Nmax_eff_aide in Nmax_eff_list_equiv) {
                         crm_r_model = if (model_aide == "CRM") crm_r_model_aide else "fixed",
                         crm_skeleton = crm_skeleton_default,
                         crm_alpha_sd = crm_alpha_sd_default,
-                        crm_a_r = crm_a_r_default,
-                        crm_b_r = crm_b_r_default,
+                        crm_a_r = crm_a_r_aide,
+                        crm_b_r = crm_b_r_aide,
                         crm_model_file = crm_model_file_default,
                         crm_fixed_model_file = crm_fixed_model_file_default,
                         crm_random_model_file = crm_random_model_file_default,
@@ -1275,6 +1325,7 @@ for (Nmax_eff_aide in Nmax_eff_list_equiv) {
                       task_id <- task_id + 1L
               }
             }
+                  }
           }
         }
       }
@@ -1328,6 +1379,13 @@ group_key <- vapply(
       paste0("neval", z$n_eval_escalate),
       paste0("tried", as.integer(isTRUE(z$restrict_to_tried)))
     )
+
+    prior_tag <- random_crm_prior_tag(
+      z$model, z$crm_r_model, z$crm_a_r, z$crm_b_r
+    )
+    if (nzchar(prior_tag)) {
+      key_parts <- c(key_parts, prior_tag)
+    }
 
     if (isTRUE(z$restrict_to_target)) {
       key_parts <- c(key_parts, "ptarget1")
