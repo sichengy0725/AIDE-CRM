@@ -34,6 +34,52 @@ aide_ipde_toxicity_probability <- function(p_true,
         ipde_alpha * p_true[as.integer(previous_dose)])
 }
 
+## Posterior safety gate for a recycled/IPDE assignment under the random-r
+## CRM.  This mirrors the Phase I/II criterion and is evaluated draw by draw:
+## Pr{r + (1-r) p_next > phi} < cutoff.
+aide_random_crm_recycle_toxicity_gate <- function(post,
+                                                   next_dose,
+                                                   phi,
+                                                   cutoff) {
+  post <- as.matrix(post)
+  if (nrow(post) < 1L || !"r" %in% colnames(post)) {
+    stop("Random-CRM posterior samples must contain at least one draw of r.")
+  }
+  if (length(next_dose) != 1L || !is.finite(next_dose) ||
+      next_dose < 1L || next_dose != as.integer(next_dose)) {
+    stop("next_dose must be a positive integer.")
+  }
+  if (length(phi) != 1L || !is.finite(phi) || phi <= 0 || phi >= 1) {
+    stop("phi must be a scalar in (0, 1).")
+  }
+  if (length(cutoff) != 1L || !is.finite(cutoff) || cutoff <= 0 || cutoff >= 1) {
+    stop("cutoff must be a scalar in (0, 1).")
+  }
+
+  p_column <- paste0("p[", as.integer(next_dose), "]")
+  if (!p_column %in% colnames(post)) {
+    stop("Random-CRM posterior samples do not contain ", p_column, ".")
+  }
+
+  r_draw <- as.numeric(post[, "r"])
+  p_draw <- as.numeric(post[, p_column])
+  if (any(!is.finite(r_draw) | r_draw < 0 | r_draw > 1) ||
+      any(!is.finite(p_draw) | p_draw < 0 | p_draw > 1)) {
+    stop("Random-CRM posterior samples contain invalid probability draws.")
+  }
+
+  theta_draw <- r_draw + (1 - r_draw) * p_draw
+  probability_over_phi <- mean(theta_draw > phi)
+  list(
+    allowed = probability_over_phi < cutoff,
+    probability_over_phi = probability_over_phi,
+    theta_posterior_mean = mean(theta_draw),
+    phi = phi,
+    cutoff = cutoff,
+    next_dose = as.integer(next_dose)
+  )
+}
+
 simulate_AIDE_design <- function(
     # --- trial size / timing ---
   N_pat       = 30L,
@@ -59,6 +105,9 @@ simulate_AIDE_design <- function(
   # calculated from p_true, the patient's previous dose, and ipde_alpha.
   p_ipde = p_true,
   ipde_alpha = 0,
+  # Applies only to the random-r CRM.  When enabled, recycled/IPDE
+  # assignments are blocked if Pr{r + (1-r) p_next > TARGET} reaches cutoff.
+  apply_random_crm_recycle_toxicity_rule = TRUE,
   seed = NULL,
   verbose = FALSE,
 
@@ -162,6 +211,12 @@ simulate_AIDE_design <- function(
     stop("n_eval_escalate must be a single non-negative integer.")
   }
   n_eval_escalate <- as.integer(n_eval_escalate)
+  if (length(apply_random_crm_recycle_toxicity_rule) != 1L ||
+      is.na(apply_random_crm_recycle_toxicity_rule)) {
+    stop("apply_random_crm_recycle_toxicity_rule must be TRUE or FALSE.")
+  }
+  apply_random_crm_recycle_toxicity_rule <-
+    isTRUE(apply_random_crm_recycle_toxicity_rule)
 
   if (model == "BOIN") {
     decision_method <- match.arg(decision_method)
@@ -499,6 +554,21 @@ simulate_AIDE_design <- function(
 
   elimi <- rep(0L, K)
   earlystop <- 0L
+  random_crm_recycle_rule_active <- model == "CRM" && crm_r_model == "random"
+  ipde_risk_log <- data.frame(
+    cohort = integer(0),
+    next_dose = integer(0),
+    rule_active = logical(0),
+    rule_enabled = logical(0),
+    probability_over_target = numeric(0),
+    target = numeric(0),
+    cutoff = numeric(0),
+    allowed = logical(0),
+    n_candidates_before_rule = integer(0),
+    n_candidates_after_rule = integer(0),
+    n_selected_for_recycling = integer(0),
+    stringsAsFactors = FALSE
+  )
 
   ## ---------------- 1) first cohort ----------------
   curr_dose <- 1L
@@ -988,6 +1058,49 @@ simulate_AIDE_design <- function(
       design = ipde_design,
       t_available = t_available
     )
+    n_candidates_before_rule <- length(cand)
+    risk_gate <- list(
+      allowed = TRUE,
+      probability_over_phi = NA_real_,
+      phi = TARGET,
+      cutoff = cutoff
+    )
+
+    ## Like the Phase I/II gate, this applies only to a random-r CRM and
+    ## protects the recycled administration, not the regular dose decision.
+    if (n_candidates_before_rule > 0L &&
+        random_crm_recycle_rule_active &&
+        apply_random_crm_recycle_toxicity_rule) {
+      random_crm_fit <- crm_fit(
+        dat = dat_dec,
+        ndose = K,
+        skeleton = crm_skeleton,
+        target = TARGET,
+        cutoff = cutoff,
+        r_model = "random",
+        r_carry = r_carry,
+        a_r = crm_a_r,
+        b_r = crm_b_r,
+        alpha_sd = crm_alpha_sd,
+        model_file = crm_model_file,
+        fixed_model_file = crm_fixed_model_file,
+        random_model_file = crm_random_model_file,
+        level_model_file = crm_level_model_file,
+        n_chains = crm_n_chains,
+        n_adapt = crm_n_adapt,
+        n_burnin = crm_n_burnin,
+        n_iter = crm_n_iter,
+        thin = crm_thin
+      )
+      risk_gate <- aide_random_crm_recycle_toxicity_gate(
+        post = random_crm_fit$post,
+        next_dose = next_dose,
+        phi = TARGET,
+        cutoff = cutoff
+      )
+      if (!isTRUE(risk_gate$allowed)) cand <- integer(0)
+    }
+    n_candidates_after_rule <- length(cand)
 
     if (new_pat_first == 1L) {
       ## Mirror the TITE priority rule: new patients who have already arrived
@@ -1052,6 +1165,26 @@ simulate_AIDE_design <- function(
         new_ids <- new_patients$id
         t_start <- max(t_start, new_info$t_start)
       }
+    }
+
+    if (n_candidates_before_rule > 0L) {
+      ipde_risk_log <- rbind(
+        ipde_risk_log,
+        data.frame(
+          cohort = as.integer(cohort_id),
+          next_dose = as.integer(next_dose),
+          rule_active = random_crm_recycle_rule_active,
+          rule_enabled = apply_random_crm_recycle_toxicity_rule,
+          probability_over_target = as.numeric(risk_gate$probability_over_phi),
+          target = as.numeric(risk_gate$phi),
+          cutoff = as.numeric(risk_gate$cutoff),
+          allowed = isTRUE(risk_gate$allowed),
+          n_candidates_before_rule = as.integer(n_candidates_before_rule),
+          n_candidates_after_rule = as.integer(n_candidates_after_rule),
+          n_selected_for_recycling = as.integer(length(ret_ids)),
+          stringsAsFactors = FALSE
+        )
+      )
     }
 
     ## append new-patient outcomes
@@ -1145,6 +1278,7 @@ simulate_AIDE_design <- function(
       new_pat_first = new_pat_first,
       n_eval_escalate = n_eval_escalate,
       ipde_alpha = ipde_alpha,
+      ipde_risk_log = ipde_risk_log,
       final = list(
         t_end = NA_real_,
         MTD = 99L,
@@ -1158,6 +1292,9 @@ simulate_AIDE_design <- function(
         r_carry = r_carry,
         r_estimator = if (model == "BOIN") r_estimator else NA_character_,
         r_model = if (model == "CRM") crm_r_model else NA_character_,
+        apply_random_crm_recycle_toxicity_rule = apply_random_crm_recycle_toxicity_rule,
+        random_crm_recycle_rule_active = random_crm_recycle_rule_active,
+        random_crm_recycle_toxicity_cutoff = cutoff,
         cfo_method = if (model == "CFO") cfo_method else NA_character_,
         restrict_to_tried = restrict_to_tried,
         restrict_to_target = restrict_to_target,
@@ -1322,6 +1459,7 @@ simulate_AIDE_design <- function(
     new_pat_first = new_pat_first,
     n_eval_escalate = n_eval_escalate,
     ipde_alpha = ipde_alpha,
+    ipde_risk_log = ipde_risk_log,
     final = list(
       t_end = t_end,
       MTD = final_dose,
@@ -1335,6 +1473,9 @@ simulate_AIDE_design <- function(
       r_carry = r_carry,
       r_estimator = if (model == "BOIN") r_estimator else NA_character_,
       r_model = if (model == "CRM") crm_r_model else NA_character_,
+      apply_random_crm_recycle_toxicity_rule = apply_random_crm_recycle_toxicity_rule,
+      random_crm_recycle_rule_active = random_crm_recycle_rule_active,
+      random_crm_recycle_toxicity_cutoff = cutoff,
       cfo_method = if (model == "CFO") cfo_method else NA_character_,
       restrict_to_tried = restrict_to_tried,
       restrict_to_target = restrict_to_target,
@@ -1385,6 +1526,9 @@ get_oc_sim_AIDE <- function(
     new_pat_first = 2L,
 
     cutoff = 0.95,
+    ## Used only for model = "CRM", crm_r_model = "random".  This uses the
+    ## same cutoff as the over-toxicity elimination rule.
+    apply_random_crm_recycle_toxicity_rule = TRUE,
     d.cap = 100,
     dose_cap = 3L,
     n_eval_escalate = 3L,
@@ -1476,6 +1620,12 @@ get_oc_sim_AIDE <- function(
     stop("n_eval_escalate must be a single non-negative integer.")
   }
   n_eval_escalate <- as.integer(n_eval_escalate)
+  if (length(apply_random_crm_recycle_toxicity_rule) != 1L ||
+      is.na(apply_random_crm_recycle_toxicity_rule)) {
+    stop("apply_random_crm_recycle_toxicity_rule must be TRUE or FALSE.")
+  }
+  apply_random_crm_recycle_toxicity_rule <-
+    isTRUE(apply_random_crm_recycle_toxicity_rule)
 
   if (model == "BOIN") {
     decision_method <- match.arg(decision_method)
@@ -1601,6 +1751,7 @@ get_oc_sim_AIDE <- function(
       verbose = verbose,
       TARGET = target,
       cutoff = cutoff,
+      apply_random_crm_recycle_toxicity_rule = apply_random_crm_recycle_toxicity_rule,
       model = model,
       ipde_design = ipde_design,
       d.cap = d.cap,
@@ -1780,6 +1931,8 @@ get_oc_sim_AIDE <- function(
     ipde_design = ipde_design,
     continuous_enrollment = continuous_enrollment,
     new_pat_first = new_pat_first,
+    apply_random_crm_recycle_toxicity_rule = apply_random_crm_recycle_toxicity_rule,
+    random_crm_recycle_toxicity_cutoff = cutoff,
     d.cap = d.cap,
     dose_cap = dose_cap,
     n_eval_escalate = n_eval_escalate,

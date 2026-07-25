@@ -5,14 +5,16 @@
 ## Newest runner naming rules:
 ##
 ## Folder:
-##   oc_results_cluster_AIDE_{scenario_set_name}/
+##   oc_results_cluster_AIDE_new{scenario_set_name}/
 ##   {scenario_set_name}-model-{model}-opt-{method_tag}-w-{T_assess}-c-{C}-
 ##   cyc-{cycle_max}-rate-{arrival_rate}-Nmax-{Nmax_eff}-ipde-{1/2}-
-##   newfirst-{1/2}-neval-{n_eval_escalate}-tried-{0/1}/
+##   newfirst-{1/2}-neval-{n_eval_escalate}-tried-{0/1}[-ptarget-1]/
+##   For random CRM, the folder also contains -ar{a_r}-br{b_r}.
 ##
 ## Raw RDS file written by run_oc_AIDE.R:
 ##   {scenario_set_name}_SC{sc}-{model}-{method_tag}-a{alpha_true}-r{r_carry}-
-##   cyc{cycle_max}-tried{0/1}-j{job}-b{block}-s{seed}-n{ntrial}.rds
+##   [ar{a_r}-br{b_r}-]cyc{cycle_max}-tried{0/1}[-ptarget1]-
+##   j{job}-b{block}-s{seed}-n{ntrial}.rds
 ##
 ## Supports:
 ##   BOIN: boin / approx1 / approx2 with r_fixed, r_mle, or r_adaptive
@@ -30,16 +32,33 @@ rm(list = ls())
 
 ## setwd("/rsrch8/home/biostatistics/syang10/AIDE")
 
-## Current non-random 5-dose runner branch: scenarios 26:37.
-scenario_file <- file.path("scenario_sets", "Set_5dose_adaptive_r_37.csv")
+## Current random-scenario 5-dose branch in run_oc_AIDE.R.  Update this
+## block whenever the runner's user-settings section changes.
+scenario_file <- file.path(
+  "scenario_sets",
+  "random_scenarios_ndose5_nscenario10000_target0p3_tdiffbelow0p05_tdiffabove0p05.csv"
+)
 scenario_set_name <- tools::file_path_sans_ext(basename(scenario_file))
-results_root <- paste0("oc_results_cluster_AIDE_", scenario_set_name)
+results_root <- paste0("oc_results_cluster_AIDE_new", scenario_set_name)
 
 scenario_meta <- utils::read.csv(scenario_file, check.names = FALSE, stringsAsFactors = FALSE)
+if (!"True_MTD" %in% names(scenario_meta) && "MTD" %in% names(scenario_meta)) {
+  scenario_meta$True_MTD <- as.integer(scenario_meta$MTD)
+}
+if (!"Source_Scenario" %in% names(scenario_meta)) {
+  scenario_meta$Source_Scenario <- as.integer(scenario_meta$Scenario)
+}
+if (!"Scenario_Group" %in% names(scenario_meta)) {
+  scenario_meta$Scenario_Group <- "scenario_file"
+}
+if (!"Attempt" %in% names(scenario_meta)) {
+  scenario_meta$Attempt <- NA_integer_
+}
 dose_col_names <- grep("^Dose[0-9]+$", names(scenario_meta), value = TRUE)
 p_true_scenarios <- as.matrix(scenario_meta[dose_col_names])
 rownames(p_true_scenarios) <- as.character(scenario_meta$Scenario)
-scenario_id_list <- 1:6
+## run_oc_AIDE.R defaults to the first batch of 10 random scenarios.
+scenario_id_list <- 1:10
 ndose_expected <- ncol(p_true_scenarios)
 
 jobs.expected <- 1:2000
@@ -68,24 +87,25 @@ d_cap <- 100L
 dose_cap <- 3L
 continuous_enrollment <- TRUE
 restrict_to_tried_list <- c(TRUE)
+restrict_to_target_list <- c(FALSE)
 
-alpha_true_list <- c(0, 0.3, 0.6, 0.9)
-arrival_rate_list <- c(1 / 28, 1 / 56)
+alpha_true_list <- c(0.3)
+arrival_rate_list <- c(1 / 56)
 
 ## BOIN settings matched to runner
-boin_method_list <- c("approx1", "approx2")
-boin_r_estimator_list <- c("fixed")
+boin_method_list <- c("boin")
+boin_r_estimator_list <- c("r_fixed")
 boin_r_carry_list_r_mle <- c(0)
 boin_r_carry_list_fixed <- c(0)
 
 ## CRM settings matched to the current 5-dose random-scenario runner.
-crm_r_model_list <- c("crm_r_fixed", "random")
+crm_r_model_list <- c("fixed", "random")
 
 ## r values by CRM backend, matching the names produced by run_oc_AIDE.R.
 ## fixed CRM uses r_carry; alpha_crm/cumu_crm do not use fixed r, so the
 ## runner convention is usually r0 in the filename.
 crm_r_carry_values <- list(
-  crm_r_fixed = c(0),
+  fixed     = c(0),
   random    = c(0),
   level     = c(0),
   alpha_crm = c(0),
@@ -112,6 +132,12 @@ crm_theta_prior_mean <- theta_mean
 crm_theta_prior_sd <- theta_sd
 crm_a_r <- target / 2
 crm_b_r <- 1 - crm_a_r
+## Mirrors run_oc_AIDE.R: each random-CRM prior has its own result folder
+## and filename tag.
+crm_random_prior_grid <- rbind(
+  c(a_r = 0.15, b_r = 0.85),
+  c(a_r = 0.50, b_r = 0.50)
+)
 
 ## alpha-CRM actual dose amounts, mg
 crm_dose_values_alpha <- c(15, 20, 30, 35, 45)
@@ -140,8 +166,8 @@ crm_cumu_beta2_rate <- beta2_rate
 crm_cumu_include_current <- FALSE
 
 ## CFO / PRIDE settings matched to methods_prior.R and run_oc_AIDE.R.
-cfo_method_list <- c("empirical", "pride")
-cfo_skeleton <- c(0.002, 0.008, 0.012, 0.04, 0.08, 0.10, 0.20, 0.35)
+cfo_method_list <- c("pride")
+cfo_skeleton <- c(0.005, 0.01, 0.05, 0.10, 0.30)
 cfo_model_file <- "PRIDE.bug"
 cfo_sigma2_beta <- 30
 cfo_eta <- 1
@@ -155,9 +181,9 @@ cfo_n_burnin <- 2000
 cfo_n_iter <- 5000
 cfo_thin <- 2
 
-model_list <- c("CRM")
+model_list <- c("CFO")
 
-out.dir <- paste0("OC_summary_from_parallel_AIDE_jobs_", scenario_set_name)
+out.dir <- paste0("OC_summary_from_parallel_AIDE_jobs_new", scenario_set_name)
 if (!dir.exists(out.dir)) dir.create(out.dir, recursive = TRUE)
 
 ## -------------------------------
@@ -180,6 +206,22 @@ fmt_short <- function(x, digits = 2) {
   out <- gsub("-", "m", out)
   out <- gsub("\\.", "p", out)
   out
+}
+
+## Must match run_oc_AIDE.R's random-CRM prior formatter.
+fmt_param <- function(x, digits = 4) {
+  x <- round(as.numeric(x), digits)
+  gsub("\\.", "p", format(x, scientific = FALSE, trim = TRUE))
+}
+
+is_random_crm <- function(model, crm_r_model) {
+  identical(as.character(model), "CRM") &&
+    identical(as.character(crm_r_model), "random")
+}
+
+random_crm_prior_tag <- function(model, crm_r_model, a_r, b_r) {
+  if (!is_random_crm(model, crm_r_model)) return("")
+  paste0("ar", fmt_param(a_r), "-br", fmt_param(b_r))
 }
 
 calc_select_rate_pct <- function(sel, ndose, denom) {
@@ -225,11 +267,17 @@ make_foldername <- function(model,
                             new_pat_first,
                             n_eval_escalate,
                             restrict_to_tried,
+                            restrict_to_target,
+                            crm_r_model,
+                            crm_a_r,
+                            crm_b_r,
                             scenario_set = scenario_set_name) {
+  prior_tag <- random_crm_prior_tag(model, crm_r_model, crm_a_r, crm_b_r)
   paste0(
     scenario_set,
     "-model-", model,
     "-opt-", method_tag,
+    if (nzchar(prior_tag)) paste0("-", prior_tag) else "",
     "-w-", fmt_short(T_assess),
     "-c-", fmt_short(C),
     "-cyc-", fmt_short(cycle_max),
@@ -238,16 +286,21 @@ make_foldername <- function(model,
     "-ipde-", ipde_design,
     "-newfirst-", new_pat_first,
     "-neval-", n_eval_escalate,
-    "-tried-", as.integer(isTRUE(restrict_to_tried))
+    "-tried-", as.integer(isTRUE(restrict_to_tried)),
+    if (isTRUE(restrict_to_target)) "-ptarget-1" else ""
   )
 }
 
 resolve_folderpath <- function(foldername) {
-  nested <- file.path(results_root, foldername)
-  if (dir.exists(nested) || !dir.exists(foldername)) {
-    return(nested)
-  }
-  foldername
+  ## The second candidate preserves read-only support for pre-"new" runs.
+  candidates <- c(
+    file.path(results_root, foldername),
+    file.path(paste0("oc_results_cluster_AIDE_", scenario_set_name), foldername),
+    foldername
+  )
+  found <- candidates[dir.exists(candidates)]
+  if (length(found) > 0L) return(found[1L])
+  candidates[1L]
 }
 
 method_tag_candidates <- function(model, method_tag) {
@@ -267,7 +320,11 @@ resolve_result_folder <- function(model,
                                   ipde_design,
                                   new_pat_first,
                                   n_eval_escalate,
-                                  restrict_to_tried) {
+                                  restrict_to_tried,
+                                  restrict_to_target,
+                                  crm_r_model,
+                                  crm_a_r,
+                                  crm_b_r) {
   tags <- method_tag_candidates(model, method_tag)
   attempts <- lapply(tags, function(tag) {
     foldername <- make_foldername(
@@ -279,7 +336,11 @@ resolve_result_folder <- function(model,
       ipde_design = ipde_design,
       new_pat_first = new_pat_first,
       n_eval_escalate = n_eval_escalate,
-      restrict_to_tried = restrict_to_tried
+      restrict_to_tried = restrict_to_tried,
+      restrict_to_target = restrict_to_target,
+      crm_r_model = crm_r_model,
+      crm_a_r = crm_a_r,
+      crm_b_r = crm_b_r
     )
     list(
       method_tag = tag,
@@ -302,11 +363,16 @@ make_group_key <- function(sc,
                            Nmax_eff,
                            ipde_design,
                            continuous_enrollment,
-                           new_pat_first,
-                           n_eval_escalate,
-                           restrict_to_tried,
-                           scenario_set = scenario_set_name) {
-  paste(
+                            new_pat_first,
+                            n_eval_escalate,
+                            restrict_to_tried,
+                            restrict_to_target,
+                            crm_r_model,
+                            crm_a_r,
+                            crm_b_r,
+                            scenario_set = scenario_set_name) {
+  prior_tag <- random_crm_prior_tag(model, crm_r_model, crm_a_r, crm_b_r)
+  key_parts <- c(
     paste0(scenario_set, "_SC", sc),
     model,
     method_tag,
@@ -319,9 +385,11 @@ make_group_key <- function(sc,
     paste0("cont", as.integer(isTRUE(continuous_enrollment))),
     paste0("newfirst", new_pat_first),
     paste0("neval", n_eval_escalate),
-    paste0("tried", as.integer(isTRUE(restrict_to_tried))),
-    sep = "_"
+    paste0("tried", as.integer(isTRUE(restrict_to_tried)))
   )
+  if (nzchar(prior_tag)) key_parts <- c(key_parts, prior_tag)
+  if (isTRUE(restrict_to_target)) key_parts <- c(key_parts, "ptarget1")
+  paste(key_parts, collapse = "_")
 }
 
 ## Each raw task RDS has the fields used by summarize_aide_files(), so exact
@@ -330,16 +398,21 @@ make_raw_rds_filenames <- function(sc,
                                    model,
                                    method_tag,
                                    alpha_true,
-                                   r_carry,
-                                   cycle_max,
-                                   restrict_to_tried,
-                                   jobs = jobs.expected,
+                                    r_carry,
+                                    cycle_max,
+                                    restrict_to_tried,
+                                    restrict_to_target,
+                                    crm_r_model,
+                                    crm_a_r,
+                                    crm_b_r,
+                                    jobs = jobs.expected,
                                    block_id = block_id_expected,
                                    seed_base = seed_base_expected,
                                    ntrial_per_job = ntrial_per_job_expected,
                                    scenario_set = scenario_set_name) {
   jobs <- as.integer(jobs)
   seed_block <- as.integer(seed_base) + (jobs - 1L) * as.integer(ntrial_per_job)
+  prior_tag <- random_crm_prior_tag(model, crm_r_model, crm_a_r, crm_b_r)
 
   paste0(
     scenario_set, "_SC", sc,
@@ -347,8 +420,10 @@ make_raw_rds_filenames <- function(sc,
     "-", method_tag,
     "-a", fmt_short(alpha_true),
     "-r", fmt_short(r_carry),
+    if (nzchar(prior_tag)) paste0("-", prior_tag) else "",
     "-cyc", fmt_short(cycle_max),
     "-tried", as.integer(isTRUE(restrict_to_tried)),
+    if (isTRUE(restrict_to_target)) "-ptarget1" else "",
     "-j", jobs,
     "-b", block_id,
     "-s", seed_block,
@@ -505,7 +580,10 @@ summarize_aide_files <- function(files.use,
                                  ipde_design,
                                  new_pat_first,
                                  n_eval_escalate,
-                                 restrict_to_tried) {
+                                 restrict_to_tried,
+                                 restrict_to_target,
+                                 crm_a_r,
+                                 crm_b_r) {
   res.list <- lapply(files.use, readRDS)
 
   ndose <- get_field(res.list[[1]], c("ndose"))
@@ -622,6 +700,7 @@ summarize_aide_files <- function(files.use,
     Dose_Cap = dose_cap,
     Continuous_Enrollment = as.integer(isTRUE(continuous_enrollment)),
     Restrict_To_Tried = as.integer(isTRUE(restrict_to_tried)),
+    Restrict_To_Target = as.integer(isTRUE(restrict_to_target)),
     Dose = seq_len(ndose),
 
     True_DLT_rate = p.true,
@@ -743,6 +822,7 @@ summarize_aide_files <- function(files.use,
     Dose_Cap = dose_cap,
     Continuous_Enrollment = as.integer(isTRUE(continuous_enrollment)),
     Restrict_To_Tried = as.integer(isTRUE(restrict_to_tried)),
+    Restrict_To_Target = as.integer(isTRUE(restrict_to_target)),
     Metric = metrics,
     stringsAsFactors = FALSE
   )
@@ -802,7 +882,8 @@ for (setting_i in seq_len(nrow(setting_grid))) {
   new_pat_first <- setting_grid$new_pat_first[setting_i]
   n_eval_escalate <- setting_grid$n_eval_escalate[setting_i]
   for (restrict_to_tried in restrict_to_tried_list) {
-    for (model in model_list) {
+    for (restrict_to_target in restrict_to_target_list) {
+      for (model in model_list) {
       if (model == "BOIN") {
         method_loop <- boin_method_list
         boin_r_estimator_loop <- boin_r_estimator_list
@@ -841,7 +922,21 @@ for (setting_i in seq_len(nrow(setting_grid))) {
                     r_loop <- c(0)
                   }
 
-                  for (r_carry in r_loop) {
+                  crm_prior_grid <- if (is_random_crm(model, crm_r_model)) {
+                    crm_random_prior_grid
+                  } else {
+                    matrix(
+                      c(crm_a_r, crm_b_r),
+                      nrow = 1L,
+                      dimnames = list(NULL, c("a_r", "b_r"))
+                    )
+                  }
+
+                  for (crm_prior_i in seq_len(nrow(crm_prior_grid))) {
+                    crm_a_r_current <- crm_prior_grid[crm_prior_i, "a_r"]
+                    crm_b_r_current <- crm_prior_grid[crm_prior_i, "b_r"]
+
+                    for (r_carry in r_loop) {
                     method_tag <- make_method_tag(
                       model = model,
                       boin_method = if (model == "BOIN") method0 else NULL,
@@ -859,7 +954,11 @@ for (setting_i in seq_len(nrow(setting_grid))) {
                       ipde_design = ipde_design,
                       new_pat_first = new_pat_first,
                       n_eval_escalate = n_eval_escalate,
-                      restrict_to_tried = restrict_to_tried
+                      restrict_to_tried = restrict_to_tried,
+                      restrict_to_target = restrict_to_target,
+                      crm_r_model = crm_r_model,
+                      crm_a_r = crm_a_r_current,
+                      crm_b_r = crm_b_r_current
                     )
                     folderpath <- folder_info$folderpath
                     file_method_tag <- folder_info$method_tag
@@ -872,6 +971,10 @@ for (setting_i in seq_len(nrow(setting_grid))) {
                       r_carry = r_carry,
                       cycle_max = cycle_max,
                       restrict_to_tried = restrict_to_tried,
+                      restrict_to_target = restrict_to_target,
+                      crm_r_model = crm_r_model,
+                      crm_a_r = crm_a_r_current,
+                      crm_b_r = crm_b_r_current,
                       jobs = jobs.expected
                     )
                     raw_paths <- file.path(folderpath, raw_names)
@@ -892,6 +995,7 @@ for (setting_i in seq_len(nrow(setting_grid))) {
                     cat("BOIN method:", ifelse(model == "BOIN", method0, NA), "\n")
                     cat("BOIN r estimator:", ifelse(model == "BOIN", boin_r_estimator, NA), "\n")
                     cat("CRM r model:", ifelse(model == "CRM", crm_r_model, NA), "\n")
+                    cat("CRM r prior:", crm_a_r_current, crm_b_r_current, "\n")
                     cat("CFO method:", ifelse(model == "CFO", cfo_method, NA), "\n")
                     cat("alpha_true:", alpha_true, "\n")
                     cat("r_carry:", r_carry, "\n")
@@ -903,6 +1007,7 @@ for (setting_i in seq_len(nrow(setting_grid))) {
                     cat("N evaluated for escalation:", n_eval_escalate, "\n")
                     cat("Continuous:", continuous_enrollment, "\n")
                     cat("Restrict to tried:", restrict_to_tried, "\n")
+                    cat("Restrict to target:", restrict_to_target, "\n")
                     cat("Folder:", folderpath, "\n")
                     cat("Raw-RDS file:", example_file, "\n")
                     cat("Found", length(files.use), "files; missing", length(missing.jobs), "jobs.\n")
@@ -921,6 +1026,8 @@ for (setting_i in seq_len(nrow(setting_grid))) {
                       BOIN_r_estimator = ifelse(model == "BOIN", boin_r_estimator, NA_character_),
                       CRM_r_model = ifelse(model == "CRM", crm_r_model, NA_character_),
                       CFO_Method = ifelse(model == "CFO", cfo_method, NA_character_),
+                      CRM_r_Prior_a = ifelse(model == "CRM", crm_a_r_current, NA_real_),
+                      CRM_r_Prior_b = ifelse(model == "CRM", crm_b_r_current, NA_real_),
                       Alpha_true = alpha_true,
                       r_carry = r_carry,
                       Accrual = arrival_rate,
@@ -934,6 +1041,7 @@ for (setting_i in seq_len(nrow(setting_grid))) {
                       Dose_Cap = dose_cap,
                       Continuous_Enrollment = as.integer(isTRUE(continuous_enrollment)),
                       Restrict_To_Tried = as.integer(isTRUE(restrict_to_tried)),
+                      Restrict_To_Target = as.integer(isTRUE(restrict_to_target)),
                       Folder = folderpath,
                       Example_file = example_file,
                       n_found = length(files.use),
@@ -968,7 +1076,10 @@ for (setting_i in seq_len(nrow(setting_grid))) {
                       ipde_design = ipde_design,
                       new_pat_first = new_pat_first,
                       n_eval_escalate = n_eval_escalate,
-                      restrict_to_tried = restrict_to_tried
+                      restrict_to_tried = restrict_to_tried,
+                      restrict_to_target = restrict_to_target,
+                      crm_a_r = crm_a_r_current,
+                      crm_b_r = crm_b_r_current
                     )
 
                     cat(
@@ -997,11 +1108,16 @@ for (setting_i in seq_len(nrow(setting_grid))) {
                       continuous_enrollment = continuous_enrollment,
                       new_pat_first = new_pat_first,
                       n_eval_escalate = n_eval_escalate,
-                      restrict_to_tried = restrict_to_tried
+                      restrict_to_tried = restrict_to_tried,
+                      restrict_to_target = restrict_to_target,
+                      crm_r_model = crm_r_model,
+                      crm_a_r = crm_a_r_current,
+                      crm_b_r = crm_b_r_current
                     )
 
                     all.dose.summary[[key]] <- one$dose_summary
                     all.table.summary[[key]] <- one$table_summary
+                  }
                   }
                 }
               }
@@ -1010,6 +1126,7 @@ for (setting_i in seq_len(nrow(setting_grid))) {
         }
       }
     }
+  }
   }
 }
   }
@@ -1052,6 +1169,7 @@ out.tag <- paste0(
   "_dosecap", fmt_short(dose_cap),
   "_cont", as.integer(isTRUE(continuous_enrollment)),
   "_tried", paste(as.integer(restrict_to_tried_list), collapse = "_"),
+  "_ptarget", paste(as.integer(restrict_to_target_list), collapse = "_"),
   "_jobs", min(jobs.expected), "to", max(jobs.expected)
 )
 
