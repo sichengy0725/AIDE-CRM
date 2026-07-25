@@ -394,6 +394,17 @@ combine_oc_AIDE_results <- function(files) {
 target_BOIN <- 0.30
 cutoff_equiv <- 0.95
 
+## Random-r CRM only: when TRUE, prohibit a recycled/IPDE administration if
+## Pr{r + (1-r) p_next > target_BOIN} exceeds cutoff_equiv.  This is the same
+## posterior toxicity rule used by the Phase I/II design.
+apply_random_crm_recycle_toxicity_rule <- TRUE
+if (length(apply_random_crm_recycle_toxicity_rule) != 1L ||
+    is.na(apply_random_crm_recycle_toxicity_rule)) {
+  stop("apply_random_crm_recycle_toxicity_rule must be TRUE or FALSE.")
+}
+apply_random_crm_recycle_toxicity_rule <-
+  isTRUE(apply_random_crm_recycle_toxicity_rule)
+
 ## Switch this between 5L and 8L to change both scenarios and priors.
 scenario_dose_count <- 5L
 if (!scenario_dose_count %in% c(5L, 8L)) {
@@ -918,6 +929,11 @@ run_one_aide_task <- function(task) {
 
     if (task$model == "CRM") {
       cat("CRM r model:", task$crm_r_model, "\n")
+      cat(
+        "Random-CRM recycled-dose toxicity rule:",
+        task$apply_random_crm_recycle_toxicity_rule,
+        "\n"
+      )
       cat("CRM skeleton:", paste(task$crm_skeleton, collapse = ", "), "\n")
       cat("CRM alpha sd:", task$crm_alpha_sd, "\n")
       cat("CRM a_r:", task$crm_a_r, "\n")
@@ -980,6 +996,8 @@ run_one_aide_task <- function(task) {
       new_pat_first = task$new_pat_first,
 
       cutoff = task$cutoff,
+      apply_random_crm_recycle_toxicity_rule =
+        task$apply_random_crm_recycle_toxicity_rule,
 
       d.cap = task$d.cap,
       dose_cap = task$dose_cap,
@@ -1222,6 +1240,8 @@ for (Nmax_eff_aide in Nmax_eff_list_equiv) {
 
                         target = target_BOIN,
                         cutoff = cutoff_equiv,
+                        apply_random_crm_recycle_toxicity_rule =
+                          apply_random_crm_recycle_toxicity_rule,
 
                         model = model_aide,
                         ipde_design = ipde_design_equiv,
