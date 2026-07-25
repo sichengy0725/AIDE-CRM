@@ -1,0 +1,112 @@
+ ,d1,d2,d3,d4,d5
+Scenario 1, , , , , 
+DLT probability,0.3,0.35,0.4,0.45,0.5
+Efficacy probability,0.05,0.06,0.07,0.08,0.09
+Scenario 2, , , , , 
+DLT probability,0.15,0.2,0.3,0.35,0.45
+Efficacy probability,0.2,0.25,0.5,0.5,0.5
+Scenario 3, , , , , 
+DLT probability,0.15,0.2,0.3,0.35,0.45
+Efficacy probability,0.1,0.4,0.4,0.4,0.4
+Scenario 4, , , , , 
+DLT probability,0.05,0.1,0.18,0.3,0.4
+Efficacy probability,0.05,0.1,0.25,0.5,0.55
+Scenario 5, , , , , 
+DLT probability,0.07,0.12,0.17,0.22,0.3
+Efficacy probability,0.05,0.3,0.3,0.3,0.3
+Scenario 6, , , , , 
+DLT probability,0.29,0.34,0.38,0.43,0.52
+Efficacy probability,0.3,0.32,0.35,0.38,0.4
+Scenario 7, , , , , 
+DLT probability,0.16,0.2,0.26,0.31,0.36
+Efficacy probability,0.2,0.5,0.5,0.5,0.5
+Scenario 8, , , , , 
+DLT probability,0.32,0.37,0.42,0.48,0.52
+Efficacy probability,0.1,0.15,0.2,0.3,0.4
+Scenario 9, , , , , 
+DLT probability,0.15,0.18,0.22,0.26,0.29
+Efficacy probability,0.05,0.08,0.2,0.25,0.5
+Scenario 10, , , , , 
+DLT probability,0.23,0.28,0.32,0.39,0.43
+Efficacy probability,0.05,0.4,0.42,0.45,0.5
+Scenario 11, , , , , 
+DLT probability,0.22,0.32,0.44,0.59,0.67
+Efficacy probability,0.2,0.2,0.2,0.2,0.2
+Scenario 12, , , , , 
+DLT probability,0.06,0.09,0.18,0.29,0.44
+Efficacy probability,0.05,0.1,0.12,0.4,0.6
+Scenario 13, , , , , 
+DLT probability,0.21,0.29,0.3,0.39,0.46
+Efficacy probability,0.05,0.3,0.32,0.35,0.4
+Scenario 14, , , , , 
+DLT probability,0.09,0.15,0.23,0.28,0.39
+Efficacy probability,0.05,0.08,0.12,0.3,0.4
+Scenario 15, , , , , 
+DLT probability,0.13,0.2,0.32,0.39,0.46
+Efficacy probability,0.1,0.1,0.1,0.1,0.1
+Scenario 16, , , , , 
+DLT probability,0.02,0.06,0.09,0.14,0.26
+Efficacy probability,0.2,0.2,0.2,0.2,0.2
+Scenario 17, , , , , 
+DLT probability,0.11,0.23,0.39,0.58,0.76
+Efficacy probability,0.3,0.5,0.5,0.5,0.5
+Scenario 18, , , , , 
+DLT probability,0.02,0.04,0.1,0.2,0.35
+Efficacy probability,0.05,0.1,0.15,0.2,0.5
+Scenario 19, , , , , 
+DLT probability,0.11,0.26,0.39,0.6,0.77
+Efficacy probability,0.08,0.3,0.32,0.35,0.4
+Scenario 20, , , , , 
+DLT probability,0.07,0.14,0.31,0.41,0.52
+Efficacy probability,0.05,0.25,0.25,0.25,0.25
+Scenario 21, , , , , 
+DLT probability,0.37,0.56,0.69,0.83,0.88
+Efficacy probability,0.5,0.5,0.5,0.5,0.5
+Scenario 22, , , , , 
+DLT probability,0.07,0.27,0.5,0.56,0.78
+Efficacy probability,0.08,0.25,0.25,0.5,0.5
+Scenario 23, , , , , 
+DLT probability,0.32,0.55,0.8,0.94,0.97
+Efficacy probability,0.05,0.05,0.05,0.05,0.05
+Scenario 24, , , , , 
+DLT probability,0.01,0.02,0.05,0.1,0.25
+Efficacy probability,0.05,0.08,0.2,0.5,0.5
+Scenario 25, , , , , 
+DLT probability,0.09,0.18,0.37,0.63,0.77
+Efficacy probability,0.2,0.25,0.4,0.45,0.5
+Scenario 26, , , , , 
+DLT probability,0.15,0.22,0.3,0.62,0.8
+Efficacy probability,0.1,0.2,0.35,0.45,0.55
+Scenario 27, , , , , 
+DLT probability,0.11,0.17,0.3,0.5,0.62
+Efficacy probability,0.1,0.2,0.4,0.42,0.45
+Scenario 28, , , , , 
+DLT probability,0.2,0.3,0.5,0.6,0.77
+Efficacy probability,0.05,0.3,0.32,0.35,0.4
+Scenario 29, , , , , 
+DLT probability,0.19,0.3,0.56,0.74,0.86
+Efficacy probability,0.4,0.4,0.4,0.4,0.4
+Scenario 30, , , , , 
+DLT probability,0.05,0.08,0.17,0.27,0.54
+Efficacy probability,0.12,0.15,0.2,0.4,0.5
+Scenario 31, , , , , 
+DLT probability,0.04,0.06,0.1,0.2,0.6
+Efficacy probability,0.2,0.5,0.5,0.5,0.5
+Scenario 32, , , , , 
+DLT probability,0.02,0.05,0.11,0.3,0.36
+Efficacy probability,0.08,0.15,0.3,0.3,0.3
+Scenario 33, , , , , 
+DLT probability,0.01,0.02,0.09,0.32,0.38
+Efficacy probability,0.05,0.08,0.2,0.4,0.5
+Scenario 34, , , , , 
+DLT probability,0.05,0.13,0.3,0.36,0.42
+Efficacy probability,0.05,0.1,0.3,0.32,0.35
+Scenario 35, , , , , 
+DLT probability,0.03,0.09,0.3,0.4,0.45
+Efficacy probability,0.2,0.45,0.45,0.45,0.45
+Scenario 36, , , , , 
+DLT probability,0.13,0.29,0.35,0.4,0.43
+Efficacy probability,0.05,0.2,0.22,0.3,0.35
+Scenario 37, , , , , 
+DLT probability,0.08,0.3,0.4,0.45,0.5
+Efficacy probability,0.05,0.2,0.2,0.2,0.2

@@ -359,6 +359,8 @@ for (task_row in seq_len(nrow(tasks))) {
     utility_scores = utility_scores,
     lambda_T_grid = lambda_T_grid,
     m_U = m_U,
+    cycle_max = cycle_max,
+    T_assess = T_assess,
     optional_random_crm_ipde_gates = FALSE,
     job_i = job_i,
     ntrial = ntrial,

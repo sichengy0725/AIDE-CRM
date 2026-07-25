@@ -1969,7 +1969,15 @@ get_oc_sim_AIDE_phase_I_II <- function(p_true,
   obd <- rep(NA_integer_, ntrial)
   stopped <- integer(ntrial)
   n_admin <- numeric(ntrial)
-  n_by_dose <- numeric(ndose)
+  n_unique <- numeric(ntrial)
+  duration <- rep(NA_real_, ntrial)
+  n_by_dose_by_trial <- matrix(0, nrow = ntrial, ncol = ndose)
+  unique_n_by_dose_by_trial <- matrix(0, nrow = ntrial, ncol = ndose)
+  nipde_by_dose_by_trial <- matrix(0, nrow = ntrial, ncol = ndose)
+  crm_pj_by_trial <- matrix(NA_real_, nrow = ntrial, ncol = ndose)
+  efficacy_pj_by_trial <- matrix(NA_real_, nrow = ntrial, ncol = ndose)
+  utility_by_trial <- matrix(NA_real_, nrow = ntrial, ncol = ndose)
+  r_hat_by_trial <- matrix(NA_real_, nrow = ntrial, ncol = ndose)
   obd_selection <- integer(ndose)
   raw <- if (isTRUE(store_raw)) vector("list", ntrial) else NULL
 
@@ -1984,8 +1992,29 @@ get_oc_sim_AIDE_phase_I_II <- function(p_true,
     obd[i] <- fit$final$OBD
     stopped[i] <- fit$final$earlystop
     n_admin[i] <- fit$final$n_admin
+    n_unique[i] <- fit$final$n_unique_patients
+    duration[i] <- fit$final$trial_time
     if (nrow(fit$admin) > 0L) {
-      n_by_dose <- n_by_dose + tabulate(fit$admin$dose, nbins = ndose)
+      n_by_dose_by_trial[i, ] <- tabulate(fit$admin$dose, nbins = ndose)
+      unique_n_by_dose_by_trial[i, ] <- tabulate(
+        unique(fit$admin[, c("id", "dose"), drop = FALSE])$dose,
+        nbins = ndose
+      )
+      ipde_rows <- fit$admin$type == "retreat"
+      if (any(ipde_rows)) {
+        nipde_by_dose_by_trial[i, ] <- tabulate(
+          fit$admin$dose[ipde_rows], nbins = ndose
+        )
+      }
+    }
+    crm_pj_by_trial[i, ] <- as.numeric(fit$final$utility$toxicity)
+    efficacy_pj_by_trial[i, ] <- as.numeric(fit$final$utility$efficacy)
+    utility_by_trial[i, ] <- as.numeric(fit$final$utility$utility)
+    r_hat <- as.numeric(fit$final$toxicity_utility_fit$r_hat)
+    if (length(r_hat) == 1L && is.finite(r_hat)) {
+      r_hat_by_trial[i, ] <- rep(r_hat, ndose)
+    } else if (length(r_hat) == ndose) {
+      r_hat_by_trial[i, ] <- r_hat
     }
     if (!is.na(obd[i]) && obd[i] >= 1L && obd[i] <= ndose) {
       obd_selection[obd[i]] <- obd_selection[obd[i]] + 1L
@@ -1999,10 +2028,28 @@ get_oc_sim_AIDE_phase_I_II <- function(p_true,
     ntrial = as.integer(ntrial),
     MTD_by_trial = mtd,
     OBD_by_trial = obd,
+    early_stop_by_trial = stopped,
+    n_administrations_by_trial = n_admin,
+    n_unique_patients_by_trial = n_unique,
+    duration_by_trial = duration,
+    n_by_dose_by_trial = n_by_dose_by_trial,
+    unique_n_by_dose_by_trial = unique_n_by_dose_by_trial,
+    nipde_by_dose_by_trial = nipde_by_dose_by_trial,
+    crm_pj_by_trial = crm_pj_by_trial,
+    efficacy_pj_by_trial = efficacy_pj_by_trial,
+    utility_by_trial = utility_by_trial,
+    r_hat_by_trial = r_hat_by_trial,
+    MTD_selection_percent = 100 * tabulate(
+      mtd[!is.na(mtd) & mtd >= 1L & mtd <= ndose], nbins = ndose
+    ) / ntrial,
     OBD_selection_percent = 100 * obd_selection / ntrial,
     early_stop_percent = 100 * mean(stopped),
     mean_administrations = mean(n_admin),
-    mean_administrations_by_dose = n_by_dose / ntrial,
+    mean_administrations_by_dose = colMeans(n_by_dose_by_trial),
+    mean_unique_patients = mean(n_unique),
+    mean_unique_patients_by_dose = colMeans(unique_n_by_dose_by_trial),
+    mean_ipde_doses_by_dose = colMeans(nipde_by_dose_by_trial),
+    mean_duration = mean(duration, na.rm = TRUE),
     raw = raw
   )
 }
