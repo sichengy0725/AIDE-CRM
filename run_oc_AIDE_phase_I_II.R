@@ -5,12 +5,15 @@
 ## efficacy-enabled AIDE Phase I/II design.  Truth is extracted directly
 ## from Set_5dose_adaptive_r_37_true_MTD_OBD_summary_lambda1.csv.
 ##
-## Usage:
-##   Rscript run_oc_AIDE_phase_I_II.R [ntrial] [task_id]
+## Usage (matching run_oc_AIDE.R):
+##   Rscript run_oc_AIDE_phase_I_II.R [workers] [ntrial] [IDX]
 ##
 ## Examples:
-##   Rscript run_oc_AIDE_phase_I_II.R 1000 1
-##   Rscript run_oc_AIDE_phase_I_II.R 1000 0   # write manifests only
+##   Rscript run_oc_AIDE_phase_I_II.R 1 100 1
+##   Rscript run_oc_AIDE_phase_I_II.R 1 100 2
+##
+## Each IDX runs every scenario/setting task with a non-overlapping seed
+## block. Thus IDX = 1,...,10 with ntrial = 100 yields 1,000 trials per task.
 ## ============================================================
 
 args <- commandArgs(trailingOnly = TRUE)
@@ -29,6 +32,20 @@ parse_positive_integer <- function(x, name) {
     stop(name, " must be a positive integer.")
   }
   value
+}
+
+get_job_index <- function(args) {
+  if (length(args) >= 3L) {
+    out <- suppressWarnings(as.integer(args[3L]))
+    if (!is.na(out) && out >= 1L) return(out)
+  }
+
+  for (name in c("JOB_I", "LSB_JOBINDEX")) {
+    out <- suppressWarnings(as.integer(Sys.getenv(name, unset = "")))
+    if (!is.na(out) && out >= 1L) return(out)
+  }
+
+  1L
 }
 
 fmt <- function(x, digits = 3L) {
@@ -103,14 +120,17 @@ read_phase12_truth <- function(file) {
 
 scenario_file <- "Set_5dose_adaptive_r_37_true_MTD_OBD_summary_lambda1.csv"
 output_dir <- "oc_results_AIDE_phase_I_II"
-ntrial <- if (length(args) >= 1L) parse_positive_integer(args[1L], "ntrial") else 1000L
-task_id_requested <- if (length(args) >= 2L) {
-  suppressWarnings(as.integer(args[2L]))
+requested_workers <- if (length(args) >= 1L) {
+  parse_positive_integer(args[1L], "workers")
 } else {
   1L
 }
-if (length(task_id_requested) != 1L || is.na(task_id_requested) || task_id_requested < 0L) {
-  stop("task_id must be a non-negative integer; use 0 to write manifests only.")
+ntrial <- if (length(args) >= 2L) parse_positive_integer(args[2L], "ntrial") else 100L
+job_i <- get_job_index(args)
+seed_base <- 1L
+job_seed <- seed_base + (job_i - 1L) * ntrial
+if (job_seed > .Machine$integer.max) {
+  stop("The IDX and ntrial combination produces a seed outside R's integer range.")
 }
 
 ## Two-stage uses paired (Nmax, N_s1) settings.  One-stage uses only Nmax;
@@ -209,7 +229,7 @@ names(truth_export)[match(paste0("Eff_Dose", 1:5), names(truth_export))] <-
 truth_export_file <- file.path(
   output_dir, "Set_5dose_adaptive_r_37_phase12_truth.csv"
 )
-if (task_id_requested == 0L || !file.exists(truth_export_file)) {
+if (job_i == 1L || !file.exists(truth_export_file)) {
   utils::write.csv(truth_export, truth_export_file, row.names = FALSE)
 }
 
@@ -234,47 +254,18 @@ tasks$task_id <- seq_len(nrow(tasks))
 tasks <- tasks[, c("task_id", setdiff(names(tasks), "task_id")), drop = FALSE]
 
 manifest_file <- file.path(output_dir, "AIDE_phase_I_II_task_manifest.csv")
-if (task_id_requested == 0L || !file.exists(manifest_file)) {
+if (job_i == 1L || !file.exists(manifest_file)) {
   utils::write.csv(tasks, manifest_file, row.names = FALSE)
 }
 
 cat("Extracted scenarios:", nrow(truth), "\n")
 cat("Phase I/II tasks:", nrow(tasks), "\n")
-cat("Trials per selected task:", ntrial, "\n")
-
-if (task_id_requested == 0L) {
-  cat("Manifests written; no simulation task requested.\n")
-  quit(save = "no", status = 0L)
+cat("Trials per task in this job:", ntrial, "\n")
+cat("Job IDX:", job_i, "\n")
+cat("First seed for this job:", job_seed, "\n")
+if (requested_workers != 1L) {
+  warning("workers is retained for run_oc_AIDE compatibility; this runner is sequential.")
 }
-if (task_id_requested > nrow(tasks)) {
-  stop("task_id exceeds the task manifest size: ", nrow(tasks))
-}
-
-task <- tasks[tasks$task_id == task_id_requested, , drop = FALSE]
-scenario_row <- match(task$Scenario, truth$Scenario)
-p_true <- as.numeric(unlist(
-  truth[scenario_row, paste0("Tox_Dose", 1:5), drop = FALSE],
-  use.names = FALSE
-))
-e_true <- as.numeric(unlist(
-  truth[scenario_row, paste0("Eff_Dose", 1:5), drop = FALSE],
-  use.names = FALSE
-))
-
-true_mtd <- as.integer(truth$True_MTD_Level[scenario_row])
-true_obd <- calculate_true_obd(
-  p_true = p_true,
-  e_true = e_true,
-  true_mtd = true_mtd,
-  utility_type = as.integer(task$utility_type),
-  lambda_T = task$lambda_T,
-  utility_scores = utility_scores
-)
-
-task_seed <- 100000L + task$task_id * 1000L
-cat("Running task", task$task_id, "for scenario", task$Scenario, "\n")
-cat("Truth toxicity:", paste(p_true, collapse = ", "), "\n")
-cat("Truth efficacy:", paste(e_true, collapse = ", "), "\n")
 
 if (!requireNamespace("rjags", quietly = TRUE)) {
   stop("This runner requires rjags and a working JAGS installation.")
@@ -283,78 +274,108 @@ if (!requireNamespace("coda", quietly = TRUE)) {
   stop("This runner requires the coda package.")
 }
 
-result <- get_oc_sim_AIDE_phase_I_II(
-  p_true = p_true,
-  e_true = e_true,
-  ntrial = ntrial,
-  seed = task_seed,
-  store_raw = FALSE,
-
-  allocation = task$allocation,
-  Nmax = as.integer(task$Nmax),
-  N_s1 = as.integer(task$N_s1),
-  N_pat = as.integer(task$Nmax),
-  C = cohort_size,
-  cycle_max = cycle_max,
-  m_U = m_U,
-
-  model = "CRM",
-  target = as.numeric(truth$Target_Toxicity[scenario_row]),
-  crm_r_model = "random",
-  crm_skeleton = crm_skeleton,
-  crm_alpha_sd = crm_alpha_sd,
-  crm_a_r = task$crm_a_r,
-  crm_b_r = task$crm_b_r,
-
-  efficacy_prior = c(task$efficacy_a, task$efficacy_b),
-  efficacy_carryover_prior = c(task$carry_a, task$carry_b),
-  utility_type = as.integer(task$utility_type),
-  lambda_T = task$lambda_T,
-  utility_scores = utility_scores,
-
-  enrollment_scheme = task$enrollment_scheme,
-  arrival_rate = task$arrival_rate,
-  T_assess = T_assess,
-
-  ipde_design = as.integer(task$ipde_design),
-  flexible_ipde = as.logical(task$flexible_ipde),
-  toxicity_ipde_alpha = task$toxicity_ipde_alpha,
-  efficacy_ipde_alpha = task$efficacy_ipde_alpha,
-
-  efficacy_threshold = efficacy_threshold,
-  futility_cutoff = futility_cutoff,
-  min_eff_n_for_futility = min_eff_n_for_futility,
-  apply_random_crm_recycle_toxicity_rule = apply_random_crm_recycle_toxicity_rule,
-  apply_random_crm_recycle_efficacy_rule = apply_random_crm_recycle_efficacy_rule
-)
-
-result$task <- as.list(task)
-result$truth <- list(
-  p_true = p_true,
-  e_true = e_true,
-  target = truth$Target_Toxicity[scenario_row],
-  true_mtd = true_mtd,
-  true_obd = true_obd,
-  utility_type = as.integer(task$utility_type)
-)
-result$runner_settings <- list(
-  utility_scores = utility_scores,
-  lambda_T_grid = lambda_T_grid,
-  m_U = m_U,
-  optional_random_crm_ipde_gates = FALSE
-)
-
-outfile <- file.path(
-  output_dir,
-  paste0(
-    "task_", sprintf("%06d", task$task_id),
-    "_scenario_", task$Scenario,
-    "_", task$allocation,
-    "_Nmax", task$Nmax,
-    "_utility", task$utility_type,
-    "_", task$enrollment_scheme,
-    ".rds"
+for (task_row in seq_len(nrow(tasks))) {
+  task <- tasks[task_row, , drop = FALSE]
+  scenario_row <- match(task$Scenario, truth$Scenario)
+  p_true <- as.numeric(unlist(
+    truth[scenario_row, paste0("Tox_Dose", 1:5), drop = FALSE],
+    use.names = FALSE
+  ))
+  e_true <- as.numeric(unlist(
+    truth[scenario_row, paste0("Eff_Dose", 1:5), drop = FALSE],
+    use.names = FALSE
+  ))
+  true_mtd <- as.integer(truth$True_MTD_Level[scenario_row])
+  true_obd <- calculate_true_obd(
+    p_true = p_true,
+    e_true = e_true,
+    true_mtd = true_mtd,
+    utility_type = as.integer(task$utility_type),
+    lambda_T = task$lambda_T,
+    utility_scores = utility_scores
   )
-)
-saveRDS(result, outfile)
-cat("Saved:", outfile, "\n")
+
+  cat(
+    "Running task", task$task_id, "of", nrow(tasks),
+    "for scenario", task$Scenario, "\n"
+  )
+  result <- get_oc_sim_AIDE_phase_I_II(
+    p_true = p_true,
+    e_true = e_true,
+    ntrial = ntrial,
+    seed = job_seed,
+    store_raw = FALSE,
+
+    allocation = task$allocation,
+    Nmax = as.integer(task$Nmax),
+    N_s1 = as.integer(task$N_s1),
+    N_pat = as.integer(task$Nmax),
+    C = cohort_size,
+    cycle_max = cycle_max,
+    m_U = m_U,
+
+    model = "CRM",
+    target = as.numeric(truth$Target_Toxicity[scenario_row]),
+    crm_r_model = "random",
+    crm_skeleton = crm_skeleton,
+    crm_alpha_sd = crm_alpha_sd,
+    crm_a_r = task$crm_a_r,
+    crm_b_r = task$crm_b_r,
+
+    efficacy_prior = c(task$efficacy_a, task$efficacy_b),
+    efficacy_carryover_prior = c(task$carry_a, task$carry_b),
+    utility_type = as.integer(task$utility_type),
+    lambda_T = task$lambda_T,
+    utility_scores = utility_scores,
+
+    enrollment_scheme = task$enrollment_scheme,
+    arrival_rate = task$arrival_rate,
+    T_assess = T_assess,
+
+    ipde_design = as.integer(task$ipde_design),
+    flexible_ipde = as.logical(task$flexible_ipde),
+    toxicity_ipde_alpha = task$toxicity_ipde_alpha,
+    efficacy_ipde_alpha = task$efficacy_ipde_alpha,
+
+    efficacy_threshold = efficacy_threshold,
+    futility_cutoff = futility_cutoff,
+    min_eff_n_for_futility = min_eff_n_for_futility,
+    apply_random_crm_recycle_toxicity_rule = apply_random_crm_recycle_toxicity_rule,
+    apply_random_crm_recycle_efficacy_rule = apply_random_crm_recycle_efficacy_rule
+  )
+
+  result$task <- as.list(task)
+  result$truth <- list(
+    p_true = p_true,
+    e_true = e_true,
+    target = truth$Target_Toxicity[scenario_row],
+    true_mtd = true_mtd,
+    true_obd = true_obd,
+    utility_type = as.integer(task$utility_type)
+  )
+  result$runner_settings <- list(
+    utility_scores = utility_scores,
+    lambda_T_grid = lambda_T_grid,
+    m_U = m_U,
+    optional_random_crm_ipde_gates = FALSE,
+    job_i = job_i,
+    ntrial = ntrial,
+    seed = job_seed
+  )
+
+  outfile <- file.path(
+    output_dir,
+    paste0(
+      "task_", sprintf("%06d", task$task_id),
+      "_scenario_", task$Scenario,
+      "_", task$allocation,
+      "_Nmax", task$Nmax,
+      "_utility", task$utility_type,
+      "_", task$enrollment_scheme,
+      "_job_", sprintf("%04d", job_i),
+      ".rds"
+    )
+  )
+  saveRDS(result, outfile)
+  cat("Saved:", outfile, "\n")
+}
