@@ -68,10 +68,11 @@ arrival_rate_list <- c(1 / 56)
 
 model_list <- c("BOIN", "CRM", "CFO")
 
-## The current random-scenario array writes one 100-trial raw RDS for each
-## scenario (j1, n100).  If a scenario is split over multiple array jobs,
-## replace 1L with the corresponding job indices.
-jobs.expected <- 1L
+## run_oc_AIDE.R assigns consecutive blocks of random scenarios to consecutive
+## array-job indices.  With 10,000 scenarios and batches of 10, SC1--SC10 use
+## j1, SC11--SC20 use j2, ..., and SC9991--SC10000 use j1000.
+random_scenario_batch_size <- 10L
+random_scenario_first_job <- 1L
 ntrial_per_job_expected <- 100L
 seed_base_expected <- 1L
 block_id_expected <- 1L
@@ -312,13 +313,13 @@ make_raw_rds_filenames <- function(sc,
                                    crm_r_model,
                                    crm_a_r,
                                    crm_b_r,
-                                   jobs = jobs.expected,
+                                   job_i,
                                    block_id = block_id_expected,
                                    seed_base = seed_base_expected,
                                    ntrial_per_job = ntrial_per_job_expected,
                                    scenario_set) {
-  jobs <- as.integer(jobs)
-  seed_block <- as.integer(seed_base) + (jobs - 1L) * as.integer(ntrial_per_job)
+  job_i <- as.integer(job_i)
+  seed_block <- as.integer(seed_base) + (job_i - 1L) * as.integer(ntrial_per_job)
   prior_tag <- random_crm_prior_tag(model, crm_r_model, crm_a_r, crm_b_r)
 
   paste0(
@@ -331,7 +332,7 @@ make_raw_rds_filenames <- function(sc,
     "-cyc", fmt_short(cycle_max),
     "-tried", as.integer(isTRUE(restrict_to_tried)),
     if (isTRUE(restrict_to_target)) "-ptarget1" else "",
-    "-j", jobs,
+    "-j", job_i,
     "-b", block_id,
     "-s", seed_block,
     "-n", as.integer(ntrial_per_job),
@@ -339,14 +340,38 @@ make_raw_rds_filenames <- function(sc,
   )
 }
 
+get_random_scenario_job_index <- function(scenario_ids,
+                                          batch_size = random_scenario_batch_size,
+                                          first_job = random_scenario_first_job) {
+  scenario_ids <- as.integer(scenario_ids)
+  if (anyNA(scenario_ids) || any(scenario_ids < 1L)) {
+    stop("scenario_ids must contain positive integers.")
+  }
+  if (length(batch_size) != 1L || is.na(batch_size) || batch_size < 1L) {
+    stop("batch_size must be a positive integer.")
+  }
+  if (length(first_job) != 1L || is.na(first_job) || first_job < 1L) {
+    stop("first_job must be a positive integer.")
+  }
+
+  as.integer((scenario_ids - 1L) %/% as.integer(batch_size) + as.integer(first_job))
+}
+
 make_raw_file_index <- function(scenario_ids, ...) {
-  n_jobs <- length(jobs.expected)
+  scenario_ids <- as.integer(scenario_ids)
+  job_i <- get_random_scenario_job_index(scenario_ids)
   data.frame(
-    Scenario = rep(as.integer(scenario_ids), each = n_jobs),
-    Filename = unlist(lapply(
-      scenario_ids,
-      function(sc) make_raw_rds_filenames(sc = sc, ...)
-    )),
+    Scenario = scenario_ids,
+    Job = job_i,
+    Filename = vapply(
+      seq_along(scenario_ids),
+      function(i) make_raw_rds_filenames(
+        sc = scenario_ids[i],
+        job_i = job_i[i],
+        ...
+      ),
+      character(1)
+    ),
     stringsAsFactors = FALSE
   )
 }
@@ -1218,9 +1243,11 @@ table.summary.df$.setting_key <- NULL
 wide.summary.out <- round_numeric_df(wide.summary.df, digits = 4)
 table.summary.out <- round_numeric_df(table.summary.df, digits = 4)
 
+scenario_job_range <- range(get_random_scenario_job_index(scenario_id_list))
 out.tag <- paste0(
   "randomsce_targetgap", fmt_gap(target_gap),
-  "_j", min(jobs.expected), "to", max(jobs.expected),
+  "_batch", random_scenario_batch_size,
+  "_j", scenario_job_range[1L], "to", scenario_job_range[2L],
   "_n", ntrial_per_job_expected
 )
 
