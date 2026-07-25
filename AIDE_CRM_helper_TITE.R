@@ -174,6 +174,11 @@ simulate_AIDE_CRM_TITE_design <- function(
     dose_cap = 3L,
     # Escalation requires at least this many evaluated patients at the current dose.
     n_eval_escalate = 3L,
+    # When TRUE, arrivals occurring during an escalation suspension leave the trial.
+    drop_new_patients_when_suspended = TRUE,
+    # When TRUE, random-CRM posterior safety can prevent further IPDE assignments.
+    random_crm_ipde_safety = TRUE,
+    random_crm_ipde_prob_cutoff = 0.95,
     dlt_dist = 1,
     dlt_alpha = 0.5,
     seed = NULL,
@@ -258,6 +263,22 @@ simulate_AIDE_CRM_TITE_design <- function(
     stop("n_eval_escalate must be a single non-negative integer.")
   }
   n_eval_escalate <- as.integer(n_eval_escalate)
+  if (length(drop_new_patients_when_suspended) != 1L ||
+      is.na(drop_new_patients_when_suspended)) {
+    stop("drop_new_patients_when_suspended must be a single TRUE/FALSE value.")
+  }
+  drop_new_patients_when_suspended <- isTRUE(drop_new_patients_when_suspended)
+  if (length(random_crm_ipde_safety) != 1L || is.na(random_crm_ipde_safety)) {
+    stop("random_crm_ipde_safety must be a single TRUE/FALSE value.")
+  }
+  random_crm_ipde_safety <- isTRUE(random_crm_ipde_safety)
+  if (length(random_crm_ipde_prob_cutoff) != 1L ||
+      !is.finite(random_crm_ipde_prob_cutoff) ||
+      random_crm_ipde_prob_cutoff <= 0 ||
+      random_crm_ipde_prob_cutoff >= 1) {
+    stop("random_crm_ipde_prob_cutoff must be a scalar in (0, 1).")
+  }
+  random_crm_ipde_prob_cutoff <- as.numeric(random_crm_ipde_prob_cutoff)
   restrict_to_tried <- isTRUE(restrict_to_tried)
   restrict_to_target <- isTRUE(restrict_to_target)
 
@@ -308,6 +329,8 @@ simulate_AIDE_CRM_TITE_design <- function(
     n_admin = integer(0),
     queue = integer(0),
     assignment_suspended = logical(0),
+    ipde_allowed = logical(0),
+    prob_ipde_p2_over_target = numeric(0),
     stringsAsFactors = FALSE
   )
 
@@ -321,6 +344,9 @@ simulate_AIDE_CRM_TITE_design <- function(
   cohort_open <- TRUE
   cohort_enrolled <- 0L
   t_now <- t0
+  dropped_new_patients <- 0L
+  dropped_ipde_events <- 0L
+  prob_ipde_p2_over_target <- NA_real_
 
   schedule_event <- function(time, type, id) {
     future_events <<- rbind(
@@ -354,7 +380,27 @@ simulate_AIDE_CRM_TITE_design <- function(
     due[order(due$time, due$seq), , drop = FALSE]
   }
 
-  add_to_waiting <- function(events) {
+  random_crm_ipde_is_allowed <- function() {
+    if (!random_crm_ipde_safety || crm_r_model != "random") return(TRUE)
+    if (!is.finite(prob_ipde_p2_over_target)) return(TRUE)
+    prob_ipde_p2_over_target <= random_crm_ipde_prob_cutoff
+  }
+
+  drop_disallowed_ipde_waiting <- function() {
+    if (random_crm_ipde_is_allowed() || nrow(waiting) == 0L) {
+      return(invisible(NULL))
+    }
+
+    drop_idx <- which(waiting$type == "retreat")
+    if (length(drop_idx) == 0L) return(invisible(NULL))
+
+    dropped_ipde_events <<- dropped_ipde_events + length(drop_idx)
+    waiting <<- waiting[-drop_idx, , drop = FALSE]
+    rownames(waiting) <<- NULL
+    invisible(NULL)
+  }
+
+  add_to_waiting <- function(events, drop_new = FALSE) {
     if (nrow(events) == 0L) return(invisible(NULL))
 
     for (ii in seq_len(nrow(events))) {
@@ -363,7 +409,16 @@ simulate_AIDE_CRM_TITE_design <- function(
       ## Decision events only wake a suspended trial; they are not patients.
       if (ev$type == "decision") next
 
+      if (ev$type == "new" && drop_new) {
+        dropped_new_patients <<- dropped_new_patients + 1L
+        next
+      }
+
       if (ev$type == "retreat") {
+        if (!random_crm_ipde_is_allowed()) {
+          dropped_ipde_events <<- dropped_ipde_events + 1L
+          next
+        }
         hist <- admin[admin$id == ev$id, , drop = FALSE]
         if (nrow(hist) == 0L) next
         hist <- hist[order(hist$t_start, hist$row_id), , drop = FALSE]
@@ -394,6 +449,7 @@ simulate_AIDE_CRM_TITE_design <- function(
 
   recycle_event_is_eligible <- function(ev, dose = current_dose) {
     if (ev$type != "retreat" || dose <= 1L) return(FALSE)
+    if (!random_crm_ipde_is_allowed()) return(FALSE)
 
     hist <- admin[admin$id == ev$id, , drop = FALSE]
     if (nrow(hist) == 0L) return(FALSE)
@@ -607,6 +663,18 @@ simulate_AIDE_CRM_TITE_design <- function(
       elimi <<- move$eliminated
     }
 
+    ## The random-CRM fitter returns the posterior probability that an IPDE
+    ## at dose 2 exceeds the toxicity target.  When the optional gate is on,
+    ## remove queued IPDE events and reject future ones while it is above the
+    ## configured posterior-probability cutoff.
+    if (random_crm_ipde_safety && crm_r_model == "random" &&
+        !is.null(move$prob_ipde_p2_over_target)) {
+      prob_ipde_p2_over_target <<- as.numeric(move$prob_ipde_p2_over_target)
+      drop_disallowed_ipde_waiting()
+    } else {
+      prob_ipde_p2_over_target <<- NA_real_
+    }
+
     insufficient_evaluated <- n_eval_curr < n_eval_escalate
     suspend_for_evaluation <- isTRUE(apply_move) &&
       isTRUE(move$next_dose > current_dose) &&
@@ -639,6 +707,8 @@ simulate_AIDE_CRM_TITE_design <- function(
         n_admin = nrow(admin),
         queue = nrow(waiting),
         assignment_suspended = isTRUE(suspend_for_evaluation),
+        ipde_allowed = random_crm_ipde_is_allowed(),
+        prob_ipde_p2_over_target = prob_ipde_p2_over_target,
         stringsAsFactors = FALSE
       )
     )
@@ -685,17 +755,20 @@ simulate_AIDE_CRM_TITE_design <- function(
          nrow(admin) < Nmax_eff &&
          (nrow(future_events) > 0L || nrow(waiting) > 0L)) {
     if (trial_suspended) {
-      ## Continue accruing arrivals into waiting, but assign no dose until a
-      ## pending evaluation or new arrival makes a new decision possible.
+      ## During a suspension, optionally reject newly arrived patients rather
+      ## than placing them in the backlog.  Only a pending evaluation can
+      ## change the model decision after such an arrival is dropped.
       if (nrow(future_events) == 0L) break
       future_events <- future_events[order(future_events$time, future_events$seq), , drop = FALSE]
       t_now <- future_events$time[1L]
       due_events <- pop_due_events(t_now)
       decision_due <- any(due_events$type == "decision")
-      arrival_due <- any(due_events$type == "new")
-      add_to_waiting(due_events)
+      add_to_waiting(
+        due_events,
+        drop_new = drop_new_patients_when_suspended
+      )
 
-      if (decision_due || arrival_due) {
+      if (decision_due || !drop_new_patients_when_suspended) {
         open_next_cohort(t_now)
         if (!trial_stop && !trial_suspended && cohort_open) {
           fill_open_cohort(t_now)
@@ -757,6 +830,11 @@ simulate_AIDE_CRM_TITE_design <- function(
       new_pat_first = new_pat_first,
       ipde_design = ipde_design,
       n_eval_escalate = n_eval_escalate,
+      drop_new_patients_when_suspended = drop_new_patients_when_suspended,
+      random_crm_ipde_safety = random_crm_ipde_safety,
+      random_crm_ipde_prob_cutoff = random_crm_ipde_prob_cutoff,
+      dropped_new_patients = dropped_new_patients,
+      dropped_ipde_events = dropped_ipde_events,
       ipde_alpha = ipde_alpha,
       final = list(
         t_end = NA_real_,
@@ -770,6 +848,7 @@ simulate_AIDE_CRM_TITE_design <- function(
         theta_ipde_hat = rep(NA_real_, ndose),
         r_hat = if (crm_r_model == "fixed") r_carry else NA_real_,
         prob_p1_over_target = NA_real_,
+        prob_ipde_p2_over_target = prob_ipde_p2_over_target,
         r_model = crm_r_model,
         restrict_to_tried = restrict_to_tried,
         restrict_to_target = restrict_to_target,
@@ -855,6 +934,11 @@ simulate_AIDE_CRM_TITE_design <- function(
     new_pat_first = new_pat_first,
     ipde_design = ipde_design,
     n_eval_escalate = n_eval_escalate,
+    drop_new_patients_when_suspended = drop_new_patients_when_suspended,
+    random_crm_ipde_safety = random_crm_ipde_safety,
+    random_crm_ipde_prob_cutoff = random_crm_ipde_prob_cutoff,
+    dropped_new_patients = dropped_new_patients,
+    dropped_ipde_events = dropped_ipde_events,
     ipde_alpha = ipde_alpha,
     final = list(
       t_end = t_end,
@@ -876,6 +960,11 @@ simulate_AIDE_CRM_TITE_design <- function(
       } else {
         NA_real_
       },
+      prob_ipde_p2_over_target = if (!is.null(final_fit$prob_ipde_p2_over_target)) {
+        final_fit$prob_ipde_p2_over_target
+      } else {
+        prob_ipde_p2_over_target
+      },
       r_model = crm_r_model,
       restrict_to_tried = restrict_to_tried,
       restrict_to_target = restrict_to_target,
@@ -895,6 +984,9 @@ get_oc_sim_AIDE_CRM_TITE <- function(
     new_pat_first = 2L,
     ipde_design = 2L,
     n_eval_escalate = 3L,
+    drop_new_patients_when_suspended = TRUE,
+    random_crm_ipde_safety = TRUE,
+    random_crm_ipde_prob_cutoff = 0.95,
     restrict_to_tried = TRUE,
     restrict_to_target = FALSE,
     store_raw = FALSE,
@@ -915,6 +1007,22 @@ get_oc_sim_AIDE_CRM_TITE <- function(
     stop("n_eval_escalate must be a single non-negative integer.")
   }
   n_eval_escalate <- as.integer(n_eval_escalate)
+  if (length(drop_new_patients_when_suspended) != 1L ||
+      is.na(drop_new_patients_when_suspended)) {
+    stop("drop_new_patients_when_suspended must be a single TRUE/FALSE value.")
+  }
+  drop_new_patients_when_suspended <- isTRUE(drop_new_patients_when_suspended)
+  if (length(random_crm_ipde_safety) != 1L || is.na(random_crm_ipde_safety)) {
+    stop("random_crm_ipde_safety must be a single TRUE/FALSE value.")
+  }
+  random_crm_ipde_safety <- isTRUE(random_crm_ipde_safety)
+  if (length(random_crm_ipde_prob_cutoff) != 1L ||
+      !is.finite(random_crm_ipde_prob_cutoff) ||
+      random_crm_ipde_prob_cutoff <= 0 ||
+      random_crm_ipde_prob_cutoff >= 1) {
+    stop("random_crm_ipde_prob_cutoff must be a scalar in (0, 1).")
+  }
+  random_crm_ipde_prob_cutoff <- as.numeric(random_crm_ipde_prob_cutoff)
   restrict_to_tried <- isTRUE(restrict_to_tried)
   restrict_to_target <- isTRUE(restrict_to_target)
   if (length(ipde_alpha) != 1L || !is.finite(ipde_alpha) || ipde_alpha < 0) {
@@ -967,6 +1075,9 @@ get_oc_sim_AIDE_CRM_TITE <- function(
       new_pat_first = new_pat_first,
       ipde_design = ipde_design,
       n_eval_escalate = n_eval_escalate,
+      drop_new_patients_when_suspended = drop_new_patients_when_suspended,
+      random_crm_ipde_safety = random_crm_ipde_safety,
+      random_crm_ipde_prob_cutoff = random_crm_ipde_prob_cutoff,
       restrict_to_tried = restrict_to_tried,
       restrict_to_target = restrict_to_target,
       ...
@@ -1024,6 +1135,9 @@ get_oc_sim_AIDE_CRM_TITE <- function(
     new_pat_first = new_pat_first,
     ipde_design = ipde_design,
     n_eval_escalate = n_eval_escalate,
+    drop_new_patients_when_suspended = drop_new_patients_when_suspended,
+    random_crm_ipde_safety = random_crm_ipde_safety,
+    random_crm_ipde_prob_cutoff = random_crm_ipde_prob_cutoff,
     restrict_to_tried = restrict_to_tried,
     restrict_to_target = restrict_to_target,
     final_mtd_by_trial = final_mtd_by_trial,

@@ -1,15 +1,14 @@
 model {
   for (j in 1:ndose) {
+    ## Independent, prespecified priors for regular efficacy and the
+    ## dose-specific IPDE efficacy carryover parameter.
     p_regular[j] ~ dbeta(a_r[j], b_r[j])
+    r_e[j] ~ dbeta(a_carry[j], b_carry[j])
+
+    ## IPDE efficacy at dose j: pi*_Ej = r_Ej + (1-r_Ej) pi_Ej.
+    p_ipde[j] <- r_e[j] + (1 - r_e[j]) * p_regular[j]
+
     y_regular[j] ~ dbin(p_regular[j], n_regular[j])
-  }
-
-  ## Regular and IPDE efficacy probabilities are identical at dose 1.
-  p_ipde[1] <- p_regular[1]
-  y_ipde[1] ~ dbin(p_ipde[1], n_ipde[1])
-
-  for (j in 2:ndose) {
-    p_ipde[j] ~ dbeta(a_r[j], b_r[j])
     y_ipde[j] ~ dbin(p_ipde[j], n_ipde[j])
   }
 }

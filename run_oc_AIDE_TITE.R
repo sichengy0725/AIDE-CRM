@@ -533,6 +533,13 @@ d_cap_aide <- 100L
 dose_cap_aide <- 3L
 ## Escalation is allowed once at least this many patients are evaluated.
 n_eval_escalate_aide <- 3L
+## Optional TITE suspension rule: drop, rather than queue, new arrivals while
+## an escalation decision is suspended for additional follow-up.
+drop_new_patients_when_suspended_aide <- TRUE
+## Optional random-CRM IPDE safety rule.  With this enabled, IPDE is blocked
+## when Pr{r + (1-r) p[2] > target} exceeds the cutoff below.
+random_crm_ipde_safety_aide <- TRUE
+random_crm_ipde_prob_cutoff_aide <- 0.95
 
 store_raw <- FALSE
 verbose <- FALSE
@@ -833,6 +840,9 @@ cat("Nmax_eff list:", paste(Nmax_eff_list_equiv, collapse = ", "), "\n")
 cat("restrict_to_tried list:", paste(restrict_to_tried_list_aide, collapse = ", "), "\n")
 cat("restrict_to_target list:", paste(restrict_to_target_list_aide, collapse = ", "), "\n")
 cat("Continuous enrollment:", continuous_enrollment_equiv, "\n")
+cat("Drop new patients while suspended:", drop_new_patients_when_suspended_aide, "\n")
+cat("Random-CRM IPDE safety gate:", random_crm_ipde_safety_aide, "\n")
+cat("Random-CRM IPDE probability cutoff:", random_crm_ipde_prob_cutoff_aide, "\n")
 cat("Cycle max list:", paste(cycle_max_list_equiv, collapse = ", "), "\n")
 cat("Scenario dose count:", scenario_dose_count, "\n")
 cat("CRM skeleton:", paste(crm_skeleton_default, collapse = ", "), "\n")
@@ -950,6 +960,9 @@ run_one_aide_task <- function(task) {
     cat("ipde_design:", task$ipde_design, "\n")
     cat("dose_cap:", task$dose_cap, "\n")
     cat("n_eval_escalate:", task$n_eval_escalate, "\n")
+    cat("drop_new_patients_when_suspended:", task$drop_new_patients_when_suspended, "\n")
+    cat("random_crm_ipde_safety:", task$random_crm_ipde_safety, "\n")
+    cat("random_crm_ipde_prob_cutoff:", task$random_crm_ipde_prob_cutoff, "\n")
     cat("restrict_to_tried:", task$restrict_to_tried, "\n")
     cat("restrict_to_target:", task$restrict_to_target, "\n")
     cat("continuous_enrollment:", task$continuous_enrollment, "\n")
@@ -1031,6 +1044,9 @@ run_one_aide_task <- function(task) {
       cutoff = task$cutoff,
       dose_cap = task$dose_cap,
       n_eval_escalate = task$n_eval_escalate,
+      drop_new_patients_when_suspended = task$drop_new_patients_when_suspended,
+      random_crm_ipde_safety = task$random_crm_ipde_safety,
+      random_crm_ipde_prob_cutoff = task$random_crm_ipde_prob_cutoff,
 
       dlt_dist = task$dlt_dist,
       dlt_alpha = task$dlt_alpha,
@@ -1119,6 +1135,9 @@ run_one_aide_task <- function(task) {
     ipde_design = task$ipde_design,
     new_pat_first = task$new_pat_first,
     n_eval_escalate = task$n_eval_escalate,
+    drop_new_patients_when_suspended = task$drop_new_patients_when_suspended,
+    random_crm_ipde_safety = task$random_crm_ipde_safety,
+    random_crm_ipde_prob_cutoff = task$random_crm_ipde_prob_cutoff,
     cycle_max = task$cycle_max,
     continuous_enrollment = task$continuous_enrollment,
     block_id = task$block_id,
@@ -1249,6 +1268,9 @@ for (Nmax_eff_aide in Nmax_eff_list_equiv) {
                         d.cap = d_cap_aide,
                         dose_cap = dose_cap_aide,
                         n_eval_escalate = n_eval_escalate_aide,
+                        drop_new_patients_when_suspended = drop_new_patients_when_suspended_aide,
+                        random_crm_ipde_safety = random_crm_ipde_safety_aide,
+                        random_crm_ipde_prob_cutoff = random_crm_ipde_prob_cutoff_aide,
                         day_obs = day_obs,
 
                         dlt_dist = dlt_dist_equiv,

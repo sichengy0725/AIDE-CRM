@@ -12,9 +12,7 @@
 #' Generate patient-level regular and IPDE efficacy data.
 #'
 #' @param p_regular True regular-patient efficacy probabilities by dose.
-#' @param p_ipde True IPDE efficacy probabilities by dose.  Its first value is
-#'   replaced with p_regular[1], because the two groups have the same
-#'   probability at dose 1.
+#' @param p_ipde True IPDE efficacy probabilities by dose.
 #' @param ndose Number of dose levels.
 #' @param n_ipde Number of IPDE patients per dose (a scalar or length-ndose vector).
 #' @param n_regular Number of regular patients per dose (a scalar or length-ndose vector).
@@ -62,9 +60,6 @@ generate_efficacy_data <- function(p_regular,
     set.seed(seed)
   }
 
-  ## Enforce the requested dose-1 equality in the data-generating mechanism.
-  p_ipde[1L] <- p_regular[1L]
-
   regular_rows <- lapply(seq_len(ndose), function(j) {
     data.frame(
       dose = rep.int(j, n_regular[j]),
@@ -95,31 +90,37 @@ generate_efficacy_data <- function(p_regular,
 
 #' Fit a dose-specific or hierarchical beta-binomial efficacy model in JAGS.
 #'
-#' The supplied a_r and b_r define the Beta prior for both regular and IPDE
-#' probabilities in the dose-specific model.  In the hierarchical model their
-#' average defines the hyperprior for the shared mean; each group has its own
-#' learned mean and concentration across doses.  At dose 1, the IPDE and
-#' regular probabilities are constrained to be identical.
+#' For the dose-specific model, a_r and b_r define independent priors for
+#' regular efficacy pi_Ej, while a_carry and b_carry define independent priors
+#' for the dose-specific IPDE carryover r_Ej. The model uses
+#' pi*_Ej = r_Ej + (1-r_Ej)pi_Ej. In the hierarchical model, a_carry/b_carry
+#' are unused.
 #'
 #' @param dose_data Output from generate_efficacy_data().
-#' @param a_r,b_r Positive Beta shape parameters (scalars or length-ndose vectors).
+#' @param a_r,b_r Positive Beta shapes for regular efficacy.
+#' @param a_carry,b_carry Positive Beta shapes for dose-specific IPDE carryover.
 #' @param prior_type "dose_specific" or "hierarchical".
 #' @param model_file Optional path to the corresponding JAGS model file.
 #' @param n_chains,n_adapt,n_burnin,n_iter,thin JAGS MCMC settings.
 #' @param seed Optional JAGS random-number seed.
+#' @param ndose Optional total number of doses. This permits unobserved dose
+#'   levels to remain in the JAGS model with their prior only.
 #' @return A list containing posterior summaries by dose, posterior samples,
 #'   dose-level counts, and the selected model type.
 fit_beta_binomial_efficacy <- function(dose_data,
                                        a_r,
                                        b_r,
                                        prior_type = c("dose_specific", "hierarchical"),
+                                       a_carry = 1,
+                                       b_carry = 9,
                                        model_file = NULL,
                                        n_chains = 3L,
                                        n_adapt = 1000L,
                                        n_burnin = 1000L,
                                        n_iter = 4000L,
                                        thin = 2L,
-                                       seed = NULL) {
+                                       seed = NULL,
+                                       ndose = NULL) {
   if (!requireNamespace("rjags", quietly = TRUE)) {
     stop("This function requires the rjags package and a working JAGS installation.")
   }
@@ -134,15 +135,19 @@ fit_beta_binomial_efficacy <- function(dose_data,
   dose_data$dose <- as.integer(dose_data$dose)
   dose_data$group <- tolower(as.character(dose_data$group))
   dose_data$efficacy <- as.numeric(dose_data$efficacy)
-  if (nrow(dose_data) == 0L || any(is.na(dose_data$dose)) ||
-      any(dose_data$dose < 1L) || any(!dose_data$group %in% c("regular", "ipde")) ||
+  if (any(is.na(dose_data$dose)) || any(dose_data$dose < 1L) ||
+      any(!dose_data$group %in% c("regular", "ipde")) ||
       any(!dose_data$efficacy %in% c(0, 1))) {
     stop("dose_data must contain positive doses, regular/ipde groups, and binary efficacy outcomes.")
   }
 
-  ndose <- max(dose_data$dose)
-  if (ndose < 2L || !identical(sort(unique(dose_data$dose)), seq_len(ndose))) {
-    stop("dose_data must include contiguous dose levels 1 through ndose, with ndose >= 2.")
+  observed_ndose <- if (nrow(dose_data) == 0L) 0L else max(dose_data$dose)
+  if (is.null(ndose)) {
+    ndose <- observed_ndose
+  }
+  ndose <- as.integer(ndose)
+  if (length(ndose) != 1L || is.na(ndose) || ndose < 2L || observed_ndose > ndose) {
+    stop("ndose must be an integer of at least 2 and no smaller than the largest observed dose.")
   }
 
   expand_shape <- function(x, name) {
@@ -157,6 +162,8 @@ fit_beta_binomial_efficacy <- function(dose_data,
   }
   a_r <- expand_shape(a_r, "a_r")
   b_r <- expand_shape(b_r, "b_r")
+  a_carry <- expand_shape(a_carry, "a_carry")
+  b_carry <- expand_shape(b_carry, "b_carry")
 
   count_by_dose <- function(group_name) {
     vapply(seq_len(ndose), function(j) {
@@ -204,6 +211,8 @@ fit_beta_binomial_efficacy <- function(dose_data,
   if (prior_type == "dose_specific") {
     jags_data$a_r <- a_r
     jags_data$b_r <- b_r
+    jags_data$a_carry <- a_carry
+    jags_data$b_carry <- b_carry
   } else {
     jags_data$a0 <- mean(a_r)
     jags_data$b0 <- mean(b_r)
@@ -232,9 +241,14 @@ fit_beta_binomial_efficacy <- function(dose_data,
   if (n_burnin > 0L) {
     stats::update(jags_model, n.iter = n_burnin, progress.bar = "none")
   }
+  monitored_parameters <- if (prior_type == "dose_specific") {
+    c("p_regular", "p_ipde", "r_e")
+  } else {
+    c("p_regular", "p_ipde")
+  }
   samples <- rjags::coda.samples(
     model = jags_model,
-    variable.names = c("p_regular", "p_ipde"),
+    variable.names = monitored_parameters,
     n.iter = n_iter,
     thin = thin,
     progress.bar = "none"
@@ -258,6 +272,16 @@ fit_beta_binomial_efficacy <- function(dose_data,
     function(j) summarize_probability("p_ipde", j),
     numeric(3)
   ))
+  carryover_summary <- if (prior_type == "dose_specific") {
+    t(vapply(
+      seq_len(ndose),
+      function(j) summarize_probability("r_e", j),
+      numeric(3)
+    ))
+  } else {
+    matrix(NA_real_, nrow = ndose, ncol = 3L,
+           dimnames = list(NULL, c("mean", "lcl", "ucl")))
+  }
 
   list(
     posterior = data.frame(
@@ -268,6 +292,9 @@ fit_beta_binomial_efficacy <- function(dose_data,
       p_ipde_hat = ipde_summary[, "mean"],
       p_ipde_lcl = ipde_summary[, "lcl"],
       p_ipde_ucl = ipde_summary[, "ucl"],
+      r_e_hat = carryover_summary[, "mean"],
+      r_e_lcl = carryover_summary[, "lcl"],
+      r_e_ucl = carryover_summary[, "ucl"],
       stringsAsFactors = FALSE
     ),
     samples = samples,
@@ -287,7 +314,7 @@ fit_beta_binomial_efficacy <- function(dose_data,
 #' @param p_regular,p_ipde,ndose,n_ipde,n_regular Data-generating inputs passed
 #'   to generate_efficacy_data().
 #' @param ntrial Number of simulated trials.
-#' @param a_r,b_r Beta prior shapes passed to fit_beta_binomial_efficacy().
+#' @param a_r,b_r,a_carry,b_carry Beta prior shapes passed to fit_beta_binomial_efficacy().
 #' @param prior_type JAGS model to fit: "dose_specific" or "hierarchical".
 #' @param plot_file Optional PNG output path.  Use NULL to display the plot on
 #'   the active graphics device.
@@ -302,6 +329,8 @@ run_efficacy_trial <- function(p_regular,
                                a_r,
                                b_r,
                                prior_type = c("dose_specific", "hierarchical"),
+                               a_carry = 1,
+                               b_carry = 9,
                                model_file = NULL,
                                n_chains = 3L,
                                n_adapt = 1000L,
@@ -338,6 +367,8 @@ run_efficacy_trial <- function(p_regular,
       dose_data = dose_data,
       a_r = a_r,
       b_r = b_r,
+      a_carry = a_carry,
+      b_carry = b_carry,
       prior_type = prior_type,
       model_file = model_file,
       n_chains = n_chains,
@@ -345,7 +376,8 @@ run_efficacy_trial <- function(p_regular,
       n_burnin = n_burnin,
       n_iter = n_iter,
       thin = thin,
-      seed = if (is.null(trial_seed)) NULL else trial_seed + 1L
+      seed = if (is.null(trial_seed)) NULL else trial_seed + 1L,
+      ndose = ndose
     )
     one <- fit$posterior
     one$trial <- trial
@@ -421,7 +453,7 @@ run_efficacy_trial <- function(p_regular,
 ## Set this to TRUE only after rjags is installed and you are ready to run the
 ## 16,000 JAGS fits implied by 5 scenarios x 4 alphas x 4 priors x 2 sample
 ## sizes x 100 trials.
-RUN_BOIN12_PRIOR_SENSITIVITY_EXPERIMENT <- TRUE
+RUN_BOIN12_PRIOR_SENSITIVITY_EXPERIMENT <- FALSE
 
 if (isTRUE(RUN_BOIN12_PRIOR_SENSITIVITY_EXPERIMENT)) {
 alpha_values <- c(0, 0.3, 0.6, 0.9)

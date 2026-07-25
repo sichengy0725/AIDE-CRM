@@ -37,6 +37,23 @@ crm_normalize_r_model <- function(r_model) {
   }
 }
 
+## Posterior probability for the toxicity of an IPDE at dose 2 under the
+## common-r random CRM model: theta_IPDE,2 = r + (1-r) p[2].
+crm_random_ipde_p2_safety <- function(post, target) {
+  if (is.null(dim(post)) || !all(c("r", "p[2]") %in% colnames(post))) {
+    stop("post must contain posterior draws named 'r' and 'p[2]'.")
+  }
+  if (length(target) != 1L || !is.finite(target) || target <= 0 || target >= 1) {
+    stop("target must be a scalar in (0, 1).")
+  }
+
+  theta_ipde_p2 <- post[, "r"] + (1 - post[, "r"]) * post[, "p[2]"]
+  list(
+    theta_ipde_p2_hat = mean(theta_ipde_p2),
+    prob_ipde_p2_over_target = mean(theta_ipde_p2 > target)
+  )
+}
+
 crm_validate_skeleton <- function(skeleton, ndose) {
   if (length(skeleton) != ndose) {
     stop("skeleton must have length ndose.")
@@ -570,6 +587,19 @@ crm_fit_discount <- function(dat,
     out[2:ndose] <- colMeans(post[, r_cols, drop = FALSE])
     out
   }
+
+  ## For the random-r model, retain the posterior safety probability for an
+  ## IPDE administered at dose 2.  The TITE simulator can use this quantity
+  ## to suspend IPDE enrollment without having to approximate it from the
+  ## posterior means of r and p[2].
+  theta_ipde_p2_hat <- NA_real_
+  prob_ipde_p2_over_target <- NA_real_
+  if (r_model == "random" && ndose >= 2L) {
+    ipde_p2_safety <- crm_random_ipde_p2_safety(post, target)
+    theta_ipde_p2_hat <- ipde_p2_safety$theta_ipde_p2_hat
+    prob_ipde_p2_over_target <- ipde_p2_safety$prob_ipde_p2_over_target
+  }
+
   prob_overtox <- mean(post[, p_cols[1L]] > target)
   stop_flag <- as.integer(prob_overtox > cutoff)
   
@@ -585,6 +615,8 @@ crm_fit_discount <- function(dat,
     stop = stop_flag,
     extra = list(
       prob_p1_over_target = prob_overtox,
+      theta_ipde_p2_hat = theta_ipde_p2_hat,
+      prob_ipde_p2_over_target = prob_ipde_p2_over_target,
       earlystop = stop_flag,
       eliminated = if (stop_flag == 1L) rep(1L, ndose) else rep(0L, ndose),
       model_file = model_file,
@@ -1092,6 +1124,7 @@ crm_move <- function(current_dose,
       },
       prob_overtox = NA_real_,
       prob_p1_over_target = NA_real_,
+      prob_ipde_p2_over_target = NA_real_,
       stop = 0L,
       earlystop = 0L,
       stop_trial = FALSE,
@@ -1158,6 +1191,11 @@ crm_move <- function(current_dose,
       r_hat = fit$r_hat,
       prob_overtox = fit$prob_overtox,
       prob_p1_over_target = fit$prob_overtox,
+      prob_ipde_p2_over_target = if (!is.null(fit$prob_ipde_p2_over_target)) {
+        fit$prob_ipde_p2_over_target
+      } else {
+        NA_real_
+      },
       stop = 1L,
       earlystop = 1L,
       stop_trial = TRUE,
@@ -1184,6 +1222,11 @@ crm_move <- function(current_dose,
       r_hat = fit$r_hat,
       prob_overtox = fit$prob_overtox,
       prob_p1_over_target = fit$prob_overtox,
+      prob_ipde_p2_over_target = if (!is.null(fit$prob_ipde_p2_over_target)) {
+        fit$prob_ipde_p2_over_target
+      } else {
+        NA_real_
+      },
       stop = fit$stop,
       earlystop = 0L,
       stop_trial = FALSE,
@@ -1225,6 +1268,11 @@ crm_move <- function(current_dose,
     r_hat = fit$r_hat,
     prob_overtox = fit$prob_overtox,
     prob_p1_over_target = fit$prob_overtox,
+    prob_ipde_p2_over_target = if (!is.null(fit$prob_ipde_p2_over_target)) {
+      fit$prob_ipde_p2_over_target
+    } else {
+      NA_real_
+    },
     stop = fit$stop,
     earlystop = 0L,
     stop_trial = FALSE,
@@ -1311,6 +1359,7 @@ select.mtd.crm <- function(target,
       },
       prob_overtox = NA_real_,
       prob_p1_over_target = NA_real_,
+      prob_ipde_p2_over_target = NA_real_,
       model_file = model_file,
       earlystop = 0L,
       stop = 0L,
@@ -1403,6 +1452,11 @@ select.mtd.crm <- function(target,
       r_hat = fit$r_hat,
       prob_overtox = fit$prob_overtox,
       prob_p1_over_target = fit$prob_overtox,
+      prob_ipde_p2_over_target = if (!is.null(fit$prob_ipde_p2_over_target)) {
+        fit$prob_ipde_p2_over_target
+      } else {
+        NA_real_
+      },
       model_file = if (!is.null(fit$model_file)) fit$model_file else model_file,
       n_eff = n_eff,
       earlystop = 1L,
@@ -1439,6 +1493,11 @@ select.mtd.crm <- function(target,
     r_hat = fit$r_hat,
     prob_overtox = fit$prob_overtox,
     prob_p1_over_target = fit$prob_overtox,
+    prob_ipde_p2_over_target = if (!is.null(fit$prob_ipde_p2_over_target)) {
+      fit$prob_ipde_p2_over_target
+    } else {
+      NA_real_
+    },
     model_file = if (!is.null(fit$model_file)) fit$model_file else model_file,
     n_eff = n_eff,
     earlystop = if (!is.null(fit$earlystop)) fit$earlystop else fit$stop,
