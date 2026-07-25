@@ -183,13 +183,14 @@ utility_grid <- rbind(
 ## One new-patient arrival per 56 days, expressed as a per-day rate.
 arrival_grid <- data.frame(arrival_rate = 1 / 56, stringsAsFactors = FALSE)
 ipde_grid <- data.frame(
-  ipde_design = c(1L, 2L),
-  flexible_ipde = c(TRUE, FALSE),
+  ## cycle_max = 1 disables IPDE, so this is a single inert placeholder.
+  ipde_design = 2L,
+  flexible_ipde = FALSE,
   stringsAsFactors = FALSE
 )
 alpha_grid <- data.frame(
-  toxicity_ipde_alpha = c(0, 0.3, 0.6, 0.9),
-  efficacy_ipde_alpha = c(0, 0.3, 0.6, 0.9),
+  toxicity_ipde_alpha = 0,
+  efficacy_ipde_alpha = 0,
   stringsAsFactors = FALSE
 )
 
@@ -199,7 +200,8 @@ utility_scores <- c(u00 = 40, u01 = 100, u10 = 0, u11 = 60)
 
 ## Fixed design settings kept outside the grid.
 cohort_size <- 3L
-cycle_max <- 2L
+## A single cycle per patient disables all IPDE/recycling administrations.
+cycle_max <- 1L
 T_assess <- 28
 m_U <- 6L
 crm_skeleton <- c(0.15, 0.20, 0.30, 0.35, 0.45)
