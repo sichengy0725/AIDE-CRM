@@ -1,56 +1,177 @@
 ## ============================================================
 ## Extract operating characteristics from run_oc_AIDE_phase_I_II.R
 ##
-## Usage:
-##   Rscript extract_result_AIDE_phase_I_II.R [first_IDX] [last_IDX]
-##
-## Examples:
-##   Rscript extract_result_AIDE_phase_I_II.R 1 1000
-##   Rscript extract_result_AIDE_phase_I_II.R 24 24
-##
-## By default this reads oc_results_AIDE_phase_I_II/ and writes a dose-level
-## summary, a table-style summary, and a missing-job log to
-## OC_summary_AIDE_phase_I_II/.  Set AIDE_PHASE12_RESULTS_DIR or
-## AIDE_PHASE12_SUMMARY_DIR to override either directory.
+## Edit the settings below, then run this file interactively (for example,
+## with RStudio's Source button).  Keep the scenario and design settings in
+## sync with run_oc_AIDE_phase_I_II.R.  The extractor rebuilds the same task
+## grid so that it can report missing result files for every requested task.
 ## ============================================================
 
-args <- commandArgs(trailingOnly = TRUE)
-script_arg <- commandArgs(trailingOnly = FALSE)
-script_file <- sub("^--file=", "", script_arg[grepl("^--file=", script_arg)])
-if (length(script_file) == 1L && file.exists(script_file)) {
-  setwd(dirname(normalizePath(script_file)))
-}
+## ------------------------------------------------------------
+## User settings: match these to run_oc_AIDE_phase_I_II.R.
+## ------------------------------------------------------------
 
-parse_positive_integer <- function(x, name) {
-  value <- suppressWarnings(as.integer(x))
-  if (length(value) != 1L || is.na(value) || value < 1L) {
-    stop(name, " must be a positive integer.")
-  }
-  value
-}
+scenario_file <- "Set_5dose_adaptive_r_37_true_MTD_OBD_summary_lambda1.csv"
+results_root <- "oc_results_AIDE_phase_I_II"
+out_dir <- "OC_summary_AIDE_phase_I_II"
 
-first_idx <- if (length(args) >= 1L) {
-  parse_positive_integer(args[1L], "first_IDX")
-} else {
-  1L
-}
-last_idx <- if (length(args) >= 2L) {
-  parse_positive_integer(args[2L], "last_IDX")
-} else {
-  1000L
-}
-if (last_idx < first_idx) stop("last_IDX must be at least first_IDX.")
+## Select the result-job IDX values to combine.  Use, for example, 1:10 when
+## the runner was called with ntrial = 100 for IDX = 1,...,10.
+jobs_expected <- 1:10
+ntrial_per_job_expected <- 100L
 
-results_root <- Sys.getenv(
-  "AIDE_PHASE12_RESULTS_DIR",
-  unset = "oc_results_AIDE_phase_I_II"
+## Leave NULL to use every scenario in scenario_file.  If you restrict this
+## list in the runner, make the same restriction here before extracting.
+scenario_id_list <- NULL
+
+## Two-stage uses paired (Nmax, N_s1) settings.  One-stage uses only Nmax;
+## N_s1 is set to Nmax because it is unused by that allocation rule.
+two_stage_sizes <- data.frame(
+  allocation = "two_stage",
+  Nmax = c(30L, 45L, 60L),
+  N_s1 = c(15L, 24L, 30L),
+  stringsAsFactors = FALSE
 )
-out_dir <- Sys.getenv(
-  "AIDE_PHASE12_SUMMARY_DIR",
-  unset = "OC_summary_AIDE_phase_I_II"
+one_stage_sizes <- data.frame(
+  allocation = "one_stage",
+  Nmax = c(30L, 45L, 60L),
+  N_s1 = c(30L, 45L, 60L),
+  stringsAsFactors = FALSE
 )
+design_size_grid <- rbind(two_stage_sizes, one_stage_sizes)
+
+## Priors for the random-carryover CRM.
+crm_prior_grid <- data.frame(
+  crm_prior_id = "r_beta_0p15_0p85",
+  crm_a_r = 0.15,
+  crm_b_r = 0.85,
+  stringsAsFactors = FALSE
+)
+
+## Independent Beta priors for regular efficacy and dose-specific efficacy
+## carryover.  Each row supplies Beta(a, b) for every dose.
+efficacy_prior_grid <- data.frame(
+  efficacy_prior_id = "regular_beta_0p15_0p85_carry_beta_0p15_0p85",
+  efficacy_a = 0.15,
+  efficacy_b = 0.85,
+  carry_a = 0.15,
+  carry_b = 0.85,
+  stringsAsFactors = FALSE
+)
+
+enrollment_schemes <- data.frame(
+  enrollment_scheme = c("continuous", "ipde_first"),
+  stringsAsFactors = FALSE
+)
+lambda_T_grid <- 0.3
+utility_grid <- rbind(
+  data.frame(utility_type = 1L, lambda_T = 1, stringsAsFactors = FALSE),
+  data.frame(utility_type = 2L, lambda_T = lambda_T_grid, stringsAsFactors = FALSE),
+  data.frame(utility_type = 3L, lambda_T = 1, stringsAsFactors = FALSE)
+)
+arrival_grid <- data.frame(arrival_rate = 1 / 56, stringsAsFactors = FALSE)
+ipde_grid <- data.frame(
+  ## cycle_max = 1 disables IPDE, so this is a single inert placeholder.
+  ipde_design = 2L,
+  flexible_ipde = FALSE,
+  stringsAsFactors = FALSE
+)
+alpha_grid <- data.frame(
+  toxicity_ipde_alpha = 0,
+  efficacy_ipde_alpha = 0,
+  stringsAsFactors = FALSE
+)
+
+## Fixed design settings, retained here as a compact record of the matching
+## run configuration.  They do not change the task IDs, but should also match
+## the corresponding values in run_oc_AIDE_phase_I_II.R.
+cohort_size <- 3L
+cycle_max <- 1L
+T_assess <- 28
+m_U <- 6L
+crm_skeleton <- c(0.15, 0.20, 0.30, 0.35, 0.45)
+crm_alpha_sd <- sqrt(2)
+efficacy_threshold <- 0.20
+futility_cutoff <- 0.95
+min_eff_n_for_futility <- 0L
+apply_random_crm_recycle_toxicity_rule <- FALSE
+apply_random_crm_recycle_efficacy_rule <- FALSE
+
 if (!dir.exists(results_root)) stop("Results directory does not exist: ", results_root)
 dir.create(out_dir, recursive = TRUE, showWarnings = FALSE)
+
+cross_join <- function(x, y) {
+  merge(x, y, by = NULL, sort = FALSE)
+}
+
+read_phase12_truth <- function(file) {
+  if (!file.exists(file)) stop("Scenario summary does not exist: ", file)
+  raw <- utils::read.csv(file, check.names = FALSE, stringsAsFactors = FALSE)
+
+  tox_cols <- paste0("Tox_Dose", 1:5)
+  eff_cols <- paste0("Eff_Dose", 1:5)
+  required <- c(
+    "Scenario", "Source_Scenario", "Scenario_Group", "True_MTD_Level",
+    "Target_Toxicity", tox_cols, eff_cols
+  )
+  missing <- setdiff(required, names(raw))
+  if (length(missing) > 0L) {
+    stop("Scenario summary is missing: ", paste(missing, collapse = ", "))
+  }
+
+  truth_columns <- c(
+    "Scenario", "Source_Scenario", "Scenario_Group", "Attempt",
+    "True_MTD_Level", "Target_Toxicity", tox_cols, eff_cols
+  )
+  truth <- raw[, truth_columns[truth_columns %in% names(raw)], drop = FALSE]
+  truth$Scenario <- as.integer(truth$Scenario)
+  if (anyNA(truth$Scenario) || anyDuplicated(truth$Scenario)) {
+    stop("Scenario must contain unique non-missing integer values.")
+  }
+  truth
+}
+
+truth <- read_phase12_truth(scenario_file)
+if (!is.null(scenario_id_list)) {
+  scenario_id_list <- as.integer(scenario_id_list)
+  missing_scenarios <- setdiff(scenario_id_list, truth$Scenario)
+  if (length(missing_scenarios) > 0L) {
+    stop("scenario_id_list is not in scenario_file: ",
+         paste(missing_scenarios, collapse = ", "))
+  }
+  truth <- truth[truth$Scenario %in% scenario_id_list, , drop = FALSE]
+}
+
+setting_grid <- Reduce(
+  cross_join,
+  list(
+    design_size_grid,
+    crm_prior_grid,
+    efficacy_prior_grid,
+    enrollment_schemes,
+    utility_grid,
+    arrival_grid,
+    ipde_grid,
+    alpha_grid
+  )
+)
+expected_tasks <- cross_join(
+  truth[, c("Scenario", "Source_Scenario", "Scenario_Group", "Attempt"), drop = FALSE],
+  setting_grid
+)
+expected_tasks$task_id <- seq_len(nrow(expected_tasks))
+expected_tasks <- expected_tasks[, c("task_id", setdiff(names(expected_tasks), "task_id")), drop = FALSE]
+
+jobs_expected <- sort(unique(as.integer(jobs_expected)))
+if (length(jobs_expected) == 0L || anyNA(jobs_expected) || any(jobs_expected < 1L)) {
+  stop("jobs_expected must contain one or more positive integer IDX values.")
+}
+ntrial_per_job_expected <- as.integer(ntrial_per_job_expected)
+if (length(ntrial_per_job_expected) != 1L || is.na(ntrial_per_job_expected) ||
+    ntrial_per_job_expected < 1L) {
+  stop("ntrial_per_job_expected must be a positive integer.")
+}
+ntrial_expected <- length(jobs_expected) * ntrial_per_job_expected
 
 task_id_from_file <- function(path) {
   as.integer(sub("^task_([0-9]+)_.*$", "\\1", basename(path)))
@@ -338,26 +459,23 @@ if (length(raw_files) == 0L) stop("No Phase I/II task RDS files found in: ", res
 
 job_ids <- vapply(raw_files, job_id_from_file, integer(1))
 task_ids <- vapply(raw_files, task_id_from_file, integer(1))
-keep <- job_ids >= first_idx & job_ids <= last_idx
+expected_task_ids <- expected_tasks$task_id
+keep <- job_ids %in% jobs_expected & task_ids %in% expected_task_ids
 raw_files <- raw_files[keep]
 job_ids <- job_ids[keep]
 task_ids <- task_ids[keep]
 if (length(raw_files) == 0L) {
-  stop("No RDS files found for IDX ", first_idx, " through ", last_idx, ".")
+  stop(
+    "No RDS files found for the selected jobs/settings. ",
+    "Check jobs_expected and make the extraction settings match the runner."
+  )
 }
-
-manifest_file <- file.path(results_root, "AIDE_phase_I_II_task_manifest.csv")
-manifest_task_ids <- integer(0)
-if (file.exists(manifest_file)) {
-  manifest <- utils::read.csv(manifest_file, stringsAsFactors = FALSE)
-  if ("task_id" %in% names(manifest)) manifest_task_ids <- as.integer(manifest$task_id)
-}
-all_task_ids <- sort(unique(c(task_ids, manifest_task_ids)))
+all_task_ids <- expected_task_ids
 
 dose_summaries <- list()
 table_summaries <- list()
 missing_log <- list()
-expected_jobs <- seq.int(first_idx, last_idx)
+expected_jobs <- jobs_expected
 
 for (task_id in all_task_ids) {
   these <- which(task_ids == task_id)
@@ -372,11 +490,14 @@ for (task_id in all_task_ids) {
     dose_summaries[[as.character(task_id)]] <- one$dose_summary
     table_summaries[[as.character(task_id)]] <- one$table_summary
   }
+  task_settings <- expected_tasks[match(task_id, expected_tasks$task_id), , drop = FALSE]
   missing_log[[as.character(task_id)]] <- data.frame(
     Task_ID = task_id,
+    task_settings[, setdiff(names(task_settings), "task_id"), drop = FALSE],
     n_found = length(files_for_task),
     n_expected = length(expected_jobs),
     n_missing = length(missing_jobs),
+    ntrial_expected = ntrial_expected,
     ntrial_from_files = ntrial_from_files,
     missing_IDX = paste(missing_jobs, collapse = ","),
     stringsAsFactors = FALSE
@@ -394,7 +515,15 @@ round_numeric_df <- function(dat, digits = 4L) {
 dose_summary <- do.call(rbind, dose_summaries)
 table_summary <- do.call(rbind, table_summaries)
 missing_summary <- do.call(rbind, missing_log)
-tag <- paste0("AIDE_phase_I_II_IDX_", sprintf("%04d", first_idx), "_to_", sprintf("%04d", last_idx))
+job_tag <- if (length(jobs_expected) > 1L &&
+               identical(jobs_expected, seq.int(min(jobs_expected), max(jobs_expected)))) {
+  paste0(sprintf("%04d", min(jobs_expected)), "_to_", sprintf("%04d", max(jobs_expected)))
+} else if (length(jobs_expected) == 1L) {
+  sprintf("%04d", jobs_expected)
+} else {
+  paste0("selected_", length(jobs_expected), "_jobs")
+}
+tag <- paste0("AIDE_phase_I_II_IDX_", job_tag)
 
 dose_csv <- file.path(out_dir, paste0(tag, "_dose_summary.csv"))
 table_csv <- file.path(out_dir, paste0(tag, "_table_summary.csv"))
