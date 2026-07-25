@@ -68,6 +68,14 @@ arrival_rate_list <- c(1 / 56)
 
 model_list <- c("BOIN", "CRM", "CFO")
 
+## The current random-scenario array writes one 100-trial raw RDS for each
+## scenario (j1, n100).  If a scenario is split over multiple array jobs,
+## replace 1L with the corresponding job indices.
+jobs.expected <- 1L
+ntrial_per_job_expected <- 100L
+seed_base_expected <- 1L
+block_id_expected <- 1L
+
 boin_method_list <- c("boin")
 boin_r_estimator_list <- c("r_fixed")
 boin_r_carry_list_r_mle <- c(0)
@@ -81,6 +89,14 @@ crm_r_carry_values <- list(
   level     = c(0),
   alpha_crm = c(0),
   cumu_crm  = c(0)
+)
+
+## Each random-CRM prior is written to a separate folder and uses its own
+## raw-RDS filename tag. Keep the rows corresponding to the runs to extract.
+crm_random_prior_grid <- rbind(
+  c(a_r = 0.15, b_r = 0.85),
+  c(a_r = 0.30, b_r = 0.70),
+  c(a_r = 0.50, b_r = 0.50)
 )
 
 ## The reference in the paired comparison is the no-carryover fixed CRM.
@@ -119,6 +135,22 @@ fmt_short <- function(x, digits = 2) {
   out <- gsub("-", "m", out)
   out <- gsub("\\.", "p", out)
   out
+}
+
+## Must match run_oc_AIDE.R's random-CRM prior formatter.
+fmt_param <- function(x, digits = 4) {
+  x <- round(as.numeric(x), digits)
+  gsub("\\.", "p", format(x, scientific = FALSE, trim = TRUE))
+}
+
+is_random_crm <- function(model, crm_r_model) {
+  identical(as.character(model), "CRM") &&
+    identical(as.character(crm_r_model), "random")
+}
+
+random_crm_prior_tag <- function(model, crm_r_model, a_r, b_r) {
+  if (!is_random_crm(model, crm_r_model)) return("")
+  paste0("ar", fmt_param(a_r), "-br", fmt_param(b_r))
 }
 
 fmt_gap <- function(x) {
@@ -230,11 +262,16 @@ make_foldername <- function(model,
                             n_eval_escalate,
                             restrict_to_tried,
                             restrict_to_target,
+                            crm_r_model,
+                            crm_a_r,
+                            crm_b_r,
                             scenario_set) {
+  prior_tag <- random_crm_prior_tag(model, crm_r_model, crm_a_r, crm_b_r)
   paste0(
     scenario_set,
     "-model-", model,
     "-opt-", method_tag,
+    if (nzchar(prior_tag)) paste0("-", prior_tag) else "",
     "-w-", fmt_short(T_assess),
     "-c-", fmt_short(C),
     "-cyc-", fmt_short(cycle_max),
@@ -249,66 +286,69 @@ make_foldername <- function(model,
 }
 
 resolve_folderpath <- function(results_root, foldername) {
-  nested <- file.path(results_root, foldername)
-  if (dir.exists(nested) || !dir.exists(foldername)) {
-    return(nested)
-  }
-  foldername
+  legacy_root <- sub(
+    "^oc_results_cluster_AIDE_new",
+    "oc_results_cluster_AIDE_",
+    results_root
+  )
+  candidates <- c(
+    file.path(results_root, foldername),
+    file.path(legacy_root, foldername),
+    foldername
+  )
+  found <- candidates[dir.exists(candidates)]
+  if (length(found) > 0L) return(found[1L])
+  candidates[1L]
 }
 
-regex_escape <- function(x) {
-  gsub("([][{}()+*^$|\\\\?.])", "\\\\\\1", x, perl = TRUE)
-}
+make_raw_rds_filenames <- function(sc,
+                                   model,
+                                   method_tag,
+                                   alpha_true,
+                                   r_carry,
+                                   cycle_max,
+                                   restrict_to_tried,
+                                   restrict_to_target,
+                                   crm_r_model,
+                                   crm_a_r,
+                                   crm_b_r,
+                                   jobs = jobs.expected,
+                                   block_id = block_id_expected,
+                                   seed_base = seed_base_expected,
+                                   ntrial_per_job = ntrial_per_job_expected,
+                                   scenario_set) {
+  jobs <- as.integer(jobs)
+  seed_block <- as.integer(seed_base) + (jobs - 1L) * as.integer(ntrial_per_job)
+  prior_tag <- random_crm_prior_tag(model, crm_r_model, crm_a_r, crm_b_r)
 
-make_file_pattern <- function(scenario_set,
-                              model,
-                              method_tag,
-                              alpha_true,
-                              r_carry,
-                              arrival_rate,
-                              cycle_max,
-                              Nmax_eff,
-                              ipde_design,
-                              continuous_enrollment,
-                              new_pat_first,
-                              n_eval_escalate,
-                              restrict_to_tried,
-                              restrict_to_target) {
   paste0(
-    "^",
-    regex_escape(scenario_set),
-    "_SC[0-9]+_",
-    regex_escape(model),
-    "_",
-    regex_escape(method_tag),
-    "_a",
-    regex_escape(fmt_short(alpha_true)),
-    "_r",
-    regex_escape(fmt_short(r_carry)),
-    "_rate",
-    regex_escape(fmt_short(arrival_rate)),
-    "_cyc",
-    regex_escape(fmt_short(cycle_max)),
-    "_Nmax",
-    regex_escape(fmt_short(Nmax_eff)),
-    "_ipde",
-    as.integer(ipde_design),
-    "_cont",
-    as.integer(isTRUE(continuous_enrollment)),
-    "_newfirst",
-    as.integer(new_pat_first),
-    "_neval",
-    as.integer(n_eval_escalate),
-    "_tried",
-    as.integer(isTRUE(restrict_to_tried)),
-    if (isTRUE(restrict_to_target)) "_ptarget1" else "",
-    "-job-[0-9]+-combined\\.rds$"
+    scenario_set, "_SC", sc,
+    "-", model,
+    "-", method_tag,
+    "-a", fmt_short(alpha_true),
+    "-r", fmt_short(r_carry),
+    if (nzchar(prior_tag)) paste0("-", prior_tag) else "",
+    "-cyc", fmt_short(cycle_max),
+    "-tried", as.integer(isTRUE(restrict_to_tried)),
+    if (isTRUE(restrict_to_target)) "-ptarget1" else "",
+    "-j", jobs,
+    "-b", block_id,
+    "-s", seed_block,
+    "-n", as.integer(ntrial_per_job),
+    ".rds"
   )
 }
 
-extract_scenario_id_from_file <- function(files, scenario_set) {
-  rx <- paste0("^", regex_escape(scenario_set), "_SC([0-9]+)_.*$")
-  as.integer(sub(rx, "\\1", basename(files), perl = TRUE))
+make_raw_file_index <- function(scenario_ids, ...) {
+  n_jobs <- length(jobs.expected)
+  data.frame(
+    Scenario = rep(as.integer(scenario_ids), each = n_jobs),
+    Filename = unlist(lapply(
+      scenario_ids,
+      function(sc) make_raw_rds_filenames(sc = sc, ...)
+    )),
+    stringsAsFactors = FALSE
+  )
 }
 
 get_field <- function(x, candidates, required = TRUE) {
@@ -480,6 +520,8 @@ make_setting_meta <- function(model,
                               boin_r_estimator,
                               crm_r_model,
                               cfo_method,
+                              crm_a_r,
+                              crm_b_r,
                               alpha_true,
                               r_carry,
                               arrival_rate,
@@ -508,6 +550,8 @@ make_setting_meta <- function(model,
     BOIN_r_estimator = if (model == "BOIN") boin_r_estimator else NA_character_,
     CRM_r_model = if (model == "CRM") crm_r_model_label else NA_character_,
     CFO_Method = if (model == "CFO") cfo_method else NA_character_,
+    CRM_r_Prior_a = if (is_random_crm(model, crm_r_model)) crm_a_r else NA_real_,
+    CRM_r_Prior_b = if (is_random_crm(model, crm_r_model)) crm_b_r else NA_real_,
     Alpha_true = alpha_true,
     r_carry = r_carry,
     Accrual = arrival_rate,
@@ -835,7 +879,21 @@ for (Nmax_eff in Nmax_eff_list) {
                         r_loop <- c(0)
                       }
 
-                      for (r_carry in r_loop) {
+                      crm_prior_grid <- if (is_random_crm(model, crm_r_model)) {
+                        crm_random_prior_grid
+                      } else {
+                        matrix(
+                          c(NA_real_, NA_real_),
+                          nrow = 1L,
+                          dimnames = list(NULL, c("a_r", "b_r"))
+                        )
+                      }
+
+                      for (crm_prior_i in seq_len(nrow(crm_prior_grid))) {
+                        crm_a_r_current <- crm_prior_grid[crm_prior_i, "a_r"]
+                        crm_b_r_current <- crm_prior_grid[crm_prior_i, "b_r"]
+
+                        for (r_carry in r_loop) {
                         method_tag <- make_method_tag(
                           model = model,
                           boin_method = if (model == "BOIN") method0 else NULL,
@@ -855,6 +913,9 @@ for (Nmax_eff in Nmax_eff_list) {
                           n_eval_escalate = n_eval_escalate,
                           restrict_to_tried = restrict_to_tried,
                           restrict_to_target = restrict_to_target,
+                          crm_r_model = crm_r_model,
+                          crm_a_r = crm_a_r_current,
+                          crm_b_r = crm_b_r_current,
                           scenario_set = scenario_set_name
                         )
 
@@ -867,6 +928,8 @@ for (Nmax_eff in Nmax_eff_list) {
                           boin_r_estimator = boin_r_estimator,
                           crm_r_model = crm_r_model,
                           cfo_method = cfo_method,
+                          crm_a_r = crm_a_r_current,
+                          crm_b_r = crm_b_r_current,
                           alpha_true = alpha_true,
                           r_carry = r_carry,
                           arrival_rate = arrival_rate,
@@ -884,6 +947,9 @@ for (Nmax_eff in Nmax_eff_list) {
                         cat("\n====================================\n")
                         cat("Model:", model, "\n")
                         cat("Method tag:", method_tag, "\n")
+                        if (is_random_crm(model, crm_r_model)) {
+                          cat("CRM r prior:", crm_a_r_current, crm_b_r_current, "\n")
+                        }
                         cat("alpha_true:", alpha_true, "\n")
                         cat("Cycle max:", cycle_max, "\n")
                         cat("Nmax eff:", Nmax_eff, "\n")
@@ -903,36 +969,33 @@ for (Nmax_eff in Nmax_eff_list) {
                           next
                         }
 
-                        pattern <- make_file_pattern(
-                          scenario_set = scenario_set_name,
+                        raw_file_index <- make_raw_file_index(
+                          scenario_ids = scenario_id_list,
                           model = model,
                           method_tag = method_tag,
                           alpha_true = alpha_true,
                           r_carry = r_carry,
-                          arrival_rate = arrival_rate,
                           cycle_max = cycle_max,
-                          Nmax_eff = Nmax_eff,
-                          continuous_enrollment = continuous_enrollment,
                           restrict_to_tried = restrict_to_tried,
-                          restrict_to_target = restrict_to_target
+                          restrict_to_target = restrict_to_target,
+                          crm_r_model = crm_r_model,
+                          crm_a_r = crm_a_r_current,
+                          crm_b_r = crm_b_r_current,
+                          scenario_set = scenario_set_name
                         )
+                        raw_paths <- file.path(folderpath, raw_file_index$Filename)
+                        existing_raw <- file.exists(raw_paths)
+                        files.use <- raw_paths[existing_raw]
+                        file_scenario_ids <- raw_file_index$Scenario[existing_raw]
 
-                        files.use <- list.files(
-                          folderpath,
-                          pattern = pattern,
-                          full.names = TRUE
+                        cat(
+                          "Found", length(files.use), "of", nrow(raw_file_index),
+                          "raw RDS files.\n"
                         )
-
-                        cat("Found", length(files.use), "combined files.\n")
 
                         acc <- new_accumulator(scenario_id_list, ndose_expected)
 
                         if (length(files.use) > 0L) {
-                          file_scenario_ids <- extract_scenario_id_from_file(
-                            files.use,
-                            scenario_set = scenario_set_name
-                          )
-
                           t.read <- Sys.time()
 
                           for (i in seq_along(files.use)) {
@@ -984,6 +1047,7 @@ for (Nmax_eff in Nmax_eff_list) {
                           "\n"
                         )
                         cat("====================================\n")
+                        }
                       }
                     }
                   }
@@ -998,7 +1062,7 @@ for (Nmax_eff in Nmax_eff_list) {
 }
 
 if (length(all.wide.summary) == 0L) {
-  stop("No combined RDS files were found. Check results_root, folder names, and run settings.")
+  stop("No raw RDS files were found. Check results_root, folder names, filenames, and run settings.")
 }
 
 wide.summary.df <- do.call(rbind, all.wide.summary)
@@ -1012,7 +1076,8 @@ scenario.mtd.summary.df <- do.call(rbind, all.scenario.mtd.summary)
 
 setting_key_cols <- c(
   "Scenario_Set", "Model", "Method", "BOIN_Method", "BOIN_r_estimator",
-  "CRM_r_model", "CFO_Method", "Alpha_true", "r_carry", "Accrual",
+  "CRM_r_model", "CFO_Method", "CRM_r_Prior_a", "CRM_r_Prior_b",
+  "Alpha_true", "r_carry", "Accrual",
   "T_assess", "Nmax_eff", "Dose_Cap", "Cycle_Max",
   "IPDE_Design", "Continuous_Enrollment", "New_Pat_First",
   "N_Eval_Escalate", "Restrict_To_Tried", "Restrict_To_Target"
@@ -1153,7 +1218,11 @@ table.summary.df$.setting_key <- NULL
 wide.summary.out <- round_numeric_df(wide.summary.df, digits = 4)
 table.summary.out <- round_numeric_df(table.summary.df, digits = 4)
 
-out.tag <- paste0("randomsce_targetgap", fmt_gap(target_gap))
+out.tag <- paste0(
+  "randomsce_targetgap", fmt_gap(target_gap),
+  "_j", min(jobs.expected), "to", max(jobs.expected),
+  "_n", ntrial_per_job_expected
+)
 
 out.wide.csv <- file.path(out.dir, paste0(out.tag, "_wide_summary.csv"))
 out.table.csv <- file.path(out.dir, paste0(out.tag, "_table_summary.csv"))
