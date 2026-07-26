@@ -480,21 +480,47 @@ dose_summaries <- list()
 table_summaries <- list()
 missing_log <- list()
 expected_jobs <- jobs_expected
+total_tasks <- length(all_task_ids)
+extraction_started <- Sys.time()
 
-for (task_id in all_task_ids) {
+cat("Phase I/II tasks to extract:", total_tasks, "\n")
+cat("Expected result files per task:", length(expected_jobs), "\n")
+
+for (task_index in seq_along(all_task_ids)) {
+  task_id <- all_task_ids[[task_index]]
   these <- which(task_ids == task_id)
   files_for_task <- raw_files[these]
   jobs_for_task <- job_ids[these]
   missing_jobs <- setdiff(expected_jobs, jobs_for_task)
+  task_settings <- expected_tasks[match(task_id, expected_tasks$task_id), , drop = FALSE]
+  task_started <- Sys.time()
+
+  cat(
+    "Extracting task", task_index, "of", total_tasks,
+    "for scenario", task_settings$Scenario, "\n"
+  )
+  cat(
+    "  Found", length(files_for_task), "of", length(expected_jobs),
+    "expected result files.\n"
+  )
+  flush.console()
+
   ntrial_from_files <- 0L
   if (length(files_for_task) > 0L) {
-    results <- lapply(files_for_task, readRDS)
+    results <- vector("list", length(files_for_task))
+    for (file_index in seq_along(files_for_task)) {
+      if (file_index == 1L || file_index %% 25L == 0L ||
+          file_index == length(files_for_task)) {
+        cat("  Reading result file", file_index, "of", length(files_for_task), "\n")
+        flush.console()
+      }
+      results[[file_index]] <- readRDS(files_for_task[[file_index]])
+    }
     ntrial_from_files <- sum(vapply(results, function(x) as.integer(x$ntrial), integer(1)))
     one <- summarize_task(results, task_id)
     dose_summaries[[as.character(task_id)]] <- one$dose_summary
     table_summaries[[as.character(task_id)]] <- one$table_summary
   }
-  task_settings <- expected_tasks[match(task_id, expected_tasks$task_id), , drop = FALSE]
   missing_log[[as.character(task_id)]] <- data.frame(
     Task_ID = task_id,
     task_settings[, setdiff(names(task_settings), "task_id"), drop = FALSE],
@@ -506,6 +532,12 @@ for (task_id in all_task_ids) {
     missing_IDX = paste(missing_jobs, collapse = ","),
     stringsAsFactors = FALSE
   )
+  cat(
+    "  Completed in", round(difftime(Sys.time(), task_started, units = "secs"), 1),
+    "seconds; total elapsed:",
+    round(difftime(Sys.time(), extraction_started, units = "mins"), 1), "minutes.\n"
+  )
+  flush.console()
 }
 
 if (length(dose_summaries) == 0L) stop("No readable Phase I/II result files were found.")
