@@ -30,6 +30,10 @@ stopifnot(
   all(c("continuous", "ipde_first") %in%
       eval(phase12_formals$enrollment_scheme))
 )
+stopifnot(
+  !aide_phase12_dose_threshold_reached(c(3L, 3L, 3L), 6L),
+  aide_phase12_dose_threshold_reached(c(3L, 6L, 3L), 6L)
+)
 
 if (!requireNamespace("rjags", quietly = TRUE)) {
   cat("AIDE Phase I/II regression checks skipped: rjags/JAGS is not installed.\n")
@@ -219,6 +223,7 @@ common_args <- list(
   p_true = c(0, 0, 0),
   e_true = c(0.20, 0.60, 0.40),
   N_s1 = 6L,
+  N_s2 = 12L,
   Nmax = 12L,
   C = 3L,
   T_assess = 1,
@@ -246,9 +251,25 @@ assert_true(
   "Utility did not use the selected toxicity model's estimate."
 )
 assert_true(
-  all(two_stage$admin$stage[1:6] == "stage1") &&
-    all(two_stage$admin$stage[7:12] == "stage2"),
-  "Two-stage administrations were not partitioned at N_s1."
+  two_stage$stage1$threshold_reached || two_stage$final$n_admin == common_args$Nmax,
+  "Stage I ended before a dose reached N_s1."
+)
+stage1_counts <- tabulate(
+  two_stage$admin$dose[two_stage$admin$stage == "stage1"],
+  nbins = length(common_args$p_true)
+)
+stage2_counts <- tabulate(
+  two_stage$admin$dose[two_stage$admin$stage == "stage2"],
+  nbins = length(common_args$p_true)
+)
+assert_true(
+  nrow(two_stage$admin[two_stage$admin$stage == "stage2", , drop = FALSE]) == 0L ||
+    any(stage1_counts >= common_args$N_s1),
+  "Stage II began before any dose reached N_s1."
+)
+assert_true(
+  max(stage1_counts + stage2_counts) <= common_args$N_s2,
+  "Two-stage design enrolled more than N_s2 administrations at a dose."
 )
 assert_true(
   all(c("t_eff", "t_tox", "t_eval") %in% names(two_stage$admin)) &&
@@ -414,6 +435,7 @@ oc <- get_oc_sim_AIDE_phase_I_II(
   e_true = common_args$e_true,
   ntrial = 2L,
   N_s1 = common_args$N_s1,
+  N_s2 = common_args$N_s2,
   Nmax = common_args$Nmax,
   C = common_args$C,
   T_assess = common_args$T_assess,

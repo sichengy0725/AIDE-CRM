@@ -31,6 +31,7 @@ fit <- simulate_AIDE_phase_I_II(
   crm_skeleton = c(0.1,0.2,0.3,0.4,0.5),
   target = 0.30,
   N_s1 = 30L,
+  N_s2 = 60L,
   Nmax = 60L,
   C = 3L,
   cycle_max = 2L,

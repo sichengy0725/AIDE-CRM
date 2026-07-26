@@ -2,8 +2,9 @@
 ## AIDE Phase I/II designs (non-TITE)
 ##
 ## Two allocation options are available:
-##   1. "two_stage": toxicity-only AIDE through N_s1, followed by
-##      efficacy-directed allocation among Stage-I admissible doses.
+##   1. "two_stage": toxicity-only AIDE until one dose reaches N_s1
+##      administrations, followed by efficacy-directed allocation among
+##      Stage-I admissible doses until one dose reaches N_s2 or Nmax is met.
 ##   2. "one_stage": toxicity decisions define a local candidate set after
 ##      each cohort; efficacy-toxicity utility allocates within that set.
 ##
@@ -43,6 +44,14 @@ aide_phase12_validate_logical_flag <- function(value, name) {
     stop(name, " must be TRUE or FALSE.")
   }
   as.logical(value)
+}
+
+aide_phase12_dose_threshold_reached <- function(n_by_dose, threshold) {
+  n_by_dose <- as.numeric(n_by_dose)
+  if (length(threshold) != 1L || !is.finite(threshold) || threshold < 1L) {
+    stop("threshold must be a positive finite value.")
+  }
+  any(is.finite(n_by_dose) & n_by_dose >= threshold)
 }
 
 ## True recycled-patient efficacy. At a proposed dose d2 for a patient most
@@ -594,9 +603,12 @@ simulate_AIDE_phase_I_II <- function(
     efficacy_ipde_alpha = 0,
     allocation = c("two_stage", "one_stage"),
 
-    ## Trial size. N_s1 and Nmax count administrations, consistent with AIDE.
-    N_s1 = 15L,
+    ## Trial size. N_s1, N_s2, and Nmax count administrations, consistent
+    ## with AIDE.  For two-stage allocation, Stage I ends when any dose
+    ## reaches N_s1 and Stage II ends when any dose reaches N_s2 or Nmax.
     Nmax = 30L,
+    N_s1 = 15L,
+    N_s2 = Nmax,
     N_pat = Nmax,
     C = 3L,
     cycle_max = 1L,
@@ -724,14 +736,18 @@ simulate_AIDE_phase_I_II <- function(
   if (length(N_s1) != 1L || N_s1 < 1L || N_s1 != as.integer(N_s1)) {
     stop("N_s1 must be a positive integer.")
   }
+  if (length(N_s2) != 1L || N_s2 < 1L || N_s2 != as.integer(N_s2)) {
+    stop("N_s2 must be a positive integer.")
+  }
   if (length(C) != 1L || C < 1L || C != as.integer(C)) {
     stop("C must be a positive integer.")
   }
   if (length(Nmax) != 1L || Nmax < C || Nmax != as.integer(Nmax)) {
     stop("Nmax must be an integer at least as large as C.")
   }
-  if (allocation == "two_stage" && (N_s1 < C || N_s1 > Nmax)) {
-    stop("For allocation = 'two_stage', N_s1 must lie between C and Nmax.")
+  if (allocation == "two_stage" &&
+      (N_s1 < C || N_s1 > N_s2 || N_s2 > Nmax)) {
+    stop("For allocation = 'two_stage', C <= N_s1 <= N_s2 <= Nmax is required.")
   }
   if (length(N_pat) != 1L || N_pat < 1L || N_pat != as.integer(N_pat)) {
     stop("N_pat must be a positive integer.")
@@ -1396,6 +1412,10 @@ simulate_AIDE_phase_I_II <- function(
     )
   }
 
+  dose_threshold_reached <- function(threshold) {
+    aide_phase12_dose_threshold_reached(toxicity_counts()$n, threshold)
+  }
+
   absorb_toxicity_model_elimination <- function(model_fit) {
     if (!is.null(model_fit$eliminated) &&
         length(model_fit$eliminated) == ndose) {
@@ -1672,8 +1692,9 @@ simulate_AIDE_phase_I_II <- function(
   if (allocation == "two_stage") {
     ## Stage I: standard AIDE toxicity allocation. Efficacy does not rank
     ## doses, but futile doses are removed before every allocation and IPDE
-    ## screening.
-    while (nrow(admin) < N_s1 && !earlystop) {
+    ## screening. Stage I ends only after a single dose has accumulated N_s1
+    ## administrations, not when the total reaches N_s1.
+    while (nrow(admin) < Nmax && !earlystop && !dose_threshold_reached(N_s1)) {
       futility_before <- efficacy_summary_current()
       if (toxicity_eliminated[current_dose] == 1L ||
           futility_before$futility_eliminated[current_dose] == 1L) {
@@ -1681,7 +1702,11 @@ simulate_AIDE_phase_I_II <- function(
         stop_reason <- "no_safe_nonfutile_stage1_current_dose"
         break
       }
-      n_to_enroll <- min(C, N_s1 - nrow(admin))
+      n_to_enroll <- min(
+        C,
+        Nmax - nrow(admin),
+        N_s1 - toxicity_counts()$n[current_dose]
+      )
       if (!enroll_cohort(
         current_dose, "stage1", n_to_enroll, futility = futility_before
       )) {
@@ -1695,7 +1720,7 @@ simulate_AIDE_phase_I_II <- function(
         stop_reason <- "dose1_toxicity_eliminated_stage1"
         break
       }
-      if (nrow(admin) >= N_s1) break
+      if (dose_threshold_reached(N_s1)) break
 
       tox_move_out <- toxicity_move(current_dose)
       absorb_toxicity_model_elimination(tox_move_out)
@@ -1738,9 +1763,10 @@ simulate_AIDE_phase_I_II <- function(
 
     ## Stage II: efficacy-directed allocation among the current candidate set.
     ## The Stage-I MTD ceiling is retained, while toxicity and futility are
-    ## re-evaluated after every cohort and immediately remove doses.
+    ## re-evaluated after every cohort and immediately remove doses. The trial
+    ## ends when any dose accumulates N_s2 administrations or Nmax is reached.
     stage2_admissible <- stage1_admissible
-    while (!earlystop && nrow(admin) < Nmax) {
+    while (!earlystop && nrow(admin) < Nmax && !dose_threshold_reached(N_s2)) {
       update_toxicity_elimination()
       eff_now <- efficacy_summary_current()
       stage2_admissible <- stage1_admissible &
@@ -1759,7 +1785,11 @@ simulate_AIDE_phase_I_II <- function(
         eff_now$posterior_mean,
         which(stage2_admissible)
       )
-      n_to_enroll <- min(C, Nmax - nrow(admin))
+      n_to_enroll <- min(
+        C,
+        Nmax - nrow(admin),
+        N_s2 - toxicity_counts()$n[allocated_dose]
+      )
       if (!enroll_cohort(
         allocated_dose, "stage2", n_to_enroll, futility = eff_now
       )) {
@@ -1878,10 +1908,23 @@ simulate_AIDE_phase_I_II <- function(
     pending_arrivals = pending_arrivals,
     stage1 = list(
       N_s1 = as.integer(N_s1),
+      n_by_dose = tabulate(
+        as.integer(admin$dose[admin$stage == "stage1"]),
+        nbins = ndose
+      ),
+      threshold_reached = dose_threshold_reached(N_s1),
       MTD = if (is.null(stage1_fit)) NA_integer_ else stage1_fit$MTD,
       toxicity_fit = stage1_fit,
       efficacy = stage1_futility,
       admissible = stage1_admissible
+    ),
+    stage2 = list(
+      N_s2 = as.integer(N_s2),
+      n_by_dose = tabulate(
+        as.integer(admin$dose[admin$stage == "stage2"]),
+        nbins = ndose
+      ),
+      threshold_reached = dose_threshold_reached(N_s2)
     ),
     final = list(
       allocation = allocation,
@@ -1903,6 +1946,8 @@ simulate_AIDE_phase_I_II <- function(
       trial_time = trial_time,
       model = model,
       decision_method = if (model == "BOIN") decision_method else paste0("crm_", crm_r_model),
+      N_s1 = as.integer(N_s1),
+      N_s2 = as.integer(N_s2),
       m_U = m_U,
       utility_type = utility_type,
       lambda_T = lambda_T,

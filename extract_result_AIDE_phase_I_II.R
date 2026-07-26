@@ -15,27 +15,30 @@ scenario_file <- "Set_5dose_adaptive_r_37_true_MTD_OBD_summary_lambda1.csv"
 results_root <- "oc_results_AIDE_phase_I_II"
 out_dir <- "OC_summary_AIDE_phase_I_II"
 
-## Select the result-job IDX values to combine.  Use, for example, 1:10 when
-## the runner was called with ntrial = 100 for IDX = 1,...,10.
-jobs_expected <- 1:10
-ntrial_per_job_expected <- 100L
+## Match the one-trial-per-IDX array setup used by extract_result_AIDE.
+## This combines IDX = 1,...,1000 for 1,000 trials per task.
+jobs_expected <- 1:1000
+ntrial_per_job_expected <- 1L
 
 ## Leave NULL to use every scenario in scenario_file.  If you restrict this
 ## list in the runner, make the same restriction here before extracting.
 scenario_id_list <- NULL
 
-## Two-stage uses paired (Nmax, N_s1) settings.  One-stage uses only Nmax;
-## N_s1 is set to Nmax because it is unused by that allocation rule.
+## For two-stage allocation, N_s1 and N_s2 are per-dose administration
+## thresholds: Stage I ends at N_s1 and Stage II ends at N_s2. Nmax remains
+## the total administration limit. One-stage does not use either threshold.
 two_stage_sizes <- data.frame(
   allocation = "two_stage",
   Nmax = c(30L, 45L, 60L),
   N_s1 = c(15L, 24L, 30L),
+  N_s2 = c(30L, 45L, 60L),
   stringsAsFactors = FALSE
 )
 one_stage_sizes <- data.frame(
   allocation = "one_stage",
   Nmax = c(30L, 45L, 60L),
   N_s1 = c(30L, 45L, 60L),
+  N_s2 = c(30L, 45L, 60L),
   stringsAsFactors = FALSE
 )
 design_size_grid <- rbind(two_stage_sizes, one_stage_sizes)
@@ -290,6 +293,7 @@ make_metadata <- function(result, task_id) {
     Allocation = as.character(task_value(task, "allocation")),
     Nmax = as.integer(task_value(task, "Nmax")),
     N_s1 = as.integer(task_value(task, "N_s1")),
+    N_s2 = as.integer(task_value(task, "N_s2", task_value(task, "Nmax"))),
     Model = "CRM",
     CRM_r_Model = "random",
     CRM_Prior_a = as.numeric(task_value(task, "crm_a_r")),

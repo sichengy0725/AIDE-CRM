@@ -133,18 +133,21 @@ if (job_seed > .Machine$integer.max) {
   stop("The IDX and ntrial combination produces a seed outside R's integer range.")
 }
 
-## Two-stage uses paired (Nmax, N_s1) settings.  One-stage uses only Nmax;
-## N_s1 is set to Nmax because it is unused by that allocation rule.
+## For two-stage allocation, N_s1 and N_s2 are per-dose administration
+## thresholds: Stage I ends at N_s1 and Stage II ends at N_s2. Nmax remains
+## the total administration limit. One-stage does not use either threshold.
 two_stage_sizes <- data.frame(
   allocation = "two_stage",
   Nmax = c(30L, 45L, 60L),
   N_s1 = c(15L, 24L, 30L),
+  N_s2 = c(30L, 45L, 60L),
   stringsAsFactors = FALSE
 )
 one_stage_sizes <- data.frame(
   allocation = "one_stage",
   Nmax = c(30L, 45L, 60L),
   N_s1 = c(30L, 45L, 60L),
+  N_s2 = c(30L, 45L, 60L),
   stringsAsFactors = FALSE
 )
 design_size_grid <- rbind(two_stage_sizes, one_stage_sizes)
@@ -311,6 +314,7 @@ for (task_row in seq_len(nrow(tasks))) {
     allocation = task$allocation,
     Nmax = as.integer(task$Nmax),
     N_s1 = as.integer(task$N_s1),
+    N_s2 = as.integer(task$N_s2),
     N_pat = as.integer(task$Nmax),
     C = cohort_size,
     cycle_max = cycle_max,
