@@ -20,9 +20,9 @@ out_dir <- "OC_summary_AIDE_phase_I_II"
 jobs_expected <- 1:1000
 ntrial_per_job_expected <- 1L
 
-## Leave NULL to use every scenario in scenario_file.  If you restrict this
-## list in the runner, make the same restriction here before extracting.
-scenario_id_list <- NULL
+## The runner uses all 37 scenarios in the supplied truth file.  Keep this
+## list synchronized if you run a subset of scenarios.
+scenario_id_list <- 1:37
 
 ## For two-stage allocation, N_s1 and N_s2 are per-dose administration
 ## thresholds: Stage I ends at N_s1 and Stage II ends at N_s2. Nmax remains
@@ -176,12 +176,32 @@ if (length(ntrial_per_job_expected) != 1L || is.na(ntrial_per_job_expected) ||
 }
 ntrial_expected <- length(jobs_expected) * ntrial_per_job_expected
 
-task_id_from_file <- function(path) {
-  as.integer(sub("^task_([0-9]+)_.*$", "\\1", basename(path)))
+make_phase12_raw_rds_filenames <- function(task, jobs = jobs_expected) {
+  jobs <- as.integer(jobs)
+  paste0(
+    "task_", sprintf("%06d", as.integer(task$task_id)),
+    "_scenario_", as.integer(task$Scenario),
+    "_", as.character(task$allocation),
+    "_Nmax", as.integer(task$Nmax),
+    "_utility", as.integer(task$utility_type),
+    "_", as.character(task$enrollment_scheme),
+    "_job_", sprintf("%04d", jobs),
+    ".rds"
+  )
 }
 
-job_id_from_file <- function(path) {
-  as.integer(sub("^.*_job_([0-9]+)\\.rds$", "\\1", basename(path)))
+make_phase12_group_key <- function(task) {
+  parts <- c(
+    paste0("task", sprintf("%06d", as.integer(task$task_id))),
+    paste0("SC", as.integer(task$Scenario)),
+    as.character(task$allocation),
+    paste0("Nmax", as.integer(task$Nmax)),
+    paste0("Ns1", as.integer(task$N_s1)),
+    if ("N_s2" %in% names(task)) paste0("Ns2", as.integer(task$N_s2)),
+    paste0("utility", as.integer(task$utility_type)),
+    as.character(task$enrollment_scheme)
+  )
+  paste(parts, collapse = "_")
 }
 
 task_value <- function(task, name, default = NA) {
@@ -454,93 +474,102 @@ summarize_task <- function(results, task_id) {
   list(dose_summary = dose_summary, table_summary = table_summary, ntrial = ntrial)
 }
 
-raw_files <- list.files(
-  results_root,
-  pattern = "^task_[0-9]+_scenario_[0-9]+_.*_job_[0-9]+\\.rds$",
-  full.names = TRUE
-)
-if (length(raw_files) == 0L) stop("No Phase I/II task RDS files found in: ", results_root)
+## ------------------------------------------------------------
+## Main extraction: explicit expected-file discovery, matching
+## extract_result_AIDE.R.  Each Phase I/II task owns one expected RDS file
+## per IDX, so no generic directory scan or filename regex is needed.
+## ------------------------------------------------------------
 
-job_ids <- vapply(raw_files, job_id_from_file, integer(1))
-task_ids <- vapply(raw_files, task_id_from_file, integer(1))
-expected_task_ids <- expected_tasks$task_id
-keep <- job_ids %in% jobs_expected & task_ids %in% expected_task_ids
-raw_files <- raw_files[keep]
-job_ids <- job_ids[keep]
-task_ids <- task_ids[keep]
-if (length(raw_files) == 0L) {
-  stop(
-    "No RDS files found for the selected jobs/settings. ",
-    "Check jobs_expected and make the extraction settings match the runner."
-  )
-}
-all_task_ids <- expected_task_ids
+all.dose.summary <- list()
+all.table.summary <- list()
+missing.log <- list()
+miss.idx <- 1L
 
-dose_summaries <- list()
-table_summaries <- list()
-missing_log <- list()
-expected_jobs <- jobs_expected
-total_tasks <- length(all_task_ids)
-extraction_started <- Sys.time()
+for (task_row in seq_len(nrow(expected_tasks))) {
+  task <- expected_tasks[task_row, , drop = FALSE]
+  raw_names <- make_phase12_raw_rds_filenames(task, jobs = jobs_expected)
+  raw_paths <- file.path(results_root, raw_names)
+  existing_raw <- file.exists(raw_paths)
+  files.use <- raw_paths[existing_raw]
+  missing.jobs <- jobs_expected[!existing_raw]
+  example_file <- if (length(files.use) > 0L) {
+    files.use[1L]
+  } else {
+    raw_paths[1L]
+  }
 
-cat("Phase I/II tasks to extract:", total_tasks, "\n")
-cat("Expected result files per task:", length(expected_jobs), "\n")
-
-for (task_index in seq_along(all_task_ids)) {
-  task_id <- all_task_ids[[task_index]]
-  these <- which(task_ids == task_id)
-  files_for_task <- raw_files[these]
-  jobs_for_task <- job_ids[these]
-  missing_jobs <- setdiff(expected_jobs, jobs_for_task)
-  task_settings <- expected_tasks[match(task_id, expected_tasks$task_id), , drop = FALSE]
-  task_started <- Sys.time()
-
-  cat(
-    "Extracting task", task_index, "of", total_tasks,
-    "for scenario", task_settings$Scenario, "\n"
-  )
-  cat(
-    "  Found", length(files_for_task), "of", length(expected_jobs),
-    "expected result files.\n"
-  )
+  cat("\n====================================\n")
+  cat("Task:", task$task_id, "of", nrow(expected_tasks), "\n")
+  cat("Scenario:", task$Scenario, "\n")
+  cat("Source scenario:", task$Source_Scenario, "\n")
+  cat("Scenario group:", task$Scenario_Group, "\n")
+  cat("Scenario attempt:", task$Attempt, "\n")
+  cat("Model: CRM\n")
+  cat("CRM r model: random\n")
+  cat("Allocation:", task$allocation, "\n")
+  cat("Nmax:", task$Nmax, "\n")
+  cat("N_s1:", task$N_s1, "\n")
+  if ("N_s2" %in% names(task)) cat("N_s2:", task$N_s2, "\n")
+  cat("CRM prior:", task$crm_prior_id, "\n")
+  cat("Efficacy prior:", task$efficacy_prior_id, "\n")
+  cat("Utility type:", task$utility_type, "\n")
+  cat("Lambda T:", task$lambda_T, "\n")
+  cat("Enrollment scheme:", task$enrollment_scheme, "\n")
+  cat("Arrival rate:", task$arrival_rate, "\n")
+  cat("IPDE design:", task$ipde_design, "\n")
+  cat("Flexible IPDE:", task$flexible_ipde, "\n")
+  cat("Folder:", results_root, "\n")
+  cat("Raw-RDS file:", example_file, "\n")
+  cat("Found", length(files.use), "files; missing", length(missing.jobs), "jobs.\n")
+  cat("====================================\n")
   flush.console()
 
-  ntrial_from_files <- 0L
-  if (length(files_for_task) > 0L) {
-    results <- vector("list", length(files_for_task))
-    for (file_index in seq_along(files_for_task)) {
-      if (file_index == 1L || file_index %% 25L == 0L ||
-          file_index == length(files_for_task)) {
-        cat("  Reading result file", file_index, "of", length(files_for_task), "\n")
-        flush.console()
-      }
-      results[[file_index]] <- readRDS(files_for_task[[file_index]])
-    }
-    ntrial_from_files <- sum(vapply(results, function(x) as.integer(x$ntrial), integer(1)))
-    one <- summarize_task(results, task_id)
-    dose_summaries[[as.character(task_id)]] <- one$dose_summary
-    table_summaries[[as.character(task_id)]] <- one$table_summary
-  }
-  missing_log[[as.character(task_id)]] <- data.frame(
-    Task_ID = task_id,
-    task_settings[, setdiff(names(task_settings), "task_id"), drop = FALSE],
-    n_found = length(files_for_task),
-    n_expected = length(expected_jobs),
-    n_missing = length(missing_jobs),
+  missing.log[[miss.idx]] <- data.frame(
+    task,
+    Folder = results_root,
+    Example_file = example_file,
+    n_found = length(files.use),
+    n_expected = length(jobs_expected),
+    n_missing = length(missing.jobs),
     ntrial_expected = ntrial_expected,
-    ntrial_from_files = ntrial_from_files,
-    missing_IDX = paste(missing_jobs, collapse = ","),
+    ntrial_from_files = 0L,
+    missing_IDX = paste(missing.jobs, collapse = ","),
     stringsAsFactors = FALSE
   )
+  miss.idx <- miss.idx + 1L
+
+  if (length(files.use) == 0L) {
+    warning("No files found for task ", task$task_id, ": ", example_file)
+    next
+  }
+
+  t.read <- Sys.time()
+  results <- lapply(files.use, readRDS)
+  ntrial_from_files <- sum(vapply(results, function(x) as.integer(x$ntrial), integer(1)))
+  one <- summarize_task(results, task_id = task$task_id)
+
+  missing.log[[miss.idx - 1L]]$ntrial_from_files <- ntrial_from_files
   cat(
-    "  Completed in", round(difftime(Sys.time(), task_started, units = "secs"), 1),
-    "seconds; total elapsed:",
-    round(difftime(Sys.time(), extraction_started, units = "mins"), 1), "minutes.\n"
+    "read/summarize time:",
+    round(difftime(Sys.time(), t.read, units = "secs"), 2),
+    "sec\n"
   )
-  flush.console()
+
+  if (one$ntrial != ntrial_expected) {
+    cat(
+      "Warning: expected", ntrial_expected,
+      "trials but found", one$ntrial, "\n"
+    )
+  }
+
+  key <- make_phase12_group_key(task)
+  all.dose.summary[[key]] <- one$dose_summary
+  all.table.summary[[key]] <- one$table_summary
 }
 
-if (length(dose_summaries) == 0L) stop("No readable Phase I/II result files were found.")
+if (length(all.dose.summary) == 0L) {
+  stop("No files were found. Check results_root, filenames, and working directory.")
+}
 
 round_numeric_df <- function(dat, digits = 4L) {
   is_num <- vapply(dat, is.numeric, logical(1))
@@ -548,9 +577,9 @@ round_numeric_df <- function(dat, digits = 4L) {
   dat
 }
 
-dose_summary <- do.call(rbind, dose_summaries)
-table_summary <- do.call(rbind, table_summaries)
-missing_summary <- do.call(rbind, missing_log)
+dose_summary <- do.call(rbind, all.dose.summary)
+table_summary <- do.call(rbind, all.table.summary)
+missing_summary <- do.call(rbind, missing.log)
 job_tag <- if (length(jobs_expected) > 1L &&
                identical(jobs_expected, seq.int(min(jobs_expected), max(jobs_expected)))) {
   paste0(sprintf("%04d", min(jobs_expected)), "_to_", sprintf("%04d", max(jobs_expected)))
