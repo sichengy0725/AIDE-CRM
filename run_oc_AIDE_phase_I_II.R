@@ -133,34 +133,42 @@ read_phase12_truth <- function(file) {
   truth
 }
 
-make_phase12_folder <- function(task) {
+make_phase12_config_tag <- function(task) {
+  allocation_tag <- if (identical(task$allocation, "two_stage")) "2s" else "1s"
+  enrollment_tag <- if (identical(task$enrollment_scheme, "continuous")) {
+    "cont"
+  } else {
+    "ipdefirst"
+  }
   paste0(
-    task$scenario_set,
-    "-model-CRM",
-    "-opt-phase12_random",
-    "-w-", fmt_short(task$T_assess),
-    "-c-", fmt_short(task$C),
-    "-cyc-", fmt_short(task$cycle_max),
-    "-rate-", fmt_short(task$arrival_rate),
-    "-Nmax-", fmt_short(task$Nmax),
-    "-ipde-", task$ipde_design,
-    "-flex-", as.integer(isTRUE(task$flexible_ipde)),
-    "-cfg-", task$setting_id
+    "P12",
+    "-a", allocation_tag,
+    "-N", fmt_short(task$Nmax),
+    "-s1", fmt_short(task$N_s1),
+    "-s2", fmt_short(task$N_s2),
+    "-u", task$utility_type,
+    "-l", fmt_short(task$lambda_T),
+    "-en", enrollment_tag,
+    "-rp", fmt_param(task$crm_a_r), "x", fmt_param(task$crm_b_r),
+    "-ep", fmt_param(task$efficacy_a), "x", fmt_param(task$efficacy_b),
+    "-cp", fmt_param(task$carry_a), "x", fmt_param(task$carry_b),
+    "-w", fmt_short(task$T_assess),
+    "-c", fmt_short(task$C),
+    "-cyc", fmt_short(task$cycle_max),
+    "-rate", fmt_short(task$arrival_rate),
+    "-ip", task$ipde_design,
+    "-fx", as.integer(isTRUE(task$flexible_ipde)),
+    "-ta", fmt_short(task$toxicity_ipde_alpha),
+    "-ea", fmt_short(task$efficacy_ipde_alpha),
+    "-tg", as.integer(isTRUE(task$apply_random_crm_recycle_toxicity_rule)),
+    "-eg", as.integer(isTRUE(task$apply_random_crm_recycle_efficacy_rule))
   )
 }
 
+make_phase12_folder <- function(task) make_phase12_config_tag(task)
+
 make_phase12_group_key <- function(task) {
-  paste(
-    paste0(task$scenario_set, "_SC", task$Scenario),
-    "CRM",
-    "phase12_random",
-    paste0("cfg", task$setting_id),
-    paste0("Nmax", task$Nmax),
-    paste0("alloc", task$allocation),
-    paste0("utility", task$utility_type),
-    task$enrollment_scheme,
-    sep = "_"
-  )
+  paste0("P12-SC", task$Scenario, "_", make_phase12_config_tag(task))
 }
 
 combine_phase12_results <- function(files) {
@@ -368,7 +376,7 @@ run_one_phase12_task <- function(task) {
   outdir <- file.path(task$outdir_root, foldername)
   dir.create(outdir, recursive = TRUE, showWarnings = FALSE)
 
-  scenario_name <- paste0(task$scenario_set, "_SC", task$Scenario)
+  scenario_name <- paste0("P12-SC", task$Scenario)
   method_tag <- "phase12_random"
   filename <- paste0(
     scenario_name,

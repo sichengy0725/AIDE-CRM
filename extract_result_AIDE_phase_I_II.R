@@ -191,27 +191,49 @@ fmt_short <- function(x, digits = 2L) {
   gsub("\\.", "p", out)
 }
 
-make_phase12_folder <- function(task) {
+fmt_param <- function(x, digits = 4L) {
+  fmt_short(x, digits = digits)
+}
+
+make_phase12_config_tag <- function(task) {
+  allocation_tag <- if (identical(task$allocation, "two_stage")) "2s" else "1s"
+  enrollment_tag <- if (identical(task$enrollment_scheme, "continuous")) {
+    "cont"
+  } else {
+    "ipdefirst"
+  }
   paste0(
-    scenario_set_name,
-    "-model-CRM",
-    "-opt-phase12_random",
-    "-w-", fmt_short(T_assess),
-    "-c-", fmt_short(cohort_size),
-    "-cyc-", fmt_short(cycle_max),
-    "-rate-", fmt_short(task$arrival_rate),
-    "-Nmax-", fmt_short(task$Nmax),
-    "-ipde-", task$ipde_design,
-    "-flex-", as.integer(isTRUE(task$flexible_ipde)),
-    "-cfg-", task$setting_id
+    "P12",
+    "-a", allocation_tag,
+    "-N", fmt_short(task$Nmax),
+    "-s1", fmt_short(task$N_s1),
+    "-s2", fmt_short(task$N_s2),
+    "-u", task$utility_type,
+    "-l", fmt_short(task$lambda_T),
+    "-en", enrollment_tag,
+    "-rp", fmt_param(task$crm_a_r), "x", fmt_param(task$crm_b_r),
+    "-ep", fmt_param(task$efficacy_a), "x", fmt_param(task$efficacy_b),
+    "-cp", fmt_param(task$carry_a), "x", fmt_param(task$carry_b),
+    "-w", fmt_short(T_assess),
+    "-c", fmt_short(cohort_size),
+    "-cyc", fmt_short(cycle_max),
+    "-rate", fmt_short(task$arrival_rate),
+    "-ip", task$ipde_design,
+    "-fx", as.integer(isTRUE(task$flexible_ipde)),
+    "-ta", fmt_short(task$toxicity_ipde_alpha),
+    "-ea", fmt_short(task$efficacy_ipde_alpha),
+    "-tg", as.integer(isTRUE(apply_random_crm_recycle_toxicity_rule)),
+    "-eg", as.integer(isTRUE(apply_random_crm_recycle_efficacy_rule))
   )
 }
+
+make_phase12_folder <- function(task) make_phase12_config_tag(task)
 
 make_phase12_raw_rds_filenames <- function(task, jobs = jobs_expected) {
   jobs <- as.integer(jobs)
   seed_block <- as.integer(seed_base_expected) +
     (jobs - 1L) * as.integer(ntrial_per_job_expected)
-  scenario_name <- paste0(scenario_set_name, "_SC", as.integer(task$Scenario))
+  scenario_name <- paste0("P12-SC", as.integer(task$Scenario))
   paste0(
     scenario_name,
     "-CRM-phase12_random",
@@ -224,17 +246,7 @@ make_phase12_raw_rds_filenames <- function(task, jobs = jobs_expected) {
 }
 
 make_phase12_group_key <- function(task) {
-  paste(
-    paste0(scenario_set_name, "_SC", as.integer(task$Scenario)),
-    "CRM",
-    "phase12_random",
-    paste0("cfg", task$setting_id),
-    paste0("Nmax", task$Nmax),
-    paste0("alloc", task$allocation),
-    paste0("utility", task$utility_type),
-    task$enrollment_scheme,
-    sep = "_"
-  )
+  paste0("P12-SC", task$Scenario, "_", make_phase12_config_tag(task))
 }
 
 task_value <- function(task, name, default = NA) {
