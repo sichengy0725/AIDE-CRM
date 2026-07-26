@@ -12,13 +12,16 @@
 ## ------------------------------------------------------------
 
 scenario_file <- "Set_5dose_adaptive_r_37_true_MTD_OBD_summary_lambda1.csv"
-results_root <- "oc_results_AIDE_phase_I_II"
+scenario_set_name <- tools::file_path_sans_ext(basename(scenario_file))
+results_root <- paste0("oc_results_cluster_AIDE_phase_I_II_", scenario_set_name)
 out_dir <- "OC_summary_AIDE_phase_I_II"
 
 ## Match the one-trial-per-IDX array setup used by extract_result_AIDE.
 ## This combines IDX = 1,...,1000 for 1,000 trials per task.
 jobs_expected <- 1:1000
 ntrial_per_job_expected <- 1L
+seed_base_expected <- 1L
+block_id_expected <- 1L
 
 ## The runner uses all 37 scenarios in the supplied truth file.  Keep this
 ## list synchronized if you run a subset of scenarios.
@@ -158,6 +161,7 @@ setting_grid <- Reduce(
     alpha_grid
   )
 )
+setting_grid$setting_id <- seq_len(nrow(setting_grid))
 expected_tasks <- cross_join(
   truth[, c("Scenario", "Source_Scenario", "Scenario_Group", "Attempt"), drop = FALSE],
   setting_grid
@@ -176,32 +180,61 @@ if (length(ntrial_per_job_expected) != 1L || is.na(ntrial_per_job_expected) ||
 }
 ntrial_expected <- length(jobs_expected) * ntrial_per_job_expected
 
+fmt_short <- function(x, digits = 2L) {
+  x <- round(as.numeric(x), digits)
+  out <- format(x, scientific = FALSE, trim = TRUE)
+  out <- sub("(\\.[0-9]*?)0+$", "\\1", out)
+  out <- sub("\\.$", "", out)
+  out[out == "-0"] <- "0"
+  out[out == ""] <- "0"
+  out <- gsub("-", "m", out)
+  gsub("\\.", "p", out)
+}
+
+make_phase12_folder <- function(task) {
+  paste0(
+    scenario_set_name,
+    "-model-CRM",
+    "-opt-phase12_random",
+    "-w-", fmt_short(T_assess),
+    "-c-", fmt_short(cohort_size),
+    "-cyc-", fmt_short(cycle_max),
+    "-rate-", fmt_short(task$arrival_rate),
+    "-Nmax-", fmt_short(task$Nmax),
+    "-ipde-", task$ipde_design,
+    "-flex-", as.integer(isTRUE(task$flexible_ipde)),
+    "-cfg-", task$setting_id
+  )
+}
+
 make_phase12_raw_rds_filenames <- function(task, jobs = jobs_expected) {
   jobs <- as.integer(jobs)
+  seed_block <- as.integer(seed_base_expected) +
+    (jobs - 1L) * as.integer(ntrial_per_job_expected)
+  scenario_name <- paste0(scenario_set_name, "_SC", as.integer(task$Scenario))
   paste0(
-    "task_", sprintf("%06d", as.integer(task$task_id)),
-    "_scenario_", as.integer(task$Scenario),
-    "_", as.character(task$allocation),
-    "_Nmax", as.integer(task$Nmax),
-    "_utility", as.integer(task$utility_type),
-    "_", as.character(task$enrollment_scheme),
-    "_job_", sprintf("%04d", jobs),
+    scenario_name,
+    "-CRM-phase12_random",
+    "-j", jobs,
+    "-b", as.integer(block_id_expected),
+    "-s", seed_block,
+    "-n", as.integer(ntrial_per_job_expected),
     ".rds"
   )
 }
 
 make_phase12_group_key <- function(task) {
-  parts <- c(
-    paste0("task", sprintf("%06d", as.integer(task$task_id))),
-    paste0("SC", as.integer(task$Scenario)),
-    as.character(task$allocation),
-    paste0("Nmax", as.integer(task$Nmax)),
-    paste0("Ns1", as.integer(task$N_s1)),
-    if ("N_s2" %in% names(task)) paste0("Ns2", as.integer(task$N_s2)),
-    paste0("utility", as.integer(task$utility_type)),
-    as.character(task$enrollment_scheme)
+  paste(
+    paste0(scenario_set_name, "_SC", as.integer(task$Scenario)),
+    "CRM",
+    "phase12_random",
+    paste0("cfg", task$setting_id),
+    paste0("Nmax", task$Nmax),
+    paste0("alloc", task$allocation),
+    paste0("utility", task$utility_type),
+    task$enrollment_scheme,
+    sep = "_"
   )
-  paste(parts, collapse = "_")
 }
 
 task_value <- function(task, name, default = NA) {
@@ -487,8 +520,10 @@ miss.idx <- 1L
 
 for (task_row in seq_len(nrow(expected_tasks))) {
   task <- expected_tasks[task_row, , drop = FALSE]
+  foldername <- make_phase12_folder(task)
+  folderpath <- file.path(results_root, foldername)
   raw_names <- make_phase12_raw_rds_filenames(task, jobs = jobs_expected)
-  raw_paths <- file.path(results_root, raw_names)
+  raw_paths <- file.path(folderpath, raw_names)
   existing_raw <- file.exists(raw_paths)
   files.use <- raw_paths[existing_raw]
   missing.jobs <- jobs_expected[!existing_raw]
@@ -518,7 +553,7 @@ for (task_row in seq_len(nrow(expected_tasks))) {
   cat("Arrival rate:", task$arrival_rate, "\n")
   cat("IPDE design:", task$ipde_design, "\n")
   cat("Flexible IPDE:", task$flexible_ipde, "\n")
-  cat("Folder:", results_root, "\n")
+  cat("Folder:", folderpath, "\n")
   cat("Raw-RDS file:", example_file, "\n")
   cat("Found", length(files.use), "files; missing", length(missing.jobs), "jobs.\n")
   cat("====================================\n")
@@ -526,7 +561,7 @@ for (task_row in seq_len(nrow(expected_tasks))) {
 
   missing.log[[miss.idx]] <- data.frame(
     task,
-    Folder = results_root,
+    Folder = folderpath,
     Example_file = example_file,
     n_found = length(files.use),
     n_expected = length(jobs_expected),
