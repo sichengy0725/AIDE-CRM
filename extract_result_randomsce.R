@@ -14,7 +14,7 @@
 ##   8. average overdose allocation
 ##   9. average underdose allocation
 ##  10. MCSE of the average MTD selection rate
-##  11. paired MTD-selection difference from the oracle (mean and SD)
+##  11. paired absolute MTD-selection difference from the oracle (mean and SD)
 ##
 ## Selection metrics are percentages. Allocation metrics use n_by_dose,
 ## the AIDE dose-administration allocation stored by get_oc_sim_AIDE().
@@ -35,8 +35,8 @@ target <- 0.30
 scenario_dose_count <- 5L
 random_nscenario <- 10000L
 random_target <- target
-random_target_diff_below <- 0.05
-random_target_diff_above <- 0.05
+random_target_diff_below <- 0.10
+random_target_diff_above <- 0.10
 scenario_dir <- "scenario_sets"
 
 if (!isTRUE(all.equal(random_target_diff_below, random_target_diff_above))) {
@@ -63,10 +63,10 @@ restrict_to_target_list <- c(FALSE)
 ## CFO is disabled for this extraction.  Set this to c(0.6, 0.9) when CFO
 ## result files are available; BOIN and CRM retain the full alpha grid.
 alpha_true_list_non_cfo <- c(0, 0.3, 0.6, 0.9)
-alpha_true_list_cfo <- c()
+alpha_true_list_cfo <- c(0, 0.3, 0.6, 0.9)
 arrival_rate_list <- c(1 / 56)
 
-model_list <- c("BOIN", "CRM", "CFO")
+model_list <- c("CRM")
 
 ## run_oc_AIDE.R assigns consecutive blocks of random scenarios to consecutive
 ## array-job indices.  With 10,000 scenarios and batches of 10, SC1--SC10 use
@@ -97,7 +97,8 @@ crm_r_carry_values <- list(
 crm_random_prior_grid <- rbind(
   c(a_r = 0.15, b_r = 0.85),
   c(a_r = 0.30, b_r = 0.70),
-  c(a_r = 0.50, b_r = 0.50)
+  c(a_r = 0.50, b_r = 0.50),
+  c(a_r = 1, b_r = 1)
 )
 
 ## The reference in the paired comparison is the no-carryover fixed CRM.
@@ -246,7 +247,7 @@ make_method_tag <- function(model,
     ## The runner writes the fixed-r CRM as crm_r_fixed.  Accept the older
     ## aliases here as well so the extracted label is always unambiguous.
     if (crm_r_model %in% c("fixed", "r_fixed", "crm_fixed", "crm_r_fixed")) {
-      return("crm_r_fixed")
+      return("r_fixed")
     }
     return(crm_r_model)
   }
@@ -753,8 +754,8 @@ summarize_accumulator <- function(acc, scenario_meta, setting_meta, n_files_foun
     "Average overdose selection %",
     "Average overdose allocation",
     "Average underdose allocation",
-    "Mean paired MTD selection difference vs oracle %",
-    "SD paired MTD selection difference vs oracle %"
+    "Mean paired absolute MTD selection difference vs oracle %",
+    "SD paired absolute MTD selection difference vs oracle %"
   )
 
   table_summary <- setting_meta[rep(1L, length(metrics)), , drop = FALSE]
@@ -1141,7 +1142,7 @@ if (length(ambiguous_oracle_keys) > 0L) {
   warning(
     "Multiple alpha_true = 0 fixed-CRM oracle settings were found for ",
     length(ambiguous_oracle_keys),
-    " design setting(s); oracle differences are reported as NA for those settings."
+    " design setting(s); absolute oracle differences are reported as NA for those settings."
   )
 }
 
@@ -1161,8 +1162,8 @@ oracle_comparison <- lapply(setting_keys, function(setting_key) {
     .setting_key = setting_key,
     Oracle_Reference = NA_character_,
     n_scenarios_paired_with_oracle = NA_integer_,
-    Mean_Paired_MTD_Selection_Diff_vs_Oracle_pct = NA_real_,
-    SD_Paired_MTD_Selection_Diff_vs_Oracle_pct = NA_real_,
+    Mean_Paired_Absolute_MTD_Selection_Diff_vs_Oracle_pct = NA_real_,
+    SD_Paired_Absolute_MTD_Selection_Diff_vs_Oracle_pct = NA_real_,
     stringsAsFactors = FALSE
   )
 
@@ -1189,14 +1190,17 @@ oracle_comparison <- lapply(setting_keys, function(setting_key) {
     return(out)
   }
 
-  ## Positive values mean the method has higher MTD selection than the
-  ## alpha_true = 0 fixed-CRM oracle for the same random scenario.
-  delta <- paired$Method_MTD_Selection_pct - paired$Oracle_MTD_Selection_pct
+  ## Absolute paired differences discard direction: they quantify how far the
+  ## method's MTD-selection rate is from the alpha_true = 0 fixed-CRM oracle
+  ## for the same random scenario.
+  absolute_delta <- abs(
+    paired$Method_MTD_Selection_pct - paired$Oracle_MTD_Selection_pct
+  )
   out$Oracle_Reference <- "CRM r_fixed (alpha_true = 0, r_carry = 0)"
   out$n_scenarios_paired_with_oracle <- nrow(paired)
-  out$Mean_Paired_MTD_Selection_Diff_vs_Oracle_pct <- mean(delta)
-  out$SD_Paired_MTD_Selection_Diff_vs_Oracle_pct <- if (length(delta) > 1L) {
-    stats::sd(delta)
+  out$Mean_Paired_Absolute_MTD_Selection_Diff_vs_Oracle_pct <- mean(absolute_delta)
+  out$SD_Paired_Absolute_MTD_Selection_Diff_vs_Oracle_pct <- if (length(absolute_delta) > 1L) {
+    stats::sd(absolute_delta)
   } else {
     NA_real_
   }
@@ -1211,10 +1215,10 @@ comparison_index <- match(
 wide.summary.df$Oracle_Reference <- oracle_comparison.df$Oracle_Reference[comparison_index]
 wide.summary.df$n_scenarios_paired_with_oracle <-
   oracle_comparison.df$n_scenarios_paired_with_oracle[comparison_index]
-wide.summary.df$Mean_Paired_MTD_Selection_Diff_vs_Oracle_pct <-
-  oracle_comparison.df$Mean_Paired_MTD_Selection_Diff_vs_Oracle_pct[comparison_index]
-wide.summary.df$SD_Paired_MTD_Selection_Diff_vs_Oracle_pct <-
-  oracle_comparison.df$SD_Paired_MTD_Selection_Diff_vs_Oracle_pct[comparison_index]
+wide.summary.df$Mean_Paired_Absolute_MTD_Selection_Diff_vs_Oracle_pct <-
+  oracle_comparison.df$Mean_Paired_Absolute_MTD_Selection_Diff_vs_Oracle_pct[comparison_index]
+wide.summary.df$SD_Paired_Absolute_MTD_Selection_Diff_vs_Oracle_pct <-
+  oracle_comparison.df$SD_Paired_Absolute_MTD_Selection_Diff_vs_Oracle_pct[comparison_index]
 
 comparison_index <- match(
   table.summary.df$.setting_key,
@@ -1225,15 +1229,15 @@ table.summary.df$n_scenarios_paired_with_oracle <-
   oracle_comparison.df$n_scenarios_paired_with_oracle[comparison_index]
 
 mean_diff_rows <- table.summary.df$Metric ==
-  "Mean paired MTD selection difference vs oracle %"
+  "Mean paired absolute MTD selection difference vs oracle %"
 sd_diff_rows <- table.summary.df$Metric ==
-  "SD paired MTD selection difference vs oracle %"
+  "SD paired absolute MTD selection difference vs oracle %"
 table.summary.df$Total[mean_diff_rows] <-
-  oracle_comparison.df$Mean_Paired_MTD_Selection_Diff_vs_Oracle_pct[
+  oracle_comparison.df$Mean_Paired_Absolute_MTD_Selection_Diff_vs_Oracle_pct[
     comparison_index[mean_diff_rows]
   ]
 table.summary.df$Total[sd_diff_rows] <-
-  oracle_comparison.df$SD_Paired_MTD_Selection_Diff_vs_Oracle_pct[
+  oracle_comparison.df$SD_Paired_Absolute_MTD_Selection_Diff_vs_Oracle_pct[
     comparison_index[sd_diff_rows]
   ]
 
