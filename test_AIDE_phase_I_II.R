@@ -35,6 +35,38 @@ stopifnot(
   aide_phase12_dose_threshold_reached(c(3L, 6L, 3L), 6L)
 )
 
+## The efficacy-futility rule uses the observed efficacy count at the dose:
+## Pr(p_E < eta | y, n) = pbeta(eta, y + 1, n - y + 1).
+beta_eff_admin <- data.frame(
+  dose = rep(1L, 20L),
+  eff = rep(0L, 20L)
+)
+beta_futility <- aide_phase12_beta_binomial_futility(
+  admin = beta_eff_admin,
+  ndose = 2L,
+  efficacy_threshold = 0.20,
+  futility_cutoff = 0.95,
+  min_eff_n_for_futility = 3L
+)
+stopifnot(
+  beta_futility$futility_eliminated[1L] == 1L,
+  isTRUE(all.equal(
+    beta_futility$prob_below_threshold[1L],
+    pbeta(0.20, 1L, 21L)
+  ))
+)
+beta_success_admin <- data.frame(
+  dose = rep(1L, 20L),
+  eff = rep(1L, 20L)
+)
+stopifnot(!aide_phase12_beta_binomial_futility(
+  admin = beta_success_admin,
+  ndose = 2L,
+  efficacy_threshold = 0.20,
+  futility_cutoff = 0.95,
+  min_eff_n_for_futility = 3L
+)$futility_eliminated[1L])
+
 if (!requireNamespace("rjags", quietly = TRUE)) {
   cat("AIDE Phase I/II regression checks skipped: rjags/JAGS is not installed.\n")
   quit(save = "no", status = 0L)

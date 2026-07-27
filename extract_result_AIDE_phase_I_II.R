@@ -16,9 +16,10 @@ scenario_set_name <- tools::file_path_sans_ext(basename(scenario_file))
 results_root <- paste0("oc_results_cluster_AIDE_phase_I_II_", scenario_set_name)
 out_dir <- "OC_summary_AIDE_phase_I_II"
 
-## Match the one-trial-per-IDX array setup used by extract_result_AIDE.
-## This combines IDX = 1,...,1000 for 1,000 trials per task.
-jobs_expected <- 1:1000
+## Match the one-trial-per-IDX LSF array that produced the current files.
+## The file names shown are job-1001 through job-2000, giving 1,000 trials
+## per task. Change this range if a different IDX array was submitted.
+jobs_expected <- 1001:2000
 ntrial_per_job_expected <- 1L
 seed_base_expected <- 1L
 block_id_expected <- 1L
@@ -32,16 +33,16 @@ scenario_id_list <- 1:37
 ## the total administration limit. One-stage does not use either threshold.
 two_stage_sizes <- data.frame(
   allocation = "two_stage",
-  Nmax = c(30L, 45L, 60L),
-  N_s1 = c(15L, 24L, 30L),
-  N_s2 = c(30L, 45L, 60L),
+  Nmax = c(30L, 60L),
+  N_s1 = c(15L, 30L),
+  N_s2 = c(30L, 60L),
   stringsAsFactors = FALSE
 )
 one_stage_sizes <- data.frame(
   allocation = "one_stage",
-  Nmax = c(30L, 45L, 60L),
-  N_s1 = c(30L, 45L, 60L),
-  N_s2 = c(30L, 45L, 60L),
+  Nmax = c(30L, 60L),
+  N_s1 = c(30L, 60L),
+  N_s2 = c(30L, 60L),
   stringsAsFactors = FALSE
 )
 design_size_grid <- rbind(two_stage_sizes, one_stage_sizes)
@@ -71,15 +72,14 @@ enrollment_schemes <- data.frame(
 )
 lambda_T_grid <- 0.3
 utility_grid <- rbind(
-  data.frame(utility_type = 1L, lambda_T = 1, stringsAsFactors = FALSE),
+  # data.frame(utility_type = 1L, lambda_T = 1, stringsAsFactors = FALSE),
   data.frame(utility_type = 2L, lambda_T = lambda_T_grid, stringsAsFactors = FALSE),
   data.frame(utility_type = 3L, lambda_T = 1, stringsAsFactors = FALSE)
 )
 arrival_grid <- data.frame(arrival_rate = 1 / 56, stringsAsFactors = FALSE)
 ipde_grid <- data.frame(
-  ## cycle_max = 1 disables IPDE, so this is a single inert placeholder.
-  ipde_design = 2L,
-  flexible_ipde = FALSE,
+  ipde_design = 1L,
+  flexible_ipde = TRUE,
   stringsAsFactors = FALSE
 )
 alpha_grid <- data.frame(
@@ -242,6 +242,49 @@ make_phase12_raw_rds_filenames <- function(task, jobs = jobs_expected) {
     "-s", seed_block,
     "-n", as.integer(ntrial_per_job_expected),
     ".rds"
+  )
+}
+
+make_phase12_combined_rds_filenames <- function(task, jobs = jobs_expected) {
+  paste0(
+    make_phase12_group_key(task),
+    "-job-", as.integer(jobs),
+    "-combined.rds"
+  )
+}
+
+find_phase12_result_files <- function(task, jobs = jobs_expected) {
+  folderpath <- file.path(results_root, make_phase12_folder(task))
+  raw_paths <- file.path(
+    folderpath,
+    make_phase12_raw_rds_filenames(task, jobs = jobs)
+  )
+  combined_names <- make_phase12_combined_rds_filenames(task, jobs = jobs)
+
+  ## Prefer the raw task file.  The combined file contains the same summary
+  ## fields and is accepted as a fallback, including the older flat layout.
+  combined_in_folder <- file.path(folderpath, combined_names)
+  combined_in_root <- file.path(results_root, combined_names)
+  raw_exists <- file.exists(raw_paths)
+  combined_folder_exists <- file.exists(combined_in_folder)
+  combined_root_exists <- file.exists(combined_in_root)
+
+  selected_paths <- raw_paths
+  selected_type <- rep("raw", length(jobs))
+  use_combined_folder <- !raw_exists & combined_folder_exists
+  use_combined_root <- !raw_exists & !combined_folder_exists & combined_root_exists
+  selected_paths[use_combined_folder] <- combined_in_folder[use_combined_folder]
+  selected_type[use_combined_folder] <- "combined (setting folder)"
+  selected_paths[use_combined_root] <- combined_in_root[use_combined_root]
+  selected_type[use_combined_root] <- "combined (results root)"
+
+  found <- raw_exists | combined_folder_exists | combined_root_exists
+  list(
+    folderpath = folderpath,
+    raw_paths = raw_paths,
+    result_paths = selected_paths,
+    result_type = selected_type,
+    found = found
   )
 }
 
@@ -521,8 +564,8 @@ summarize_task <- function(results, task_id) {
 
 ## ------------------------------------------------------------
 ## Main extraction: explicit expected-file discovery, matching
-## extract_result_AIDE.R.  Each Phase I/II task owns one expected RDS file
-## per IDX, so no generic directory scan or filename regex is needed.
+## extract_result_AIDE.R. Each task accepts its raw RDS file, or its
+## per-job combined RDS file when only combined outputs were retained.
 ## ------------------------------------------------------------
 
 all.dose.summary <- list()
@@ -532,17 +575,14 @@ miss.idx <- 1L
 
 for (task_row in seq_len(nrow(expected_tasks))) {
   task <- expected_tasks[task_row, , drop = FALSE]
-  foldername <- make_phase12_folder(task)
-  folderpath <- file.path(results_root, foldername)
-  raw_names <- make_phase12_raw_rds_filenames(task, jobs = jobs_expected)
-  raw_paths <- file.path(folderpath, raw_names)
-  existing_raw <- file.exists(raw_paths)
-  files.use <- raw_paths[existing_raw]
-  missing.jobs <- jobs_expected[!existing_raw]
+  discovery <- find_phase12_result_files(task, jobs = jobs_expected)
+  folderpath <- discovery$folderpath
+  files.use <- discovery$result_paths[discovery$found]
+  missing.jobs <- jobs_expected[!discovery$found]
   example_file <- if (length(files.use) > 0L) {
     files.use[1L]
   } else {
-    raw_paths[1L]
+    discovery$raw_paths[1L]
   }
 
   cat("\n====================================\n")
@@ -566,7 +606,7 @@ for (task_row in seq_len(nrow(expected_tasks))) {
   cat("IPDE design:", task$ipde_design, "\n")
   cat("Flexible IPDE:", task$flexible_ipde, "\n")
   cat("Folder:", folderpath, "\n")
-  cat("Raw-RDS file:", example_file, "\n")
+  cat("Result file (raw preferred):", example_file, "\n")
   cat("Found", length(files.use), "files; missing", length(missing.jobs), "jobs.\n")
   cat("====================================\n")
   flush.console()

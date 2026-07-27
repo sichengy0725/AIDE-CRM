@@ -236,16 +236,16 @@ scenario_id_list <- 1:37
 ## thresholds. One-stage does not use either threshold.
 two_stage_sizes <- data.frame(
   allocation = "two_stage",
-  Nmax = c(30L, 45L, 60L),
-  N_s1 = c(15L, 24L, 30L),
-  N_s2 = c(30L, 45L, 60L),
+  Nmax = c(30L, 60L),
+  N_s1 = c(15L, 30L),
+  N_s2 = c(30L, 60L),
   stringsAsFactors = FALSE
 )
 one_stage_sizes <- data.frame(
   allocation = "one_stage",
-  Nmax = c(30L, 45L, 60L),
-  N_s1 = c(30L, 45L, 60L),
-  N_s2 = c(30L, 45L, 60L),
+  Nmax = c(30L, 60L),
+  N_s1 = c(30L, 60L),
+  N_s2 = c(30L, 60L),
   stringsAsFactors = FALSE
 )
 design_size_grid <- rbind(two_stage_sizes, one_stage_sizes)
@@ -270,14 +270,14 @@ enrollment_schemes <- data.frame(
 )
 lambda_T_grid <- 0.3
 utility_grid <- rbind(
-  data.frame(utility_type = 1L, lambda_T = 1, stringsAsFactors = FALSE),
+  # data.frame(utility_type = 1L, lambda_T = 1, stringsAsFactors = FALSE),
   data.frame(utility_type = 2L, lambda_T = lambda_T_grid, stringsAsFactors = FALSE),
   data.frame(utility_type = 3L, lambda_T = 1, stringsAsFactors = FALSE)
 )
 arrival_grid <- data.frame(arrival_rate = 1 / 56, stringsAsFactors = FALSE)
 ipde_grid <- data.frame(
-  ipde_design = 2L,
-  flexible_ipde = FALSE,
+  ipde_design = 1L,
+  flexible_ipde = TRUE,
   stringsAsFactors = FALSE
 )
 alpha_grid <- data.frame(

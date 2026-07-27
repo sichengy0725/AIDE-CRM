@@ -413,6 +413,70 @@ aide_phase12_dose_specific_efficacy_recycle_gate <- function(admin,
   )
 }
 
+aide_phase12_beta_binomial_futility <- function(admin,
+                                                  ndose,
+                                                  efficacy_threshold = 0.20,
+                                                  futility_cutoff = 0.95,
+                                                  min_eff_n_for_futility = 0L) {
+  if (length(ndose) != 1L || !is.finite(ndose) || ndose < 1L ||
+      ndose != as.integer(ndose)) {
+    stop("ndose must be a positive integer.")
+  }
+  ndose <- as.integer(ndose)
+  if (length(efficacy_threshold) != 1L || !is.finite(efficacy_threshold) ||
+      efficacy_threshold <= 0 || efficacy_threshold >= 1) {
+    stop("efficacy_threshold must be a scalar in (0, 1).")
+  }
+  if (length(futility_cutoff) != 1L || !is.finite(futility_cutoff) ||
+      futility_cutoff <= 0 || futility_cutoff >= 1) {
+    stop("futility_cutoff must be a scalar in (0, 1).")
+  }
+  if (length(min_eff_n_for_futility) != 1L ||
+      !is.finite(min_eff_n_for_futility) || min_eff_n_for_futility < 0 ||
+      min_eff_n_for_futility != as.integer(min_eff_n_for_futility)) {
+    stop("min_eff_n_for_futility must be a non-negative integer.")
+  }
+  if (is.null(admin)) admin <- data.frame(dose = integer(0), eff = integer(0))
+  if (!all(c("dose", "eff") %in% names(admin))) {
+    stop("admin must contain dose and eff for the efficacy-futility rule.")
+  }
+  if (nrow(admin) > 0L &&
+      (any(!is.finite(admin$dose)) || any(admin$dose < 1L | admin$dose > ndose) ||
+       any(!admin$eff %in% c(0L, 1L)))) {
+    stop("admin contains invalid dose or efficacy values.")
+  }
+
+  n <- tabulate(as.integer(admin$dose), nbins = ndose)
+  y <- tabulate(as.integer(admin$dose[admin$eff == 1L]), nbins = ndose)
+
+  ## With the Beta(1, 1) prior in the supplied example,
+  ## Pr(p_E,j < eta | y_j, n_j) = pbeta(eta, y_j + 1, n_j - y_j + 1).
+  ## Equivalently, the posterior chance of efficacy exceeding eta is
+  ## 1 - pbeta(...). A dose is futile when that latter chance is below
+  ## 1 - futility_cutoff.
+  prob_below_threshold <- stats::pbeta(
+    efficacy_threshold,
+    y + 1L,
+    n - y + 1L
+  )
+  prob_above_threshold <- 1 - prob_below_threshold
+  futility_eliminated <- as.integer(
+    n >= as.integer(min_eff_n_for_futility) &
+      prob_below_threshold > futility_cutoff
+  )
+
+  list(
+    n = as.integer(n),
+    y = as.integer(y),
+    prob_below_threshold = prob_below_threshold,
+    prob_above_threshold = prob_above_threshold,
+    futility_eliminated = futility_eliminated,
+    efficacy_threshold = efficacy_threshold,
+    futility_cutoff = futility_cutoff,
+    min_eff_n_for_futility = as.integer(min_eff_n_for_futility)
+  )
+}
+
 aide_phase12_efficacy_summary <- function(admin,
                                            ndose,
                                            efficacy_prior = c(1, 1),
@@ -426,7 +490,8 @@ aide_phase12_efficacy_summary <- function(admin,
                                            cache = NULL,
                                            efficacy_threshold = 0.20,
                                            futility_cutoff = 0.95,
-                                           min_eff_n_for_futility = 0L) {
+                                           min_eff_n_for_futility = 0L,
+                                           futility_eliminated = NULL) {
   if (length(efficacy_threshold) != 1L || !is.finite(efficacy_threshold) ||
       efficacy_threshold <= 0 || efficacy_threshold >= 1) {
     stop("efficacy_threshold must be a scalar in (0, 1).")
@@ -454,19 +519,44 @@ aide_phase12_efficacy_summary <- function(admin,
     cache = cache,
     threshold = efficacy_threshold
   )
-  futility_eliminated <- as.integer(
-    posterior$n >= as.integer(min_eff_n_for_futility) &
-      posterior$prob_regular_below_threshold > futility_cutoff
-  )
+  observed_futility <- if (is.null(futility_eliminated)) {
+    aide_phase12_beta_binomial_futility(
+      admin = admin,
+      ndose = ndose,
+      efficacy_threshold = efficacy_threshold,
+      futility_cutoff = futility_cutoff,
+      min_eff_n_for_futility = min_eff_n_for_futility
+    )
+  } else {
+    if (length(futility_eliminated) != ndose ||
+        any(!futility_eliminated %in% c(0L, 1L))) {
+      stop("futility_eliminated must contain one 0/1 value per dose.")
+    }
+    ## The simulator supplies its persistent state here.  This prevents an
+    ## interim summary from reassessing unobserved or non-current doses.
+    list(
+      n = posterior$n,
+      y = posterior$y,
+      prob_below_threshold = rep(NA_real_, ndose),
+      prob_above_threshold = rep(NA_real_, ndose),
+      futility_eliminated = as.integer(futility_eliminated),
+      efficacy_threshold = efficacy_threshold,
+      futility_cutoff = futility_cutoff,
+      min_eff_n_for_futility = as.integer(min_eff_n_for_futility)
+    )
+  }
   c(
     posterior,
     list(
       posterior_mean = posterior$regular_posterior_mean,
-      prob_below_threshold = posterior$prob_regular_below_threshold,
-      futility_eliminated = futility_eliminated,
-      efficacy_threshold = efficacy_threshold,
-      futility_cutoff = futility_cutoff,
-      min_eff_n_for_futility = as.integer(min_eff_n_for_futility)
+      prob_below_threshold = observed_futility$prob_below_threshold,
+      prob_above_threshold = observed_futility$prob_above_threshold,
+      futility_eliminated = observed_futility$futility_eliminated,
+      efficacy_futility_n = observed_futility$n,
+      efficacy_futility_y = observed_futility$y,
+      efficacy_threshold = observed_futility$efficacy_threshold,
+      futility_cutoff = observed_futility$futility_cutoff,
+      min_eff_n_for_futility = observed_futility$min_eff_n_for_futility
     )
   )
 }
@@ -938,7 +1028,7 @@ simulate_AIDE_phase_I_II <- function(
   ## cohort decision is based on one common posterior fit.
   efficacy_posterior_cache <- new.env(parent = emptyenv())
   efficacy_summary_current <- function() {
-    aide_phase12_efficacy_summary(
+    summary <- aide_phase12_efficacy_summary(
       admin = admin,
       ndose = ndose,
       efficacy_prior = efficacy_prior,
@@ -952,8 +1042,10 @@ simulate_AIDE_phase_I_II <- function(
       cache = efficacy_posterior_cache,
       efficacy_threshold = efficacy_threshold,
       futility_cutoff = futility_cutoff,
-      min_eff_n_for_futility = min_eff_n_for_futility
+      min_eff_n_for_futility = min_eff_n_for_futility,
+      futility_eliminated = efficacy_futility_eliminated
     )
+    summary
   }
   efficacy_utility_current <- function(toxicity_estimate) {
     aide_phase12_utility(
@@ -994,6 +1086,44 @@ simulate_AIDE_phase_I_II <- function(
   }
 
   toxicity_eliminated <- rep(0L, ndose)
+  efficacy_futility_eliminated <- rep(0L, ndose)
+  futility_state <- function() {
+    list(futility_eliminated = as.integer(efficacy_futility_eliminated))
+  }
+  evaluate_current_dose_futility <- function(dose) {
+    if (length(dose) != 1L || !is.finite(dose) || dose < 1L || dose > ndose) {
+      stop("dose must identify one valid dose level.")
+    }
+    dose <- as.integer(dose)
+    observed <- aide_phase12_beta_binomial_futility(
+      admin = admin,
+      ndose = ndose,
+      efficacy_threshold = efficacy_threshold,
+      futility_cutoff = futility_cutoff,
+      min_eff_n_for_futility = min_eff_n_for_futility
+    )
+    ## Only the just-treated dose is assessed.  Once a dose is futile, it
+    ## remains eliminated for every later allocation.
+    efficacy_futility_eliminated[dose] <<- max(
+      efficacy_futility_eliminated[dose],
+      observed$futility_eliminated[dose]
+    )
+    observed$futility_eliminated <- as.integer(efficacy_futility_eliminated)
+    observed
+  }
+  apply_early_stop_rule <- function(stage) {
+    if (toxicity_eliminated[1L] == 1L) {
+      earlystop <<- TRUE
+      stop_reason <<- paste0("dose1_toxicity_eliminated_", stage)
+      return(TRUE)
+    }
+    if (all(efficacy_futility_eliminated == 1L)) {
+      earlystop <<- TRUE
+      stop_reason <<- paste0("all_doses_efficacy_futile_", stage)
+      return(TRUE)
+    }
+    FALSE
+  }
   ## Under continuous enrollment, all potential new-patient arrivals are
   ## generated up front and accumulate in the waiting queue. Under IPDE-first
   ## recruitment, no new patient is recruited until an open cohort still has
@@ -1122,7 +1252,7 @@ simulate_AIDE_phase_I_II <- function(
     if (cycle_max <= 1L || (next_dose <= 1L && !flexible_ipde)) {
       return(integer(0))
     }
-    if (is.null(futility)) futility <- efficacy_summary_current()
+    if (is.null(futility)) futility <- futility_state()
     if (toxicity_eliminated[next_dose] == 1L ||
         futility$futility_eliminated[next_dose] == 1L) {
       ## A dose eliminated for toxicity or efficacy cannot be an IPDE
@@ -1271,7 +1401,7 @@ simulate_AIDE_phase_I_II <- function(
     if (!is.finite(dose) || dose < 1L || dose > ndose || n_to_enroll < 1L) {
       return(FALSE)
     }
-    if (is.null(futility)) futility <- efficacy_summary_current()
+    if (is.null(futility)) futility <- futility_state()
     if (toxicity_eliminated[dose] == 1L ||
         futility$futility_eliminated[dose] == 1L) {
       return(FALSE)
@@ -1691,14 +1821,15 @@ simulate_AIDE_phase_I_II <- function(
 
   if (allocation == "two_stage") {
     ## Stage I: standard AIDE toxicity allocation. Efficacy does not rank
-    ## doses, but futile doses are removed before every allocation and IPDE
-    ## screening. Stage I ends only after a single dose has accumulated N_s1
-    ## administrations, not when the total reaches N_s1.
+    ## doses.  A dose is assessed for efficacy futility only after it has just
+    ## been treated; once eliminated, it is excluded from later allocation and
+    ## IPDE screening. Stage I ends only after a single dose has accumulated
+    ## N_s1 administrations, not when the total reaches N_s1.
     while (nrow(admin) < Nmax && !earlystop && !dose_threshold_reached(N_s1)) {
-      futility_before <- efficacy_summary_current()
+      futility_before <- futility_state()
+      if (apply_early_stop_rule("stage1")) break
       if (toxicity_eliminated[current_dose] == 1L ||
           futility_before$futility_eliminated[current_dose] == 1L) {
-        earlystop <- TRUE
         stop_reason <- "no_safe_nonfutile_stage1_current_dose"
         break
       }
@@ -1714,19 +1845,15 @@ simulate_AIDE_phase_I_II <- function(
         break
       }
       update_toxicity_elimination()
-      futility_after <- efficacy_summary_current()
-      if (toxicity_eliminated[1L] == 1L) {
-        earlystop <- TRUE
-        stop_reason <- "dose1_toxicity_eliminated_stage1"
-        break
-      }
+      futility_after <- evaluate_current_dose_futility(current_dose)
+      if (apply_early_stop_rule("stage1")) break
       if (dose_threshold_reached(N_s1)) break
 
       tox_move_out <- toxicity_move(current_dose)
       absorb_toxicity_model_elimination(tox_move_out)
       if (isTRUE(tox_move_out$stop_trial) || tox_move_out$next_dose == 99L) {
-        earlystop <- TRUE
-        stop_reason <- "toxicity_model_early_stop_stage1"
+        if (apply_early_stop_rule("stage1")) break
+        stop_reason <- "no_safe_nonfutile_stage1_candidate"
         break
       }
       allocated_dose <- choose_stage1_dose(
@@ -1740,7 +1867,7 @@ simulate_AIDE_phase_I_II <- function(
         futility_after
       )
       if (allocated_dose == 99L) {
-        earlystop <- TRUE
+        if (apply_early_stop_rule("stage1")) break
         stop_reason <- "no_safe_nonfutile_stage1_candidate"
         break
       }
@@ -1762,21 +1889,18 @@ simulate_AIDE_phase_I_II <- function(
     }
 
     ## Stage II: efficacy-directed allocation among the current candidate set.
-    ## The Stage-I MTD ceiling is retained, while toxicity and futility are
-    ## re-evaluated after every cohort and immediately remove doses. The trial
-    ## ends when any dose accumulates N_s2 administrations or Nmax is reached.
+    ## The Stage-I MTD ceiling is retained.  Toxicity is re-evaluated after
+    ## every cohort; efficacy futility is evaluated only for the dose just
+    ## treated. The trial ends when any dose accumulates N_s2 administrations
+    ## or Nmax is reached.
     stage2_admissible <- stage1_admissible
     while (!earlystop && nrow(admin) < Nmax && !dose_threshold_reached(N_s2)) {
       update_toxicity_elimination()
       eff_now <- efficacy_summary_current()
+      if (apply_early_stop_rule("stage2")) break
       stage2_admissible <- stage1_admissible &
         toxicity_eliminated == 0L &
         eff_now$futility_eliminated == 0L
-      if (toxicity_eliminated[1L] == 1L) {
-        earlystop <- TRUE
-        stop_reason <- "dose1_toxicity_eliminated_stage2"
-        break
-      }
       if (!any(stage2_admissible)) {
         stop_reason <- "no_stage2_admissible_dose"
         break
@@ -1797,7 +1921,7 @@ simulate_AIDE_phase_I_II <- function(
         break
       }
       update_toxicity_elimination()
-      futility_after <- efficacy_summary_current()
+      futility_after <- evaluate_current_dose_futility(allocated_dose)
       record_decision(
         "stage2",
         allocated_dose,
@@ -1805,11 +1929,7 @@ simulate_AIDE_phase_I_II <- function(
         allocated_dose,
         futility_after
       )
-      if (toxicity_eliminated[1L] == 1L) {
-        earlystop <- TRUE
-        stop_reason <- "dose1_toxicity_eliminated_stage2"
-        break
-      }
+      if (apply_early_stop_rule("stage2")) break
     }
     if (!earlystop && nrow(admin) < Nmax && !any(stage2_admissible)) {
       stop_reason <- "no_stage2_admissible_dose"
@@ -1817,19 +1937,25 @@ simulate_AIDE_phase_I_II <- function(
   } else {
     ## One-stage design: every completed cohort first obtains an AIDE toxicity
     ## decision, then utility selects from the prescribed local candidate set.
+    ## Efficacy futility is assessed only at the dose just treated.
     while (nrow(admin) < Nmax && !earlystop) {
+      futility_before <- futility_state()
+      if (apply_early_stop_rule("one_stage")) break
+      if (toxicity_eliminated[current_dose] == 1L ||
+          futility_before$futility_eliminated[current_dose] == 1L) {
+        stop_reason <- "no_safe_nonfutile_one_stage_current_dose"
+        break
+      }
       n_to_enroll <- min(C, Nmax - nrow(admin))
-      if (!enroll_cohort(current_dose, "one_stage", n_to_enroll)) {
+      if (!enroll_cohort(
+        current_dose, "one_stage", n_to_enroll, futility = futility_before
+      )) {
         stop_reason <- "ran_out_of_new_patients_one_stage"
         break
       }
       toxicity_fit_now <- update_toxicity_elimination()
-      futility_now <- efficacy_summary_current()
-      if (toxicity_eliminated[1L] == 1L) {
-        earlystop <- TRUE
-        stop_reason <- "dose1_toxicity_eliminated_one_stage"
-        break
-      }
+      futility_now <- evaluate_current_dose_futility(current_dose)
+      if (apply_early_stop_rule("one_stage")) break
       if (nrow(admin) >= Nmax) break
 
       tox_move_out <- toxicity_move(current_dose)
@@ -1848,6 +1974,7 @@ simulate_AIDE_phase_I_II <- function(
         futility_now
       )
       if (allocated_dose == 99L) {
+        if (apply_early_stop_rule("one_stage")) break
         stop_reason <- "no_safe_nonfutile_one_stage_candidate"
         break
       }
@@ -1858,6 +1985,20 @@ simulate_AIDE_phase_I_II <- function(
   final_fit <- final_toxicity_fit()
   final_mtd <- final_fit$MTD
   final_futility <- efficacy_summary_current()
+  ## These dose-wise beta-binomial probabilities are calculated only for the
+  ## completed-trial report.  They do not alter the persistent interim
+  ## elimination state used for allocation or early stopping.
+  final_observed_futility <- aide_phase12_beta_binomial_futility(
+    admin = admin,
+    ndose = ndose,
+    efficacy_threshold = efficacy_threshold,
+    futility_cutoff = futility_cutoff,
+    min_eff_n_for_futility = min_eff_n_for_futility
+  )
+  final_futility$prob_below_threshold <- final_observed_futility$prob_below_threshold
+  final_futility$prob_above_threshold <- final_observed_futility$prob_above_threshold
+  final_futility$efficacy_futility_n <- final_observed_futility$n
+  final_futility$efficacy_futility_y <- final_observed_futility$y
   final_utility_fit <- toxicity_utility_fit()
   final_utility <- efficacy_utility_current(
     toxicity_estimate_from_fit(final_utility_fit)
@@ -1937,6 +2078,7 @@ simulate_AIDE_phase_I_II <- function(
       efficacy = final_futility,
       utility = final_utility,
       toxicity_eliminated = final_tox_elim,
+      efficacy_futility_eliminated = final_futility$futility_eliminated,
       earlystop = as.integer(earlystop),
       stop_reason = stop_reason,
       n_admin = nrow(admin),
