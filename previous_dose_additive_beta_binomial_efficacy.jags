@@ -1,0 +1,56 @@
+model {
+
+  ############################################################
+  # Dose-specific beta-binomial efficacy model with additive
+  # previous-dose carryover for recycled/IPDE administrations.
+  #
+  # Each dose has an independently fitted marginal regular-efficacy
+  # probability p_regular[j] ~ Beta(a_regular[j], b_regular[j]).
+  # For patient i at current dose dose[i], the efficacy probability is:
+  #
+  # Regular administration:
+  #   Pr(E[i] = 1) = p_regular[dose[i]]
+  #
+  # Recycled/IPDE administration:
+  #   Pr(E[i] = 1) = min(
+  #     1,
+  #     p_regular[dose[i]] + alpha * p_regular[previous_dose[i]]
+  #   )
+  #
+  # The Bernoulli likelihood below is the individual-level form of a
+  # beta-binomial model. Individual rows are necessary because recycled
+  # patients can have different previous doses and therefore cannot be
+  # aggregated by current dose alone.
+  #
+  # Required data:
+  #   N                 : total number of administrations
+  #   ndose             : number of dose levels
+  #   eff[i]            : binary efficacy outcome, 0/1
+  #   dose[i]           : current dose, integer 1,...,ndose
+  #   previous_dose[i]  : patient's immediately preceding dose, 1,...,ndose
+  #   ipde[i]           : 0 = regular, 1 = recycled/IPDE administration
+  #   a_regular[j], b_regular[j] : dose-specific beta-prior shapes
+  #   a_alpha, b_alpha  : beta-prior shapes for carryover alpha
+  #
+  # previous_dose[i] must be a valid dose index even for regular rows;
+  # use any valid sentinel (for example, 1) when ipde[i] = 0.
+  ############################################################
+
+  alpha ~ dbeta(a_alpha, b_alpha)
+
+  for (j in 1:ndose) {
+    p_regular[j] ~ dbeta(a_regular[j], b_regular[j])
+  }
+
+  for (i in 1:N) {
+    theta_regular[i] <- p_regular[dose[i]]
+    theta_ipde[i] <- min(
+      1,
+      p_regular[dose[i]] + alpha * p_regular[previous_dose[i]]
+    )
+    theta[i] <- (1 - ipde[i]) * theta_regular[i] +
+                ipde[i] * theta_ipde[i]
+
+    eff[i] ~ dbern(theta[i])
+  }
+}

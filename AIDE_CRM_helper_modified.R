@@ -1,10 +1,11 @@
 ## ============================================================
-## AIDE-CRM helper with five CRM backends
+## AIDE-CRM helper with six CRM backends
 ##   1) fixed/r_fixed : discount CRM with fixed r through JAGS
 ##   2) random        : discount CRM with one random r through JAGS
 ##   3) level         : discount CRM with level-specific random r through JAGS
 ##   4) alpha_crm     : deterministic alpha-CRM using alpha grid + integrate()
 ##   5) cumu_crm      : logistic cumulative-dose CRM through JAGS
+##   6) previous_dose : additive previous-dose CRM through JAGS
 ##
 ## User-prespecified inputs:
 ##   - skeleton      : prior CRM toxicity skeleton, length ndose
@@ -24,7 +25,10 @@
 ## ------------------------------------------------------------
 crm_inv_logit <- function(x) 1 / (1 + exp(-x))
 
-crm_r_model_choices <- function() c("fixed", "r_fixed", "random", "level", "alpha_crm", "cumu_crm", "ipcrm")
+crm_r_model_choices <- function() c(
+  "fixed", "r_fixed", "random", "level", "alpha_crm", "cumu_crm", "ipcrm",
+  "previous_dose", "previous_dose_additive"
+)
 
 crm_normalize_r_model <- function(r_model) {
   r_model <- match.arg(r_model, choices = crm_r_model_choices())
@@ -32,6 +36,8 @@ crm_normalize_r_model <- function(r_model) {
     "fixed"
   } else if (r_model == "ipcrm") {
     "cumu_crm"
+  } else if (r_model == "previous_dose_additive") {
+    "previous_dose"
   } else {
     r_model
   }
@@ -272,6 +278,33 @@ crm_prepare_dat <- function(dat,
   out
 }
 
+## Construct the previous-dose index required by the additive previous-dose
+## model. The data are already ordered within patient by crm_prepare_dat().
+## A valid sentinel is used for regular administrations because JAGS evaluates
+## both branches of the deterministic probability expression.
+crm_previous_dose_index <- function(dat) {
+  if (is.null(dat) || nrow(dat) == 0L) return(integer(0))
+  if (!all(c("id", "dose", "type") %in% names(dat))) {
+    stop("dat must contain id, dose, and type to construct previous doses.")
+  }
+
+  previous_dose <- rep.int(1L, nrow(dat))
+  is_ipde <- dat$type == "retreat"
+  for (rows in split(seq_len(nrow(dat)), as.character(dat$id))) {
+    if (is_ipde[rows[1L]]) {
+      stop("A recycled/IPDE administration must have an earlier administration for the same patient.")
+    }
+    if (length(rows) > 1L) {
+      for (k in 2:length(rows)) {
+        if (is_ipde[rows[k]]) {
+          previous_dose[rows[k]] <- as.integer(dat$dose[rows[k - 1L]])
+        }
+      }
+    }
+  }
+  as.integer(previous_dose)
+}
+
 crm_make_result <- function(p_hat,
                             target,
                             skeleton,
@@ -315,6 +348,7 @@ crm_fit <- function(dat,
                     fixed_model_file = "fix_CRM_TITE.bug",
                     random_model_file = "random_CRM_TITE.bug",
                     level_model_file = "random_CRM_level.bug",
+                    previous_dose_model_file = "previous_dose_additive_CRM.bug",
                     n_chains = 2,
                     n_adapt = 500,
                     n_burnin = 500,
@@ -348,7 +382,7 @@ crm_fit <- function(dat,
   r_model <- crm_normalize_r_model(r_model)
   crm_validate_skeleton(skeleton, ndose)
   
-  if (r_model %in% c("fixed", "random", "level")) {
+  if (r_model %in% c("fixed", "random", "level", "previous_dose")) {
     return(crm_fit_discount(
       dat = dat,
       ndose = ndose,
@@ -364,6 +398,7 @@ crm_fit <- function(dat,
       fixed_model_file = fixed_model_file,
       random_model_file = random_model_file,
       level_model_file = level_model_file,
+      previous_dose_model_file = previous_dose_model_file,
       assessment_window = assessment_window,
       decision_time = decision_time,
       weight_col = weight_col,
@@ -443,7 +478,7 @@ crm_fit_discount <- function(dat,
                              target = 0.30,
                              cutoff = 0.95,
                              cutoff.eli = NULL,
-                             r_model = c("fixed", "r_fixed", "random", "level"),
+                             r_model = c("fixed", "r_fixed", "random", "level", "previous_dose"),
                              r_carry = 0.10,
                              a_r = 1,
                              b_r = 9,
@@ -452,6 +487,7 @@ crm_fit_discount <- function(dat,
                              fixed_model_file = "fix_CRM_TITE.bug",
                              random_model_file = "random_CRM_TITE.bug",
                              level_model_file = "random_CRM_level.bug",
+                             previous_dose_model_file = "previous_dose_additive_CRM.bug",
                              assessment_window = NULL,
                              decision_time = NULL,
                              weight_col = NULL,
@@ -470,9 +506,10 @@ crm_fit_discount <- function(dat,
   if (is.null(model_file)) {
     model_file <- switch(
       r_model,
-      fixed  = fixed_model_file,
-      random = random_model_file,
-      level  = level_model_file
+       fixed  = fixed_model_file,
+       random = random_model_file,
+       level  = level_model_file,
+       previous_dose = previous_dose_model_file
     )
   }
   
@@ -494,6 +531,11 @@ crm_fit_discount <- function(dat,
   if (r_model == "fixed" && (length(r_carry) != 1L || r_carry < 0 || r_carry >= 1)) {
     stop("For fixed r, r_carry must be a scalar in [0, 1).")
   }
+  if (r_model == "previous_dose" &&
+      (length(a_r) != 1L || length(b_r) != 1L || !is.finite(a_r) ||
+       !is.finite(b_r) || a_r <= 0 || b_r <= 0)) {
+    stop("For previous_dose, a_r and b_r must be positive Beta-prior parameters for alpha.")
+  }
   
   dat2 <- crm_prepare_dat(
     dat,
@@ -511,6 +553,11 @@ crm_fit_discount <- function(dat,
   dose_vec <- as.integer(dat2$dose)
   ipde_vec <- as.integer(dat2$type == "retreat")
   w_vec <- as.numeric(dat2$tite_weight)
+  previous_dose_vec <- if (r_model == "previous_dose") {
+    crm_previous_dose_index(dat2)
+  } else {
+    NULL
+  }
   
   jags_data <- list(
     N = length(y_vec),
@@ -518,12 +565,20 @@ crm_fit_discount <- function(dat,
     y = y_vec,
     dose = dose_vec,
     ipde = ipde_vec,
-    w = w_vec,
-    q = as.numeric(skeleton),
-    tau_alpha = 1 / alpha_sd^2
+    q = as.numeric(skeleton)
   )
   
-  monitors <- c("alpha", "p", "theta_ipde")
+  if (r_model == "previous_dose") {
+    jags_data$previous_dose <- previous_dose_vec
+    jags_data$tau_beta <- 1 / alpha_sd^2
+    jags_data$a_alpha <- a_r
+    jags_data$b_alpha <- b_r
+    monitors <- c("beta", "alpha", "p")
+  } else {
+    jags_data$w <- w_vec
+    jags_data$tau_alpha <- 1 / alpha_sd^2
+    monitors <- c("alpha", "p", "theta_ipde")
+  }
   
   if (r_model == "fixed") {
     jags_data$r <- r_carry
@@ -577,6 +632,8 @@ crm_fit_discount <- function(dat,
     as.numeric(r_carry)
   } else if (r_model == "random") {
     as.numeric(mean(post[, "r"]))
+  } else if (r_model == "previous_dose") {
+    as.numeric(mean(post[, "alpha"]))
   } else {
     r_cols <- paste0("r", 2:ndose)
     if (!all(r_cols %in% colnames(post))) {
@@ -620,7 +677,9 @@ crm_fit_discount <- function(dat,
       earlystop = stop_flag,
       eliminated = if (stop_flag == 1L) rep(1L, ndose) else rep(0L, ndose),
       model_file = model_file,
-      n_eff = sum(w_vec)
+      n_eff = sum(w_vec),
+      previous_dose = previous_dose_vec,
+      carryover_alpha_hat = if (r_model == "previous_dose") r_hat else NA_real_
     )
   )
 }
@@ -1054,6 +1113,7 @@ crm_move <- function(current_dose,
                      fixed_model_file = "fix_CRM_TITE.bug",
                      random_model_file = "random_CRM_TITE.bug",
                      level_model_file = "random_CRM_level.bug",
+                     previous_dose_model_file = "previous_dose_additive_CRM.bug",
                      n_chains = 2,
                      n_adapt = 500,
                      n_burnin = 500,
@@ -1148,6 +1208,7 @@ crm_move <- function(current_dose,
     fixed_model_file = fixed_model_file,
     random_model_file = random_model_file,
     level_model_file = level_model_file,
+    previous_dose_model_file = previous_dose_model_file,
     n_chains = n_chains,
     n_adapt = n_adapt,
     n_burnin = n_burnin,
@@ -1301,6 +1362,7 @@ select.mtd.crm <- function(target,
                            fixed_model_file = "fix_CRM_TITE.bug",
                            random_model_file = "random_CRM_TITE.bug",
                            level_model_file = "random_CRM_level.bug",
+                           previous_dose_model_file = "previous_dose_additive_CRM.bug",
                            n_chains = 2,
                            n_adapt = 500,
                            n_burnin = 500,
@@ -1399,6 +1461,7 @@ select.mtd.crm <- function(target,
     fixed_model_file = fixed_model_file,
     random_model_file = random_model_file,
     level_model_file = level_model_file,
+    previous_dose_model_file = previous_dose_model_file,
     n_chains = n_chains,
     n_adapt = n_adapt,
     n_burnin = n_burnin,

@@ -11,8 +11,8 @@ import { PDFDocument } from 'pdf-lib';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
 const inputDir = path.join(root, 'Presentation 7-27-2026');
-const oldRandomDir = path.join(root, 'Presentation 7-20-2026');
-const outDir = path.join(inputDir, 'Comparison Figures');
+const rawDir = path.join(inputDir, 'Raw Result');
+const outDir = path.join(inputDir, 'Table and Plots', 'Prior');
 
 function csvRows(text) {
   const rows = [];
@@ -209,6 +209,7 @@ function rangeForMetric(metric, values) {
   if (metric.key === 'overdoseAllocation') return [0, 100];
   if (metric.key === 'sampleSize') return yDomain(values, 0, 25);
   if (metric.key === 'duration') return yDomain(values, 0, 10);
+  if (metric.key === 'absoluteDifference') return yDomain(values, 0, 1);
   return yDomain(values, 0, 1);
 }
 
@@ -310,9 +311,10 @@ function drawLegend({ labels, colors, x, y, width, fontSize = 17 }) {
 }
 
 function figureSvg({ title, subtitle, panels, legend, width = 2592, height = 2016, type = 'bar' }) {
-  const margin = { left: 85, right: 85, top: 125, bottom: 160 };
-  const cols = 3;
-  const rows = 2;
+  const sevenPanels = panels.length > 6;
+  const margin = { left: 85, right: 85, top: 125, bottom: sevenPanels ? 205 : 160 };
+  const cols = sevenPanels ? 4 : 3;
+  const rows = Math.ceil(panels.length / cols);
   const gapX = 44;
   const gapY = 45;
   const panelWidth = (width - margin.left - margin.right - gapX * (cols - 1)) / cols;
@@ -327,20 +329,30 @@ function figureSvg({ title, subtitle, panels, legend, width = 2592, height = 201
     const y = margin.top + row * (panelHeight + gapY);
     svg += (type === 'line' ? drawLinePanel : drawBarPanel)({ x, y, width: panelWidth, height: panelHeight, ...panel });
   });
-  svg += drawLegend({ labels: legend.labels, colors: legend.colors, x: margin.left + 50, y: height - 75, width: width - margin.left - margin.right - 100, fontSize: legend.fontSize ?? 17 });
+  svg += drawLegend({ labels: legend.labels, colors: legend.colors, x: margin.left + 50, y: height - (sevenPanels ? 125 : 75), width: width - margin.left - margin.right - 100, fontSize: legend.fontSize ?? 17 });
   return `${svg}</svg>`;
 }
 
-function metricRowsForRandom(data, methodLabel) {
+function metricRowsForRandom(data, methodLabel, { oracle = false } = {}) {
   const byMetric = Object.fromEntries(data.map((row) => [row.Metric, row]));
+  const totalDoseAdministrations = [1, 2, 3, 4, 5]
+    .map((dose) => num(byMetric['Average dose allocation']?.[`D${dose}`]))
+    .reduce((sum, value) => sum + value, 0);
+  const sampleSize = oracle
+    ? totalDoseAdministrations
+    : num(byMetric['Average total unique patients']?.Total);
   return {
     methodLabel,
     mtdSelection: num(byMetric['Average MTD selection %']?.Total),
     mtdAllocation: num(byMetric['Average MTD allocation']?.Total) * 100 / num(data[0]?.Nmax_eff),
     overdoseSelection: num(byMetric['Average overdose selection %']?.Total),
     overdoseAllocation: num(byMetric['Average overdose allocation']?.Total) * 100 / num(data[0]?.Nmax_eff),
-    sampleSize: num(byMetric['Average total unique patients']?.Total),
-    duration: num(byMetric['Average trial duration']?.Duration) / 7,
+    sampleSize,
+    duration: oracle ? (56 * sampleSize) / 7 : num(byMetric['Average trial duration']?.Duration) / 7,
+    absoluteDifference: Math.abs(num(
+      byMetric['Mean paired absolute MTD selection difference vs oracle %']?.Total ??
+      byMetric['Mean paired MTD selection difference vs oracle %']?.Total
+    )),
   };
 }
 
@@ -351,7 +363,7 @@ async function buildRandomFigures() {
     '0.15': 'randomsce_targetgap0p15_batch10_j1to1000_n100_table_summary.csv',
   };
   const gapRows = {};
-  for (const [gap, file] of Object.entries(inputFiles)) gapRows[gap] = await readCsv(path.join(inputDir, file));
+  for (const [gap, file] of Object.entries(inputFiles)) gapRows[gap] = await readCsv(path.join(rawDir, file));
   const priors = [
     { key: '0.15|0.85', label: 'Beta(0.15, 0.85)', color: palette[0] },
     { key: '0.3|0.7', label: 'Beta(0.3, 0.7)', color: palette[1] },
@@ -366,89 +378,85 @@ async function buildRandomFigures() {
     { key: 'overdoseAllocation', panel: 'D', title: 'Overdose allocation', yLabel: 'Percentage (%)' },
     { key: 'sampleSize', panel: 'E', title: 'Average sample size', yLabel: 'Patients' },
     { key: 'duration', panel: 'F', title: 'Average trial duration', yLabel: 'Weeks' },
+    { key: 'absoluteDifference', panel: 'G', title: 'Absolute MTD-selection change vs oracle', yLabel: 'Percentage points' },
   ];
-  const extractedPrior = [];
-  const priorStems = [];
-  for (const alpha of alphas) {
-    const values = {};
-    for (const prior of priors) {
-      values[prior.key] = {};
-      for (const [gap, rows] of Object.entries(gapRows)) {
-        const selectedRows = rows.filter((row) => Math.abs(num(row.Alpha_true) - alpha) < 1e-12 && `${row.CRM_r_Prior_a}|${row.CRM_r_Prior_b}` === prior.key);
-        if (selectedRows.length !== 12) throw new Error(`Expected 12 random-only rows for alpha=${alpha}, gap=${gap}, ${prior.label}; found ${selectedRows.length}.`);
-        const summary = metricRowsForRandom(selectedRows, prior.label);
-        values[prior.key][gap] = summary;
-        for (const metric of metricSpecs) extractedPrior.push({ Figure: 'Random prior sensitivity', Alpha: alpha, Gap: gap, Prior: prior.label, Metric: metric.title, Value: summary[metric.key], Scenarios_found: selectedRows[0].n_scenarios_found });
-      }
-    }
-    const panels = metricSpecs.map((metric) => {
-      const series = priors.map((prior) => ({ label: prior.label, color: prior.color, values: Object.keys(inputFiles).map((gap) => values[prior.key][gap][metric.key]) }));
-      return { title: `(${metric.panel}) ${metric.title}`, yLabel: metric.yLabel, categories: Object.keys(inputFiles), series, domain: rangeForMetric(metric, series.flatMap((line) => line.values)) };
-    });
-    const stem = `random_prior_sensitivity_alpha${tag(alpha)}`;
-    priorStems.push(stem);
-    await writeSvgOutputs(figureSvg({
-      title: `Random scenarios - Discount CRM prior sensitivity (alpha = ${alpha})`,
-      subtitle: 'Target gaps: 0.05, 0.10, and 0.15; 10,000 candidate scenarios per gap',
-      panels,
-      legend: { labels: priors.map((prior) => prior.label), colors: priors.map((prior) => prior.color), fontSize: 18 },
-    }), stem);
-  }
-  await mergePdfs(priorStems, 'random_prior_sensitivity_all_alphas.pdf');
-  await writeText(path.join(outDir, 'random_prior_sensitivity_extracted_data.csv'), simpleTable(extractedPrior, [
-    { label: 'Figure', value: 'Figure' }, { label: 'Alpha', value: 'Alpha' }, { label: 'Gap', value: 'Gap' }, { label: 'Prior', value: 'Prior' }, { label: 'Metric', value: 'Metric' }, { label: 'Value', value: 'Value' }, { label: 'Scenarios found', value: 'Scenarios_found' },
-  ]));
-
-  const oldFiles = {
-    '0.05': 'randomsce_targetgap0p05_table_summary.csv',
-    '0.10': 'randomsce_targetgap0p10_table_summary.csv',
-    '0.15': 'randomsce_targetgap0p15_table_summary.csv',
+  const oracle = {
+    key: 'oracle', label: 'Oracle: r-fixed, alpha = 0', color: '#222222', oracle: true,
+    matches: (row) => row.Model === 'CRM' && row.CRM_r_model === 'r_fixed' && Math.abs(num(row.Alpha_true)) < 1e-12,
   };
-  const oldRows = {};
-  for (const [gap, file] of Object.entries(oldFiles)) oldRows[gap] = await readCsv(path.join(oldRandomDir, file));
-  const fixedMethods = [
-    { key: 'boin', label: 'BOIN', color: palette[4], filter: (row) => row.Model === 'BOIN' },
-    { key: 'crm', label: 'CRM', color: palette[5], filter: (row) => row.Model === 'CRM' && row.CRM_r_model === 'r_fixed' },
-    { key: 'alpha', label: 'Alpha-CRM', color: palette[6], filter: (row) => row.Model === 'CRM' && row.CRM_r_model === 'alpha_crm' },
-    { key: 'ipcrm', label: 'IPCRM', color: palette[7], filter: (row) => row.Model === 'CRM' && row.CRM_r_model === 'cumu_crm' },
+  const priorMethods = priors.map((prior) => ({
+    key: `random-${prior.key}`,
+    label: `Discount CRM ${prior.label.replace('Beta', '')}`,
+    color: prior.color,
+    matches: (row, alpha) => row.Model === 'CRM' && row.CRM_r_model === 'random' &&
+      Math.abs(num(row.Alpha_true) - alpha) < 1e-12 && `${row.CRM_r_Prior_a}|${row.CRM_r_Prior_b}` === prior.key,
+  }));
+  const allMethods = [
+    { key: 'r-fixed', label: 'r-fixed CRM', color: palette[4], matches: (row, alpha) => row.Model === 'CRM' && row.CRM_r_model === 'r_fixed' && Math.abs(num(row.Alpha_true) - alpha) < 1e-12 },
+    { key: 'alpha-crm', label: 'Alpha-CRM', color: palette[5], matches: (row, alpha) => row.Model === 'CRM' && row.CRM_r_model === 'alpha_crm' && Math.abs(num(row.Alpha_true) - alpha) < 1e-12 },
+    { key: 'cumu-crm', label: 'Cumulative CRM', color: palette[6], matches: (row, alpha) => row.Model === 'CRM' && row.CRM_r_model === 'cumu_crm' && Math.abs(num(row.Alpha_true) - alpha) < 1e-12 },
+    ...priorMethods,
   ];
-  const methodSpecs = [...fixedMethods, ...priors.map((prior, index) => ({ key: `random-${prior.key}`, label: `Discount CRM ${prior.label.replace('Beta', '')}`, color: palette[index], filter: null, prior }))];
-  const extractedAll = [];
-  const allMethodStems = [];
-  for (const alpha of alphas) {
-    const values = {};
-    for (const method of methodSpecs) {
-      values[method.key] = {};
-      for (const gap of Object.keys(oldFiles)) {
-        const sourceRows = method.prior ? gapRows[gap] : oldRows[gap];
-        const selectedRows = sourceRows.filter((row) => {
-          if (Math.abs(num(row.Alpha_true) - alpha) >= 1e-12) return false;
-          if (method.prior) return row.Model === 'CRM' && row.CRM_r_model === 'random' && `${row.CRM_r_Prior_a}|${row.CRM_r_Prior_b}` === method.prior.key;
-          return method.filter(row);
-        });
-        if (selectedRows.length !== 12) throw new Error(`Expected 12 rows for alpha=${alpha}, gap=${gap}, ${method.label}; found ${selectedRows.length}.`);
-        const summary = metricRowsForRandom(selectedRows, method.label);
-        values[method.key][gap] = summary;
-        for (const metric of metricSpecs) extractedAll.push({ Figure: 'All methods plus random prior settings', Alpha: alpha, Gap: gap, Method: method.label, Metric: metric.title, Value: summary[metric.key], Scenarios_found: selectedRows[0].n_scenarios_found });
-      }
+
+  const selectRows = (rows, method, alpha, gap) => {
+    const selected = rows.filter((row) => method.matches(row, alpha));
+    if (selected.length !== 12) {
+      throw new Error(`Expected 12 metric rows for alpha=${alpha}, gap=${gap}, ${method.label}; found ${selected.length}.`);
     }
-    const panels = metricSpecs.map((metric) => {
-      const series = methodSpecs.map((method) => ({ label: method.label, color: method.color, values: Object.keys(oldFiles).map((gap) => values[method.key][gap][metric.key]) }));
-      return { title: `(${metric.panel}) ${metric.title}`, yLabel: metric.yLabel, categories: Object.keys(oldFiles), series, domain: rangeForMetric(metric, series.flatMap((line) => line.values)) };
-    });
-    const stem = `random_all_methods_and_priors_alpha${tag(alpha)}`;
-    allMethodStems.push(stem);
-    await writeSvgOutputs(figureSvg({
-      title: `Random scenarios - all methods and Discount CRM priors (alpha = ${alpha})`,
-      subtitle: 'CFO excluded. Fixed-method summaries from 7-20; Discount CRM prior summaries from 7-27.',
-      panels,
-      legend: { labels: methodSpecs.map((method) => method.label), colors: methodSpecs.map((method) => method.color), fontSize: 14 },
-    }), stem);
-  }
-  await mergePdfs(allMethodStems, 'random_all_methods_and_priors_all_alphas.pdf');
-  await writeText(path.join(outDir, 'random_all_methods_and_priors_extracted_data.csv'), simpleTable(extractedAll, [
-    { label: 'Figure', value: 'Figure' }, { label: 'Alpha', value: 'Alpha' }, { label: 'Gap', value: 'Gap' }, { label: 'Method', value: 'Method' }, { label: 'Metric', value: 'Metric' }, { label: 'Value', value: 'Value' }, { label: 'Scenarios found', value: 'Scenarios_found' },
-  ]));
+    return selected;
+  };
+
+  const buildFigureSet = async ({ figure, methods, stemPrefix, title, subtitle, legendFontSize }) => {
+    const extracted = [];
+    const stems = [];
+    for (const alpha of alphas) {
+      const values = {};
+      for (const method of methods) {
+        values[method.key] = {};
+        for (const [gap, rows] of Object.entries(gapRows)) {
+          const selectedRows = selectRows(rows, method, alpha, gap);
+          const summary = metricRowsForRandom(selectedRows, method.label, { oracle: Boolean(method.oracle) });
+          values[method.key][gap] = summary;
+          for (const metric of metricSpecs) {
+            extracted.push({ Figure: figure, Alpha: alpha, Gap: gap, Method: method.label, Metric: metric.title, Value: summary[metric.key], Scenarios_found: selectedRows[0].n_scenarios_found, Derived_oracle_quantity: Boolean(method.oracle && (metric.key === 'sampleSize' || metric.key === 'duration')) });
+          }
+        }
+      }
+      const panels = metricSpecs.map((metric) => {
+        const series = methods.map((method) => ({ label: method.label, color: method.color, values: Object.keys(inputFiles).map((gap) => values[method.key][gap][metric.key]) }));
+        return { title: `(${metric.panel}) ${metric.title}`, yLabel: metric.yLabel, categories: Object.keys(inputFiles), series, domain: rangeForMetric(metric, series.flatMap((line) => line.values)) };
+      });
+      const stem = `${stemPrefix}_alpha${tag(alpha)}`;
+      stems.push(stem);
+      await writeSvgOutputs(figureSvg({
+        title: `${title} (alpha = ${alpha})`,
+        subtitle,
+        panels,
+        legend: { labels: methods.map((method) => method.label), colors: methods.map((method) => method.color), fontSize: legendFontSize },
+      }), stem);
+    }
+    await mergePdfs(stems, `${stemPrefix}_all_alphas.pdf`);
+    await writeText(path.join(outDir, `${stemPrefix}_extracted_data.csv`), simpleTable(extracted, [
+      { label: 'Figure', value: 'Figure' }, { label: 'Alpha', value: 'Alpha' }, { label: 'Gap', value: 'Gap' }, { label: 'Method', value: 'Method' }, { label: 'Metric', value: 'Metric' }, { label: 'Value', value: 'Value' }, { label: 'Scenarios found', value: 'Scenarios_found' }, { label: 'Derived oracle quantity', value: 'Derived_oracle_quantity' },
+    ]));
+  };
+
+  await buildFigureSet({
+    figure: 'Random prior sensitivity',
+    methods: [...priorMethods, oracle],
+    stemPrefix: 'random_prior_sensitivity',
+    title: 'Random scenarios - Discount CRM prior sensitivity',
+    subtitle: 'Target gaps: 0.05, 0.10, and 0.15. Oracle = r-fixed CRM at alpha = 0; its duration is 56 days per administration.',
+    legendFontSize: 16,
+  });
+  await buildFigureSet({
+    figure: 'All methods and random priors',
+    methods: [...allMethods, oracle],
+    stemPrefix: 'random_all_methods_and_priors',
+    title: 'Random scenarios - all methods and Discount CRM priors',
+    subtitle: 'CFO excluded. Oracle = r-fixed CRM at alpha = 0; its duration is 56 days per administration.',
+    legendFontSize: 13,
+  });
 }
 
 function weightedMetric(values, weights) {
@@ -574,19 +582,14 @@ async function buildPhaseFigures() {
 async function main() {
   await fs.mkdir(outDir, { recursive: true });
   await buildRandomFigures();
-  await buildPhaseFigures();
   await writeText(path.join(outDir, 'README.txt'), [
-    'Generated 2026-07-26 from the Presentation 7-27-2026 result files.',
+    'Generated 2026-07-27 from the Presentation 7-27-2026 Raw Result files.',
     '',
-    'Random-prior figures: four six-panel figures (alpha 0, 0.3, 0.6, 0.9) comparing the four Beta priors for Discount CRM only.',
-    'All-method figures: four six-panel figures (same alphas) comparing BOIN, CRM, Alpha-CRM, IPCRM, and all four Discount CRM prior settings; CFO is excluded.',
-    'Phase I/II figures: three six-panel figures for each N (30 and 60) to cover scenarios 1-37. The figures compare BOIN12, U-BOIN, EffTox, AIDE phase I, and AIDE two-stage.',
+    'Random-prior figures: four seven-panel figures (alpha 0, 0.3, 0.6, 0.9) comparing the four Beta priors for Discount CRM and the r-fixed alpha=0 oracle.',
+    'All-method figures: four seven-panel figures (same alphas) comparing r-fixed CRM, Alpha-CRM, cumulative CRM, and all four Discount CRM prior settings, plus the oracle; CFO is excluded.',
+    'Panel G is the mean paired absolute MTD-selection difference from the oracle.',
+    'For the oracle only, sample size is the sum of the five average dose allocations (regular plus IPDE administrations) and duration is 56 days times that sample size, displayed in weeks.',
     '',
-    'Phase I/II metric definitions:',
-    '- True OBD selection: selection probability of OBD_Level_Utility3.',
-    '- Overdose selection: selection probability summed over doses with true DLT rate > 0.30.',
-    '- Patients allocated to true OBD: expected treated patients at the true OBD / total expected treated patients.',
-    '- Treated-patient DLT, efficacy, and utility: true dose-level values weighted by the method-specific expected number treated at each dose.',
   ].join('\n'));
 }
 

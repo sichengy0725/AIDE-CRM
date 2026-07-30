@@ -2,9 +2,10 @@
 ## AIDE Phase I/II designs (non-TITE)
 ##
 ## Two allocation options are available:
-##   1. "two_stage": toxicity-only AIDE until one dose reaches N_s1
-##      administrations, followed by efficacy-directed allocation among
-##      Stage-I admissible doses until one dose reaches N_s2 or Nmax is met.
+##   1. "two_stage": toxicity-only AIDE until the current dose reaches N_s1
+##      administrations and its allocation decision is to stay, followed by
+##      efficacy-directed allocation among Stage-I admissible doses until one
+##      dose reaches N_s2 or Nmax is met.
 ##   2. "one_stage": toxicity decisions define a local candidate set after
 ##      each cohort; efficacy-toxicity utility allocates within that set.
 ##
@@ -199,31 +200,104 @@ aide_phase12_expand_beta_prior <- function(prior, ndose, name) {
 
 ## Load the common JAGS implementation lazily so sourcing this trial-design
 ## file does not require rjags until an efficacy model is actually fitted.
-aide_phase12_load_efficacy_jags <- function() {
+aide_phase12_load_efficacy_jags <- function(require_standard_fitter = TRUE) {
   if (!requireNamespace("rjags", quietly = TRUE)) {
     stop(
       "The phase I/II efficacy model requires rjags and a working JAGS installation. ",
       "Install them before running simulate_AIDE_phase_I_II()."
     )
   }
-  if (!exists("fit_beta_binomial_efficacy", mode = "function")) {
+  if (isTRUE(require_standard_fitter) &&
+      !exists("fit_beta_binomial_efficacy", mode = "function")) {
     source("generate_dose_specific_beta_binomial_efficacy_comparison.R")
   }
-  if (!exists("fit_beta_binomial_efficacy", mode = "function")) {
+  if (isTRUE(require_standard_fitter) &&
+      !exists("fit_beta_binomial_efficacy", mode = "function")) {
     stop("Could not load fit_beta_binomial_efficacy().")
   }
   invisible(NULL)
 }
 
-## Fit the independent, dose-specific JAGS posterior described in
-## dose_specific_beta_binomial_efficacy_model.pdf:
-##   pi_Ej ~ Beta(a_Ej, b_Ej), r_Ej ~ Beta(a_rj, b_rj), and
-##   pi*_Ej = r_Ej + (1-r_Ej) pi_Ej.
-## No hierarchical borrowing is introduced across dose levels.
+## Produce the individual-level data needed when IPDE efficacy depends on a
+## patient's immediately preceding dose. The input order is used as the final
+## within-patient tie breaker if no cycle/time information is supplied.
+aide_phase12_previous_dose_efficacy_data <- function(admin, ndose) {
+  if (is.null(admin)) admin <- data.frame(dose = integer(0), eff = integer(0))
+  if (!all(c("dose", "eff") %in% names(admin))) {
+    stop("admin must contain dose and eff for the efficacy model.")
+  }
+  if (nrow(admin) == 0L) {
+    return(data.frame(
+      dose = integer(0), efficacy = integer(0), ipde = integer(0),
+      previous_dose = integer(0)
+    ))
+  }
+  if (any(!is.finite(admin$dose)) || any(admin$dose < 1L | admin$dose > ndose) ||
+      any(!admin$eff %in% c(0L, 1L))) {
+    stop("admin contains invalid dose or efficacy values.")
+  }
+
+  ipde <- if ("type" %in% names(admin)) admin$type == "retreat" else rep(FALSE, nrow(admin))
+  if (any(is.na(ipde))) stop("admin$type cannot be missing.")
+  if (any(ipde) && !"id" %in% names(admin)) {
+    stop("The previous_dose_additive efficacy model requires admin$id for recycled/IPDE administrations.")
+  }
+  id <- if ("id" %in% names(admin)) admin$id else seq_len(nrow(admin))
+  if (any(is.na(id))) stop("admin$id cannot be missing.")
+  cycle <- if ("ncycle" %in% names(admin)) {
+    admin$ncycle
+  } else if ("cycle" %in% names(admin)) {
+    admin$cycle
+  } else {
+    ave(seq_len(nrow(admin)), id, FUN = seq_along)
+  }
+  if (any(!is.finite(cycle))) stop("admin cycle values must be finite.")
+  time <- if ("t_start" %in% names(admin)) {
+    admin$t_start
+  } else if ("t_arrival" %in% names(admin)) {
+    admin$t_arrival
+  } else {
+    seq_len(nrow(admin))
+  }
+  if (any(!is.finite(time))) stop("admin time values must be finite.")
+
+  order_index <- order(id, cycle, time, seq_len(nrow(admin)))
+  dose <- as.integer(admin$dose[order_index])
+  efficacy <- as.integer(admin$eff[order_index])
+  ipde <- as.integer(ipde[order_index])
+  id <- id[order_index]
+  previous_dose <- rep.int(1L, length(dose))
+  for (rows in split(seq_along(dose), as.character(id))) {
+    if (ipde[rows[1L]] == 1L) {
+      stop("Each recycled/IPDE efficacy administration must follow an earlier administration for the same patient.")
+    }
+    if (length(rows) > 1L) {
+      for (k in 2:length(rows)) {
+        if (ipde[rows[k]] == 1L) previous_dose[rows[k]] <- dose[rows[k - 1L]]
+      }
+    }
+  }
+  data.frame(
+    dose = dose,
+    efficacy = efficacy,
+    ipde = ipde,
+    previous_dose = as.integer(previous_dose)
+  )
+}
+
+## Fit independent dose-specific beta-binomial efficacy probabilities. The
+## default model uses a dose-specific IPDE carryover probability. The optional
+## previous_dose_additive model uses p[current] + alpha * p[previous] for each
+## recycled administration, requiring individual-level data.
 aide_phase12_efficacy_posterior <- function(admin,
                                              ndose,
                                              efficacy_prior = c(1, 1),
                                              efficacy_carryover_prior = c(1, 9),
+                                             efficacy_model = c(
+                                               "dose_specific_carryover",
+                                               "previous_dose_additive"
+                                             ),
+                                             efficacy_additive_alpha_prior = c(1, 9),
                                              model_file = NULL,
                                              n_chains = 3L,
                                              n_adapt = 1000L,
@@ -232,12 +306,16 @@ aide_phase12_efficacy_posterior <- function(admin,
                                              thin = 2L,
                                              cache = NULL,
                                              threshold = NULL) {
+  efficacy_model <- match.arg(efficacy_model)
   efficacy_prior <- aide_phase12_expand_beta_prior(
     efficacy_prior, ndose, "efficacy_prior"
   )
   efficacy_carryover_prior <- aide_phase12_expand_beta_prior(
     efficacy_carryover_prior, ndose, "efficacy_carryover_prior"
   )
+  efficacy_additive_alpha_prior <- aide_phase12_expand_beta_prior(
+    efficacy_additive_alpha_prior, 1L, "efficacy_additive_alpha_prior"
+  )[1L, ]
   if (!is.null(threshold) &&
       (length(threshold) != 1L || !is.finite(threshold) || threshold <= 0 || threshold >= 1)) {
     stop("threshold must be NULL or a scalar in (0, 1).")
@@ -246,9 +324,7 @@ aide_phase12_efficacy_posterior <- function(admin,
     stop("cache must be NULL or an environment.")
   }
 
-  if (is.null(admin)) {
-    admin <- data.frame(dose = integer(0), eff = integer(0))
-  }
+  if (is.null(admin)) admin <- data.frame(dose = integer(0), eff = integer(0))
   if (nrow(admin) > 0L) {
     if (!all(c("dose", "eff") %in% names(admin))) {
       stop("admin must contain dose and eff for the efficacy model.")
@@ -273,53 +349,154 @@ aide_phase12_efficacy_posterior <- function(admin,
     efficacy = as.integer(admin$eff),
     stringsAsFactors = FALSE
   )
+  previous_dose_data <- if (efficacy_model == "previous_dose_additive") {
+    aide_phase12_previous_dose_efficacy_data(admin, ndose)
+  } else {
+    NULL
+  }
   model_key <- if (is.null(model_file)) "<default>" else as.character(model_file)
   cache_key <- paste(
-    "dose_specific_jags", ndose,
+    efficacy_model, ndose,
     paste(c(efficacy_prior), collapse = ","),
     paste(c(efficacy_carryover_prior), collapse = ","),
+    paste(c(efficacy_additive_alpha_prior), collapse = ","),
     model_key, n_chains, n_adapt, n_burnin, n_iter, thin,
-    paste(dose_data$dose, dose_data$group, dose_data$efficacy,
-          sep = ":", collapse = ";"),
+    if (efficacy_model == "previous_dose_additive") {
+      paste(previous_dose_data$dose, previous_dose_data$efficacy,
+            previous_dose_data$ipde, previous_dose_data$previous_dose,
+            sep = ":", collapse = ";")
+    } else {
+      paste(dose_data$dose, dose_data$group, dose_data$efficacy,
+            sep = ":", collapse = ";")
+    },
     sep = "|"
   )
   cache_name <- paste0("efficacy_", cache_key)
   base <- if (!is.null(cache) && exists(cache_name, envir = cache, inherits = FALSE)) {
     get(cache_name, envir = cache, inherits = FALSE)
   } else {
-    aide_phase12_load_efficacy_jags()
-    fit <- fit_beta_binomial_efficacy(
-      dose_data = dose_data,
-      a_r = efficacy_prior[, "a"],
-      b_r = efficacy_prior[, "b"],
-      a_carry = efficacy_carryover_prior[, "a"],
-      b_carry = efficacy_carryover_prior[, "b"],
-      prior_type = "dose_specific",
-      model_file = model_file,
-      n_chains = n_chains,
-      n_adapt = n_adapt,
-      n_burnin = n_burnin,
-      n_iter = n_iter,
-      thin = thin,
-      ndose = ndose
-    )
-    draws <- as.matrix(fit$samples)
-    parameter_draws <- function(parameter) {
-      columns <- paste0(parameter, "[", seq_len(ndose), "]")
-      if (!all(columns %in% colnames(draws))) {
-        stop("The JAGS efficacy fit did not return all ", parameter, " posterior draws.")
+    if (efficacy_model == "dose_specific_carryover") {
+      aide_phase12_load_efficacy_jags(require_standard_fitter = TRUE)
+      fit <- fit_beta_binomial_efficacy(
+        dose_data = dose_data,
+        a_r = efficacy_prior[, "a"],
+        b_r = efficacy_prior[, "b"],
+        a_carry = efficacy_carryover_prior[, "a"],
+        b_carry = efficacy_carryover_prior[, "b"],
+        prior_type = "dose_specific",
+        model_file = model_file,
+        n_chains = n_chains,
+        n_adapt = n_adapt,
+        n_burnin = n_burnin,
+        n_iter = n_iter,
+        thin = thin,
+        ndose = ndose
+      )
+      draws <- as.matrix(fit$samples)
+      parameter_draws <- function(parameter) {
+        columns <- paste0(parameter, "[", seq_len(ndose), "]")
+        if (!all(columns %in% colnames(draws))) {
+          stop("The JAGS efficacy fit did not return all ", parameter, " posterior draws.")
+        }
+        draws[, columns, drop = FALSE]
       }
-      draws[, columns, drop = FALSE]
+      result <- list(
+        n_regular = fit$counts$n_regular,
+        y_regular = fit$counts$y_regular,
+        n_ipde = fit$counts$n_ipde,
+        y_ipde = fit$counts$y_ipde,
+        regular_draws = parameter_draws("p_regular"),
+        carryover_draws = parameter_draws("r_e"),
+        ipde_draws = parameter_draws("p_ipde"),
+        alpha_draws = NULL,
+        model_file = model_file
+      )
+    } else {
+      aide_phase12_load_efficacy_jags(require_standard_fitter = FALSE)
+      model_path <- if (is.null(model_file)) {
+        "previous_dose_additive_beta_binomial_efficacy.jags"
+      } else {
+        model_file
+      }
+      if (!file.exists(model_path)) {
+        stop("Cannot find JAGS efficacy model file: ", model_path)
+      }
+      fit_data <- previous_dose_data
+      ## JAGS cannot define an empty indexed loop; an unobserved sentinel row
+      ## yields the beta priors unchanged when no administration is available.
+      if (nrow(fit_data) == 0L) {
+        fit_data <- data.frame(
+          dose = 1L, efficacy = NA_integer_, ipde = 0L, previous_dose = 1L
+        )
+      }
+      jags_data <- list(
+        N = nrow(fit_data),
+        ndose = ndose,
+        eff = as.integer(fit_data$efficacy),
+        dose = as.integer(fit_data$dose),
+        previous_dose = as.integer(fit_data$previous_dose),
+        ipde = as.integer(fit_data$ipde),
+        a_regular = efficacy_prior[, "a"],
+        b_regular = efficacy_prior[, "b"],
+        a_alpha = as.numeric(efficacy_additive_alpha_prior["a"]),
+        b_alpha = as.numeric(efficacy_additive_alpha_prior["b"])
+      )
+      jm <- rjags::jags.model(
+        file = model_path, data = jags_data, n.chains = n_chains,
+        n.adapt = n_adapt, quiet = TRUE
+      )
+      stats::update(jm, n.iter = n_burnin, progress.bar = "none")
+      draws <- as.matrix(rjags::coda.samples(
+        model = jm, variable.names = c("alpha", "p_regular"),
+        n.iter = n_iter, thin = thin, progress.bar = "none"
+      ))
+      p_columns <- paste0("p_regular[", seq_len(ndose), "]")
+      if (!all(c("alpha", p_columns) %in% colnames(draws))) {
+        stop("The additive previous-dose efficacy fit did not return alpha and all p_regular draws.")
+      }
+      regular_draws <- draws[, p_columns, drop = FALSE]
+      alpha_draws <- as.numeric(draws[, "alpha"])
+      count_by_dose <- function(rows) {
+        out <- numeric(ndose)
+        if (length(rows) > 0L) {
+          out <- tabulate(previous_dose_data$dose[rows], nbins = ndose)
+        }
+        out
+      }
+      sum_by_dose <- function(rows) {
+        out <- numeric(ndose)
+        if (length(rows) > 0L) {
+          sums <- tapply(
+            previous_dose_data$efficacy[rows], previous_dose_data$dose[rows], sum
+          )
+          out[as.integer(names(sums))] <- as.numeric(sums)
+        }
+        out
+      }
+      regular_rows <- which(previous_dose_data$ipde == 0L)
+      ipde_rows <- which(previous_dose_data$ipde == 1L)
+      n_regular <- count_by_dose(regular_rows)
+      y_regular <- sum_by_dose(regular_rows)
+      n_ipde <- count_by_dose(ipde_rows)
+      y_ipde <- sum_by_dose(ipde_rows)
+      ipde_draws <- regular_draws + sweep(regular_draws, 1L, alpha_draws, "*")
+      ipde_draws[] <- pmin(1, ipde_draws)
+      result <- list(
+        n_regular = n_regular,
+        y_regular = y_regular,
+        n_ipde = n_ipde,
+        y_ipde = y_ipde,
+        regular_draws = regular_draws,
+        carryover_draws = matrix(
+          alpha_draws, nrow = length(alpha_draws), ncol = ndose
+        ),
+        ## This is a same-dose reference only. Recycled posterior predictions
+        ## use the actual current/previous dose pair in the recycle gate.
+        ipde_draws = ipde_draws,
+        alpha_draws = alpha_draws,
+        model_file = model_path
+      )
     }
-    result <- list(
-      n_regular = fit$counts$n_regular,
-      y_regular = fit$counts$y_regular,
-      n_ipde = fit$counts$n_ipde,
-      y_ipde = fit$counts$y_ipde,
-      regular_draws = parameter_draws("p_regular"),
-      carryover_draws = parameter_draws("r_e"),
-      ipde_draws = parameter_draws("p_ipde")
-    )
     if (!is.null(cache)) assign(cache_name, result, envir = cache)
     result
   }
@@ -341,10 +518,14 @@ aide_phase12_efficacy_posterior <- function(admin,
     carryover_posterior_mean = colMeans(base$carryover_draws),
     ipde_posterior_mean = colMeans(base$ipde_draws),
     prob_regular_below_threshold = prob_below_threshold,
+    efficacy_model = efficacy_model,
     efficacy_prior = efficacy_prior,
     efficacy_carryover_prior = efficacy_carryover_prior,
+    efficacy_additive_alpha_prior = efficacy_additive_alpha_prior,
+    regular_draws = base$regular_draws,
+    alpha_draws = base$alpha_draws,
     mcmc = list(
-      model_file = model_file,
+      model_file = base$model_file,
       n_chains = as.integer(n_chains),
       n_adapt = as.integer(n_adapt),
       n_burnin = as.integer(n_burnin),
@@ -358,17 +539,23 @@ aide_phase12_efficacy_posterior <- function(admin,
 aide_phase12_dose_specific_efficacy_recycle_gate <- function(admin,
                                                               current_dose,
                                                               next_dose,
-                                                              ndose,
-                                                              efficacy_prior = c(1, 1),
-                                                              efficacy_carryover_prior = c(1, 9),
-                                                              efficacy_model_file = NULL,
+                                                               ndose,
+                                                               efficacy_prior = c(1, 1),
+                                                               efficacy_carryover_prior = c(1, 9),
+                                                               efficacy_model = c(
+                                                                 "dose_specific_carryover",
+                                                                 "previous_dose_additive"
+                                                               ),
+                                                               efficacy_additive_alpha_prior = c(1, 9),
+                                                               efficacy_model_file = NULL,
                                                               efficacy_n_chains = 3L,
                                                               efficacy_n_adapt = 1000L,
                                                               efficacy_n_burnin = 1000L,
                                                               efficacy_n_iter = 4000L,
                                                               efficacy_thin = 2L,
-                                                              cache = NULL,
-                                                              delta = 0.20) {
+                                                               cache = NULL,
+                                                               delta = 0.20) {
+  efficacy_model <- match.arg(efficacy_model)
   if (length(current_dose) != 1L || !is.finite(current_dose) ||
       current_dose < 1L || current_dose > ndose ||
       current_dose != as.integer(current_dose)) {
@@ -387,6 +574,8 @@ aide_phase12_dose_specific_efficacy_recycle_gate <- function(admin,
     ndose = ndose,
     efficacy_prior = efficacy_prior,
     efficacy_carryover_prior = efficacy_carryover_prior,
+    efficacy_model = efficacy_model,
+    efficacy_additive_alpha_prior = efficacy_additive_alpha_prior,
     model_file = efficacy_model_file,
     n_chains = efficacy_n_chains,
     n_adapt = efficacy_n_adapt,
@@ -395,14 +584,25 @@ aide_phase12_dose_specific_efficacy_recycle_gate <- function(admin,
     thin = efficacy_thin,
     cache = cache
   )
-  increment <- posterior$ipde_posterior_mean[as.integer(next_dose)] -
-    posterior$regular_posterior_mean[as.integer(current_dose)]
+  if (efficacy_model == "previous_dose_additive") {
+    theta_ipde_next_draws <- pmin(
+      1,
+      posterior$regular_draws[, as.integer(next_dose)] +
+        posterior$alpha_draws * posterior$regular_draws[, as.integer(current_dose)]
+    )
+    theta_ipde_next <- mean(theta_ipde_next_draws)
+    r_next <- mean(posterior$alpha_draws)
+  } else {
+    theta_ipde_next <- posterior$ipde_posterior_mean[as.integer(next_dose)]
+    r_next <- posterior$carryover_posterior_mean[as.integer(next_dose)]
+  }
+  increment <- theta_ipde_next - posterior$regular_posterior_mean[as.integer(current_dose)]
   list(
     allowed = increment > delta,
     posterior_mean_increment = increment,
     p_regular_current = posterior$regular_posterior_mean[as.integer(current_dose)],
-    r_next = posterior$carryover_posterior_mean[as.integer(next_dose)],
-    theta_ipde_next = posterior$ipde_posterior_mean[as.integer(next_dose)],
+    r_next = r_next,
+    theta_ipde_next = theta_ipde_next,
     delta = delta,
     current_dose = as.integer(current_dose),
     next_dose = as.integer(next_dose),
@@ -481,6 +681,11 @@ aide_phase12_efficacy_summary <- function(admin,
                                            ndose,
                                            efficacy_prior = c(1, 1),
                                            efficacy_carryover_prior = c(1, 9),
+                                           efficacy_model = c(
+                                             "dose_specific_carryover",
+                                             "previous_dose_additive"
+                                           ),
+                                           efficacy_additive_alpha_prior = c(1, 9),
                                            efficacy_model_file = NULL,
                                            efficacy_n_chains = 3L,
                                            efficacy_n_adapt = 1000L,
@@ -492,6 +697,7 @@ aide_phase12_efficacy_summary <- function(admin,
                                            futility_cutoff = 0.95,
                                            min_eff_n_for_futility = 0L,
                                            futility_eliminated = NULL) {
+  efficacy_model <- match.arg(efficacy_model)
   if (length(efficacy_threshold) != 1L || !is.finite(efficacy_threshold) ||
       efficacy_threshold <= 0 || efficacy_threshold >= 1) {
     stop("efficacy_threshold must be a scalar in (0, 1).")
@@ -510,6 +716,8 @@ aide_phase12_efficacy_summary <- function(admin,
     ndose = ndose,
     efficacy_prior = efficacy_prior,
     efficacy_carryover_prior = efficacy_carryover_prior,
+    efficacy_model = efficacy_model,
+    efficacy_additive_alpha_prior = efficacy_additive_alpha_prior,
     model_file = efficacy_model_file,
     n_chains = efficacy_n_chains,
     n_adapt = efficacy_n_adapt,
@@ -602,6 +810,11 @@ aide_phase12_utility <- function(admin,
                                   ndose,
                                   efficacy_prior = c(1, 1),
                                   efficacy_carryover_prior = c(1, 9),
+                                  efficacy_model = c(
+                                    "dose_specific_carryover",
+                                    "previous_dose_additive"
+                                  ),
+                                  efficacy_additive_alpha_prior = c(1, 9),
                                   efficacy_model_file = NULL,
                                   efficacy_n_chains = 3L,
                                   efficacy_n_adapt = 1000L,
@@ -615,6 +828,7 @@ aide_phase12_utility <- function(admin,
                                   utility_scores = c(u00 = 0, u01 = 1,
                                                      u10 = 0, u11 = 0),
                                   utility_weight = NULL) {
+  efficacy_model <- match.arg(efficacy_model)
   if (length(utility_type) != 1L || is.na(utility_type) ||
       !utility_type %in% 1:3) {
     stop("utility_type must be 1, 2, or 3.")
@@ -640,6 +854,8 @@ aide_phase12_utility <- function(admin,
     ndose = ndose,
     efficacy_prior = efficacy_prior,
     efficacy_carryover_prior = efficacy_carryover_prior,
+    efficacy_model = efficacy_model,
+    efficacy_additive_alpha_prior = efficacy_additive_alpha_prior,
     model_file = efficacy_model_file,
     n_chains = efficacy_n_chains,
     n_adapt = efficacy_n_adapt,
@@ -694,8 +910,9 @@ simulate_AIDE_phase_I_II <- function(
     allocation = c("two_stage", "one_stage"),
 
     ## Trial size. N_s1, N_s2, and Nmax count administrations, consistent
-    ## with AIDE.  For two-stage allocation, Stage I ends when any dose
-    ## reaches N_s1 and Stage II ends when any dose reaches N_s2 or Nmax.
+    ## with AIDE.  For two-stage allocation, Stage I ends when the current
+    ## dose reaches N_s1 and the allocation decision is to stay; Stage II
+    ## ends when any dose reaches N_s2 or Nmax.
     Nmax = 30L,
     N_s1 = 15L,
     N_s2 = Nmax,
@@ -736,7 +953,10 @@ simulate_AIDE_phase_I_II <- function(
     dose_cap = 3L,
 
     ## CRM settings, used only when model = "CRM".
-    crm_r_model = c("fixed", "random", "level", "alpha_crm", "cumu_crm", "ipcrm"),
+    crm_r_model = c(
+      "fixed", "random", "level", "alpha_crm", "cumu_crm", "ipcrm",
+      "previous_dose", "previous_dose_additive"
+    ),
     crm_skeleton = NULL,
     crm_alpha_sd = 2,
     crm_a_r = 1,
@@ -745,6 +965,7 @@ simulate_AIDE_phase_I_II <- function(
     crm_fixed_model_file = "fix_CRM.bug",
     crm_random_model_file = "random_CRM.bug",
     crm_level_model_file = "random_CRM_level.bug",
+    crm_previous_dose_model_file = "previous_dose_additive_CRM.bug",
     crm_n_chains = 2,
     crm_n_adapt = 500,
     crm_n_burnin = 500,
@@ -754,6 +975,8 @@ simulate_AIDE_phase_I_II <- function(
     ## Efficacy model and allocation utility.
     efficacy_prior = c(1, 1),
     efficacy_carryover_prior = c(1, 9),
+    efficacy_model = c("dose_specific_carryover", "previous_dose_additive"),
+    efficacy_additive_alpha_prior = c(1, 9),
     efficacy_model_file = NULL,
     efficacy_n_chains = 3L,
     efficacy_n_adapt = 1000L,
@@ -797,6 +1020,7 @@ simulate_AIDE_phase_I_II <- function(
   }
   decision_method <- match.arg(decision_method)
   crm_r_model <- crm_normalize_r_model(match.arg(crm_r_model))
+  efficacy_model <- match.arg(efficacy_model)
   if (is.null(mtd_method)) mtd_method <- decision_method
   mtd_method <- match.arg(mtd_method, c("boin", "approx1", "approx2"))
 
@@ -912,6 +1136,9 @@ simulate_AIDE_phase_I_II <- function(
   efficacy_carryover_prior <- aide_phase12_expand_beta_prior(
     efficacy_carryover_prior, ndose, "efficacy_carryover_prior"
   )
+  efficacy_additive_alpha_prior <- aide_phase12_expand_beta_prior(
+    efficacy_additive_alpha_prior, 1L, "efficacy_additive_alpha_prior"
+  )[1L, ]
   efficacy_mcmc <- as.integer(c(
     efficacy_n_chains, efficacy_n_adapt, efficacy_n_burnin,
     efficacy_n_iter, efficacy_thin
@@ -926,7 +1153,9 @@ simulate_AIDE_phase_I_II <- function(
   efficacy_n_burnin <- efficacy_mcmc[3L]
   efficacy_n_iter <- efficacy_mcmc[4L]
   efficacy_thin <- efficacy_mcmc[5L]
-  aide_phase12_load_efficacy_jags()
+  aide_phase12_load_efficacy_jags(
+    require_standard_fitter = efficacy_model == "dose_specific_carryover"
+  )
   apply_random_crm_recycle_toxicity_rule <- aide_phase12_validate_logical_flag(
     apply_random_crm_recycle_toxicity_rule,
     "apply_random_crm_recycle_toxicity_rule"
@@ -1033,6 +1262,8 @@ simulate_AIDE_phase_I_II <- function(
       ndose = ndose,
       efficacy_prior = efficacy_prior,
       efficacy_carryover_prior = efficacy_carryover_prior,
+      efficacy_model = efficacy_model,
+      efficacy_additive_alpha_prior = efficacy_additive_alpha_prior,
       efficacy_model_file = efficacy_model_file,
       efficacy_n_chains = efficacy_n_chains,
       efficacy_n_adapt = efficacy_n_adapt,
@@ -1053,6 +1284,8 @@ simulate_AIDE_phase_I_II <- function(
       ndose = ndose,
       efficacy_prior = efficacy_prior,
       efficacy_carryover_prior = efficacy_carryover_prior,
+      efficacy_model = efficacy_model,
+      efficacy_additive_alpha_prior = efficacy_additive_alpha_prior,
       efficacy_model_file = efficacy_model_file,
       efficacy_n_chains = efficacy_n_chains,
       efficacy_n_adapt = efficacy_n_adapt,
@@ -1074,6 +1307,8 @@ simulate_AIDE_phase_I_II <- function(
       ndose = ndose,
       efficacy_prior = efficacy_prior,
       efficacy_carryover_prior = efficacy_carryover_prior,
+      efficacy_model = efficacy_model,
+      efficacy_additive_alpha_prior = efficacy_additive_alpha_prior,
       efficacy_model_file = efficacy_model_file,
       efficacy_n_chains = efficacy_n_chains,
       efficacy_n_adapt = efficacy_n_adapt,
@@ -1616,6 +1851,7 @@ simulate_AIDE_phase_I_II <- function(
       fixed_model_file = crm_fixed_model_file,
       random_model_file = crm_random_model_file,
       level_model_file = crm_level_model_file,
+      previous_dose_model_file = crm_previous_dose_model_file,
       n_chains = crm_n_chains,
       n_adapt = crm_n_adapt,
       n_burnin = crm_n_burnin,
@@ -1668,6 +1904,7 @@ simulate_AIDE_phase_I_II <- function(
       fixed_model_file = crm_fixed_model_file,
       random_model_file = crm_random_model_file,
       level_model_file = crm_level_model_file,
+      previous_dose_model_file = crm_previous_dose_model_file,
       n_chains = crm_n_chains,
       n_adapt = crm_n_adapt,
       n_burnin = crm_n_burnin,
@@ -1718,6 +1955,7 @@ simulate_AIDE_phase_I_II <- function(
       fixed_model_file = crm_fixed_model_file,
       random_model_file = crm_random_model_file,
       level_model_file = crm_level_model_file,
+      previous_dose_model_file = crm_previous_dose_model_file,
       n_chains = crm_n_chains,
       n_adapt = crm_n_adapt,
       n_burnin = crm_n_burnin,
@@ -1818,14 +2056,16 @@ simulate_AIDE_phase_I_II <- function(
   stage1_fit <- NULL
   stage1_futility <- NULL
   stage1_admissible <- rep(FALSE, ndose)
+  stage1_transition_dose <- NA_integer_
 
   if (allocation == "two_stage") {
     ## Stage I: standard AIDE toxicity allocation. Efficacy does not rank
     ## doses.  A dose is assessed for efficacy futility only after it has just
     ## been treated; once eliminated, it is excluded from later allocation and
-    ## IPDE screening. Stage I ends only after a single dose has accumulated
-    ## N_s1 administrations, not when the total reaches N_s1.
-    while (nrow(admin) < Nmax && !earlystop && !dose_threshold_reached(N_s1)) {
+    ## IPDE screening. Stage I ends only after the current dose has
+    ## accumulated N_s1 administrations and the allocation decision remains
+    ## at that dose; reaching N_s1 alone does not trigger the transition.
+    while (nrow(admin) < Nmax && !earlystop) {
       futility_before <- futility_state()
       if (apply_early_stop_rule("stage1")) break
       if (toxicity_eliminated[current_dose] == 1L ||
@@ -1835,8 +2075,7 @@ simulate_AIDE_phase_I_II <- function(
       }
       n_to_enroll <- min(
         C,
-        Nmax - nrow(admin),
-        N_s1 - toxicity_counts()$n[current_dose]
+        Nmax - nrow(admin)
       )
       if (!enroll_cohort(
         current_dose, "stage1", n_to_enroll, futility = futility_before
@@ -1847,7 +2086,6 @@ simulate_AIDE_phase_I_II <- function(
       update_toxicity_elimination()
       futility_after <- evaluate_current_dose_futility(current_dose)
       if (apply_early_stop_rule("stage1")) break
-      if (dose_threshold_reached(N_s1)) break
 
       tox_move_out <- toxicity_move(current_dose)
       absorb_toxicity_model_elimination(tox_move_out)
@@ -1869,6 +2107,13 @@ simulate_AIDE_phase_I_II <- function(
       if (allocated_dose == 99L) {
         if (apply_early_stop_rule("stage1")) break
         stop_reason <- "no_safe_nonfutile_stage1_candidate"
+        break
+      }
+      if (toxicity_counts()$n[current_dose] >= N_s1 &&
+          isTRUE(tox_move_out$action == "stay") &&
+          tox_move_out$next_dose == current_dose &&
+          allocated_dose == current_dose) {
+        stage1_transition_dose <- as.integer(current_dose)
         break
       }
       current_dose <- allocated_dose
@@ -2053,7 +2298,8 @@ simulate_AIDE_phase_I_II <- function(
         as.integer(admin$dose[admin$stage == "stage1"]),
         nbins = ndose
       ),
-      threshold_reached = dose_threshold_reached(N_s1),
+      threshold_reached = !is.na(stage1_transition_dose),
+      transition_dose = stage1_transition_dose,
       MTD = if (is.null(stage1_fit)) NA_integer_ else stage1_fit$MTD,
       toxicity_fit = stage1_fit,
       efficacy = stage1_futility,
@@ -2115,9 +2361,10 @@ simulate_AIDE_phase_I_II <- function(
         efficacy = list(
           enabled = apply_random_crm_recycle_efficacy_rule,
           delta = random_crm_recycle_efficacy_delta,
-          model = "dose_specific_beta_binomial_with_dose_specific_carryover",
+          model = efficacy_model,
           regular_prior = efficacy_prior,
           carryover_prior = efficacy_carryover_prior,
+          additive_alpha_prior = efficacy_additive_alpha_prior,
           jags_model_file = efficacy_model_file,
           jags_n_chains = efficacy_n_chains,
           jags_n_adapt = efficacy_n_adapt,

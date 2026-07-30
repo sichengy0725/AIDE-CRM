@@ -28,12 +28,40 @@ phase12_formals <- formals(simulate_AIDE_phase_I_II)
 stopifnot(
   identical(phase12_formals$m_U, 6L),
   all(c("continuous", "ipde_first") %in%
-      eval(phase12_formals$enrollment_scheme))
+      eval(phase12_formals$enrollment_scheme)),
+  all(c("previous_dose") %in% eval(phase12_formals$crm_r_model)),
+  all(c("dose_specific_carryover", "previous_dose_additive") %in%
+      eval(phase12_formals$efficacy_model))
 )
 stopifnot(
   !aide_phase12_dose_threshold_reached(c(3L, 3L, 3L), 6L),
   aide_phase12_dose_threshold_reached(c(3L, 6L, 3L), 6L)
 )
+
+## The additive previous-dose models must pair a recycled administration with
+## that same patient's immediately preceding dose, not the last global dose.
+previous_dose_admin <- data.frame(
+  id = c(1L, 2L, 1L, 2L),
+  ncycle = c(1L, 1L, 2L, 2L),
+  dose = c(1L, 2L, 3L, 1L),
+  y = c(0L, 0L, 0L, 1L),
+  eff = c(0L, 1L, 1L, 0L),
+  type = c("new", "new", "retreat", "retreat")
+)
+tox_previous_dose <- crm_previous_dose_index(
+  crm_prepare_dat(previous_dose_admin, ndose = 3L)
+)
+stopifnot(identical(tox_previous_dose, c(1L, 1L, 1L, 2L)))
+eff_previous_dose <- aide_phase12_previous_dose_efficacy_data(
+  previous_dose_admin, ndose = 3L
+)
+stopifnot(
+  identical(eff_previous_dose$dose, c(1L, 3L, 2L, 1L)),
+  identical(eff_previous_dose$ipde, c(0L, 1L, 0L, 1L)),
+  identical(eff_previous_dose$previous_dose, c(1L, 1L, 1L, 2L))
+)
+stopifnot(file.exists("previous_dose_additive_CRM.bug"))
+stopifnot(file.exists("previous_dose_additive_beta_binomial_efficacy.jags"))
 
 ## The efficacy-futility rule uses the observed efficacy count at the dose:
 ## Pr(p_E < eta | y, n) = pbeta(eta, y + 1, n - y + 1).
@@ -296,9 +324,24 @@ stage2_counts <- tabulate(
 )
 assert_true(
   nrow(two_stage$admin[two_stage$admin$stage == "stage2", , drop = FALSE]) == 0L ||
-    any(stage1_counts >= common_args$N_s1),
-  "Stage II began before any dose reached N_s1."
+    isTRUE(two_stage$stage1$threshold_reached),
+  "Stage II began before a dose reached N_s1 with a stay decision."
 )
+if (isTRUE(two_stage$stage1$threshold_reached)) {
+  transition_rows <- subset(
+    two_stage$decision_log,
+    stage == "stage1" &
+      current_dose == two_stage$stage1$transition_dose &
+      n_current >= common_args$N_s1 &
+      toxicity_action == "stay" &
+      toxicity_next_dose == current_dose &
+      allocated_dose == current_dose
+  )
+  assert_true(
+    nrow(transition_rows) > 0L,
+    "Stage I transition was not preceded by a stay decision at N_s1."
+  )
+}
 assert_true(
   max(stage1_counts + stage2_counts) <= common_args$N_s2,
   "Two-stage design enrolled more than N_s2 administrations at a dose."

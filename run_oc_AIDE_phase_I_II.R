@@ -233,7 +233,8 @@ seed_base <- 1L
 scenario_id_list <- 1:37
 
 ## For two-stage allocation, N_s1 and N_s2 are per-dose administration
-## thresholds. One-stage does not use either threshold.
+## thresholds. Stage I transitions at N_s1 only after a stay decision at the
+## current dose; Stage II stops at N_s2. One-stage does not use either threshold.
 two_stage_sizes <- data.frame(
   allocation = "two_stage",
   Nmax = c(30L, 60L),

@@ -1,0 +1,50 @@
+model {
+
+  ############################################################
+  # Additive previous-dose CRM toxicity model
+  #
+  # For patient i receiving dose j = dose[i], let previous_dose[i]
+  # denote the last dose received by that same patient. The marginal
+  # CRM toxicity probabilities are p[j].
+  #
+  # Regular administration:
+  #   Pr(Y[i] = 1) = p[dose[i]]
+  #
+  # Recycled/IPDE administration:
+  #   Pr(Y[i] = 1) = min(1, p[dose[i]] + alpha * p[previous_dose[i]])
+  #
+  # Required data:
+  #   N                 : total number of administrations
+  #   J                 : number of dose levels
+  #   y[i]              : DLT outcome, 0/1
+  #   dose[i]           : current dose, integer 1,...,J
+  #   previous_dose[i]  : patient's immediately preceding dose, 1,...,J
+  #   ipde[i]           : 0 = regular, 1 = recycled/IPDE administration
+  #   q[j]              : CRM skeleton probability for dose j
+  #   tau_beta          : precision for the CRM beta prior
+  #   a_alpha, b_alpha  : beta-prior parameters for carryover alpha
+  #
+  # previous_dose[i] must be a valid dose index even for regular rows;
+  # use any valid sentinel (for example, 1) when ipde[i] = 0.
+  ############################################################
+
+  beta ~ dnorm(0, tau_beta)
+  alpha ~ dbeta(a_alpha, b_alpha)
+
+  for (j in 1:J) {
+    # CRM power-model marginal toxicity at dose j.
+    p[j] <- pow(q[j], exp(beta))
+  }
+
+  for (i in 1:N) {
+    theta_regular[i] <- p[dose[i]]
+    theta_ipde[i] <- min(
+      1,
+      p[dose[i]] + alpha * p[previous_dose[i]]
+    )
+    theta[i] <- (1 - ipde[i]) * theta_regular[i] +
+                ipde[i] * theta_ipde[i]
+
+    y[i] ~ dbern(theta[i])
+  }
+}
