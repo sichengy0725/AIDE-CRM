@@ -149,9 +149,13 @@ make_phase12_config_tag <- function(task) {
     "-u", task$utility_type,
     "-l", fmt_short(task$lambda_T),
     "-en", enrollment_tag,
+    "-tm", task$crm_r_model,
+    "-em", task$efficacy_model,
     "-rp", fmt_param(task$crm_a_r), "x", fmt_param(task$crm_b_r),
     "-ep", fmt_param(task$efficacy_a), "x", fmt_param(task$efficacy_b),
     "-cp", fmt_param(task$carry_a), "x", fmt_param(task$carry_b),
+    "-ap", fmt_param(task$efficacy_additive_alpha_a), "x",
+    fmt_param(task$efficacy_additive_alpha_b),
     "-w", fmt_short(task$T_assess),
     "-c", fmt_short(task$C),
     "-cyc", fmt_short(task$cycle_max),
@@ -251,18 +255,33 @@ one_stage_sizes <- data.frame(
 )
 design_size_grid <- rbind(two_stage_sizes, one_stage_sizes)
 
+## The default comparison pairs the existing random-carryover models with the
+## additive previous-dose models. Add rows to compare other valid pairings.
+model_grid <- data.frame(
+  model_id = c("random_carryover", "previous_dose_additive"),
+  crm_r_model = c("random", "previous_dose"),
+  efficacy_model = c("dose_specific_carryover", "previous_dose_additive"),
+  stringsAsFactors = FALSE
+)
+
+## Beta(a, b) prior for random CRM r or the additive toxicity alpha,
+## depending on crm_r_model.
 crm_prior_grid <- data.frame(
   crm_prior_id = "r_beta_0p15_0p85",
   crm_a_r = 0.15,
   crm_b_r = 0.85,
   stringsAsFactors = FALSE
 )
+## The carryover prior applies to dose_specific_carryover. The additive-alpha
+## prior applies to previous_dose_additive efficacy.
 efficacy_prior_grid <- data.frame(
   efficacy_prior_id = "regular_beta_0p15_0p85_carry_beta_0p15_0p85",
   efficacy_a = 0.15,
   efficacy_b = 0.85,
   carry_a = 0.15,
   carry_b = 0.85,
+  efficacy_additive_alpha_a = 0.15,
+  efficacy_additive_alpha_b = 0.85,
   stringsAsFactors = FALSE
 )
 enrollment_schemes <- data.frame(
@@ -338,6 +357,7 @@ setting_grid <- Reduce(
   cross_join,
   list(
     design_size_grid,
+    model_grid,
     crm_prior_grid,
     efficacy_prior_grid,
     enrollment_schemes,
@@ -378,7 +398,7 @@ run_one_phase12_task <- function(task) {
   dir.create(outdir, recursive = TRUE, showWarnings = FALSE)
 
   scenario_name <- paste0("P12-SC", task$Scenario)
-  method_tag <- "phase12_random"
+  method_tag <- paste0("phase12_", task$model_id)
   filename <- paste0(
     scenario_name,
     "-CRM-", method_tag,
@@ -417,9 +437,13 @@ run_one_phase12_task <- function(task) {
     cat("Allocation:", task$allocation, "\n")
     cat("Nmax / N_s1 / N_s2:", task$Nmax, task$N_s1, task$N_s2, "\n")
     cat("Target:", task$target, "\n")
+    cat("CRM r model:", task$crm_r_model, "\n")
     cat("CRM prior a / b:", task$crm_a_r, task$crm_b_r, "\n")
+    cat("Efficacy model:", task$efficacy_model, "\n")
     cat("Efficacy prior a / b:", task$efficacy_a, task$efficacy_b, "\n")
     cat("Carryover prior a / b:", task$carry_a, task$carry_b, "\n")
+    cat("Additive efficacy alpha prior a / b:",
+        task$efficacy_additive_alpha_a, task$efficacy_additive_alpha_b, "\n")
     cat("Utility type / lambda_T:", task$utility_type, task$lambda_T, "\n")
     cat("Enrollment scheme:", task$enrollment_scheme, "\n")
     cat("Arrival rate:", task$arrival_rate, "\n")
@@ -450,7 +474,7 @@ run_one_phase12_task <- function(task) {
 
       model = "CRM",
       target = task$target,
-      crm_r_model = "random",
+      crm_r_model = task$crm_r_model,
       crm_skeleton = task$crm_skeleton,
       crm_alpha_sd = task$crm_alpha_sd,
       crm_a_r = task$crm_a_r,
@@ -458,6 +482,10 @@ run_one_phase12_task <- function(task) {
 
       efficacy_prior = c(task$efficacy_a, task$efficacy_b),
       efficacy_carryover_prior = c(task$carry_a, task$carry_b),
+      efficacy_model = task$efficacy_model,
+      efficacy_additive_alpha_prior = c(
+        task$efficacy_additive_alpha_a, task$efficacy_additive_alpha_b
+      ),
       utility_type = task$utility_type,
       lambda_T = task$lambda_T,
       utility_scores = task$utility_scores,
@@ -488,6 +516,12 @@ run_one_phase12_task <- function(task) {
       utility_type = task$utility_type
     )
     result$runner_settings <- list(
+      model_id = task$model_id,
+      crm_r_model = task$crm_r_model,
+      efficacy_model = task$efficacy_model,
+      efficacy_additive_alpha_prior = c(
+        task$efficacy_additive_alpha_a, task$efficacy_additive_alpha_b
+      ),
       utility_scores = task$utility_scores,
       m_U = task$m_U,
       cycle_max = task$cycle_max,
@@ -561,6 +595,8 @@ for (setting_row in seq_len(nrow(setting_grid))) {
       Nmax = as.integer(setting$Nmax),
       N_s1 = as.integer(setting$N_s1),
       N_s2 = as.integer(setting$N_s2),
+      model_id = as.character(setting$model_id),
+      crm_r_model = as.character(setting$crm_r_model),
       crm_prior_id = as.character(setting$crm_prior_id),
       crm_a_r = as.numeric(setting$crm_a_r),
       crm_b_r = as.numeric(setting$crm_b_r),
@@ -569,6 +605,9 @@ for (setting_row in seq_len(nrow(setting_grid))) {
       efficacy_b = as.numeric(setting$efficacy_b),
       carry_a = as.numeric(setting$carry_a),
       carry_b = as.numeric(setting$carry_b),
+      efficacy_model = as.character(setting$efficacy_model),
+      efficacy_additive_alpha_a = as.numeric(setting$efficacy_additive_alpha_a),
+      efficacy_additive_alpha_b = as.numeric(setting$efficacy_additive_alpha_b),
       utility_type = utility_type,
       lambda_T = lambda_T,
       enrollment_scheme = as.character(setting$enrollment_scheme),

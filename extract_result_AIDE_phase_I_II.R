@@ -48,7 +48,15 @@ one_stage_sizes <- data.frame(
 )
 design_size_grid <- rbind(two_stage_sizes, one_stage_sizes)
 
-## Priors for the random-carryover CRM.
+## Keep this paired model grid synchronized with the OC runner.
+model_grid <- data.frame(
+  model_id = c("random_carryover", "previous_dose_additive"),
+  crm_r_model = c("random", "previous_dose"),
+  efficacy_model = c("dose_specific_carryover", "previous_dose_additive"),
+  stringsAsFactors = FALSE
+)
+
+## Beta(a, b) prior for random CRM r or the additive toxicity alpha.
 crm_prior_grid <- data.frame(
   crm_prior_id = "r_beta_0p15_0p85",
   crm_a_r = 0.15,
@@ -56,14 +64,16 @@ crm_prior_grid <- data.frame(
   stringsAsFactors = FALSE
 )
 
-## Independent Beta priors for regular efficacy and dose-specific efficacy
-## carryover.  Each row supplies Beta(a, b) for every dose.
+## Independent Beta priors for regular efficacy, dose-specific carryover, and
+## the shared additive efficacy alpha. Each row supplies Beta(a, b) priors.
 efficacy_prior_grid <- data.frame(
   efficacy_prior_id = "regular_beta_0p15_0p85_carry_beta_0p15_0p85",
   efficacy_a = 0.15,
   efficacy_b = 0.85,
   carry_a = 0.15,
   carry_b = 0.85,
+  efficacy_additive_alpha_a = 0.15,
+  efficacy_additive_alpha_b = 0.85,
   stringsAsFactors = FALSE
 )
 
@@ -153,6 +163,7 @@ setting_grid <- Reduce(
   cross_join,
   list(
     design_size_grid,
+    model_grid,
     crm_prior_grid,
     efficacy_prior_grid,
     enrollment_schemes,
@@ -212,9 +223,13 @@ make_phase12_config_tag <- function(task) {
     "-u", task$utility_type,
     "-l", fmt_short(task$lambda_T),
     "-en", enrollment_tag,
+    "-tm", task$crm_r_model,
+    "-em", task$efficacy_model,
     "-rp", fmt_param(task$crm_a_r), "x", fmt_param(task$crm_b_r),
     "-ep", fmt_param(task$efficacy_a), "x", fmt_param(task$efficacy_b),
     "-cp", fmt_param(task$carry_a), "x", fmt_param(task$carry_b),
+    "-ap", fmt_param(task$efficacy_additive_alpha_a), "x",
+    fmt_param(task$efficacy_additive_alpha_b),
     "-w", fmt_short(T_assess),
     "-c", fmt_short(cohort_size),
     "-cyc", fmt_short(cycle_max),
@@ -237,7 +252,7 @@ make_phase12_raw_rds_filenames <- function(task, jobs = jobs_expected) {
   scenario_name <- paste0("P12-SC", as.integer(task$Scenario))
   paste0(
     scenario_name,
-    "-CRM-phase12_random",
+    "-CRM-phase12_", task$model_id,
     "-j", jobs,
     "-b", as.integer(block_id_expected),
     "-s", seed_block,
@@ -404,13 +419,22 @@ make_metadata <- function(result, task_id) {
     N_s1 = as.integer(task_value(task, "N_s1")),
     N_s2 = as.integer(task_value(task, "N_s2", task_value(task, "Nmax"))),
     Model = "CRM",
-    CRM_r_Model = "random",
+    CRM_r_Model = as.character(task_value(task, "crm_r_model", "random")),
     CRM_Prior_a = as.numeric(task_value(task, "crm_a_r")),
     CRM_Prior_b = as.numeric(task_value(task, "crm_b_r")),
+    Efficacy_Model = as.character(task_value(
+      task, "efficacy_model", "dose_specific_carryover"
+    )),
     Efficacy_Prior_a = as.numeric(task_value(task, "efficacy_a")),
     Efficacy_Prior_b = as.numeric(task_value(task, "efficacy_b")),
     Efficacy_Carryover_Prior_a = as.numeric(task_value(task, "carry_a")),
     Efficacy_Carryover_Prior_b = as.numeric(task_value(task, "carry_b")),
+    Efficacy_Additive_Alpha_Prior_a = as.numeric(task_value(
+      task, "efficacy_additive_alpha_a"
+    )),
+    Efficacy_Additive_Alpha_Prior_b = as.numeric(task_value(
+      task, "efficacy_additive_alpha_b"
+    )),
     Utility_Type = as.integer(task_value(task, "utility_type")),
     Lambda_T = as.numeric(task_value(task, "lambda_T")),
     m_U = as.integer(task_value(runner, "m_U", 6L)),
@@ -593,7 +617,8 @@ for (task_row in seq_len(nrow(expected_tasks))) {
   cat("Scenario group:", task$Scenario_Group, "\n")
   cat("Scenario attempt:", task$Attempt, "\n")
   cat("Model: CRM\n")
-  cat("CRM r model: random\n")
+  cat("CRM r model:", task$crm_r_model, "\n")
+  cat("Efficacy model:", task$efficacy_model, "\n")
   cat("Allocation:", task$allocation, "\n")
   cat("Nmax:", task$Nmax, "\n")
   cat("N_s1:", task$N_s1, "\n")
