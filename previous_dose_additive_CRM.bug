@@ -22,14 +22,20 @@ model {
   #   ipde[i]           : 0 = regular, 1 = recycled/IPDE administration
   #   q[j]              : CRM skeleton probability for dose j
   #   tau_beta          : precision for the CRM beta prior
-  #   a_alpha, b_alpha  : beta-prior parameters for carryover alpha
+  #   a_r, b_r          : carryover-alpha Beta-prior shapes, represented
+  #                       by a ratio of independent Gamma variables
   #
   # previous_dose[i] must be a valid dose index even for regular rows;
   # use any valid sentinel (for example, 1) when ipde[i] = 0.
   ############################################################
 
   beta ~ dnorm(0, tau_beta)
-  alpha ~ dbeta(a_alpha, b_alpha)
+
+  # This Gamma-ratio representation is exactly Beta(a_r, b_r), while
+  # avoiding direct Beta sampling when either shape is below one.
+  g_alpha_1 ~ dgamma(a_r, 1)
+  g_alpha_2 ~ dgamma(b_r, 1)
+  alpha <- g_alpha_1 / (g_alpha_1 + g_alpha_2)
 
   for (j in 1:J) {
     # CRM power-model marginal toxicity at dose j.

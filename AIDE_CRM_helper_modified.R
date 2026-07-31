@@ -534,7 +534,7 @@ crm_fit_discount <- function(dat,
   if (r_model == "previous_dose" &&
       (length(a_r) != 1L || length(b_r) != 1L || !is.finite(a_r) ||
        !is.finite(b_r) || a_r <= 0 || b_r <= 0)) {
-    stop("For previous_dose, a_r and b_r must be positive Beta-prior parameters for alpha.")
+    stop("For previous_dose, a_r and b_r must be positive Beta-equivalent prior shapes for alpha.")
   }
   
   dat2 <- crm_prepare_dat(
@@ -571,8 +571,10 @@ crm_fit_discount <- function(dat,
   if (r_model == "previous_dose") {
     jags_data$previous_dose <- previous_dose_vec
     jags_data$tau_beta <- 1 / alpha_sd^2
-    jags_data$a_alpha <- a_r
-    jags_data$b_alpha <- b_r
+    # Preserve the public runner interface: the additive toxicity model
+    # consumes a_r and b_r directly as Gamma-ratio prior shapes for alpha.
+    jags_data$a_r <- a_r
+    jags_data$b_r <- b_r
     monitors <- c("beta", "alpha", "p")
   } else {
     jags_data$w <- w_vec

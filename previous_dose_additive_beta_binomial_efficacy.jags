@@ -5,7 +5,8 @@ model {
   # previous-dose carryover for recycled/IPDE administrations.
   #
   # Each dose has an independently fitted marginal regular-efficacy
-  # probability p_regular[j] ~ Beta(a_regular[j], b_regular[j]).
+  # probability with the intended Beta(a_regular[j], b_regular[j]) prior,
+  # represented as a ratio of independent Gamma variables.
   # For patient i at current dose dose[i], the efficacy probability is:
   #
   # Regular administration:
@@ -29,17 +30,24 @@ model {
   #   dose[i]           : current dose, integer 1,...,ndose
   #   previous_dose[i]  : patient's immediately preceding dose, 1,...,ndose
   #   ipde[i]           : 0 = regular, 1 = recycled/IPDE administration
-  #   a_regular[j], b_regular[j] : dose-specific beta-prior shapes
-  #   a_alpha, b_alpha  : beta-prior shapes for carryover alpha
+  #   a_regular[j], b_regular[j] : dose-specific Beta-prior shapes
+  #   a_alpha, b_alpha  : Beta-prior shapes for carryover alpha
   #
   # previous_dose[i] must be a valid dose index even for regular rows;
   # use any valid sentinel (for example, 1) when ipde[i] = 0.
   ############################################################
 
-  alpha ~ dbeta(a_alpha, b_alpha)
+  # Gamma variables in each ratio have the same rate, so the derived
+  # quantity has the corresponding intended Beta prior.
+  g_alpha_1 ~ dgamma(a_alpha, 1)
+  g_alpha_2 ~ dgamma(b_alpha, 1)
+  alpha <- g_alpha_1 / (g_alpha_1 + g_alpha_2)
 
   for (j in 1:ndose) {
-    p_regular[j] ~ dbeta(a_regular[j], b_regular[j])
+    g_regular_1[j] ~ dgamma(a_regular[j], 1)
+    g_regular_2[j] ~ dgamma(b_regular[j], 1)
+    p_regular[j] <- g_regular_1[j] /
+                    (g_regular_1[j] + g_regular_2[j])
   }
 
   for (i in 1:N) {

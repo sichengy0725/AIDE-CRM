@@ -1,0 +1,4 @@
+Local sources used for the 2026-07-30 toxicity-prior Phase I/II table build:
+- Presentation 8-03-2026/AIDE_phase_I_II_IDX_0001_to_1000_dose_summary.csv (operating-characteristic results).
+- Set_5dose_adaptive_r_37_true_MTD_OBD_summary_lambda1.csv (37-scenario truth and utility rows).
+- Presentation 7-27-2026/Table and Plots/Phase I-II/phase12_all_methods_N30_scenarios_1_to_37_tables.pdf (layout reference).

@@ -63,6 +63,23 @@ stopifnot(
 stopifnot(file.exists("previous_dose_additive_CRM.bug"))
 stopifnot(file.exists("previous_dose_additive_beta_binomial_efficacy.jags"))
 
+## Additive toxicity and efficacy models implement all intended Beta priors
+## through ratios of independent, equal-rate Gamma variables. The toxicity
+## runner retains its public a_r/b_r interface and sends those names to JAGS.
+toxicity_model_text <- paste(readLines("previous_dose_additive_CRM.bug"), collapse = "\n")
+efficacy_model_text <- paste(readLines("previous_dose_additive_beta_binomial_efficacy.jags"), collapse = "\n")
+crm_helper_text <- paste(readLines("AIDE_CRM_helper_modified.R"), collapse = "\n")
+stopifnot(
+  !grepl("dbeta", toxicity_model_text, fixed = TRUE),
+  !grepl("dbeta", efficacy_model_text, fixed = TRUE),
+  grepl("g_alpha_1 ~ dgamma(a_r, 1)", toxicity_model_text, fixed = TRUE),
+  grepl("g_alpha_2 ~ dgamma(b_r, 1)", toxicity_model_text, fixed = TRUE),
+  grepl("g_regular_1[j] ~ dgamma(a_regular[j], 1)", efficacy_model_text, fixed = TRUE),
+  grepl("g_regular_2[j] ~ dgamma(b_regular[j], 1)", efficacy_model_text, fixed = TRUE),
+  grepl("jags_data$a_r <- a_r", crm_helper_text, fixed = TRUE),
+  grepl("jags_data$b_r <- b_r", crm_helper_text, fixed = TRUE)
+)
+
 ## The efficacy-futility rule uses the observed efficacy count at the dose:
 ## Pr(p_E < eta | y, n) = pbeta(eta, y + 1, n - y + 1).
 beta_eff_admin <- data.frame(
