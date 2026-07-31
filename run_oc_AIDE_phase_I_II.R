@@ -4,11 +4,17 @@
 ##
 ## This follows run_oc_AIDE.R's construction: build an explicit task list
 ## for one IDX, run each task sequentially, save raw RDS files in a
-## setting-specific folder, write per-task logs, and save combined files.
+## setting-specific folder, and save combined files. Progress and errors are
+## written only to the scheduler's standard output/error files.
 ##
 ## Usage:
 ##   Rscript run_oc_AIDE_phase_I_II.R [workers] [ntrial] [IDX]
 ## ============================================================
+
+lib_path <- "/rsrch8/home/biostatistics/syang10/R/x86_64-pc-linux-gnu-library/4.4"
+if (dir.exists(lib_path)) {
+  .libPaths(c(lib_path, .libPaths()))
+}
 
 args <- commandArgs(trailingOnly = TRUE)
 
@@ -33,18 +39,6 @@ fmt_short <- function(x, digits = 2L) {
 
 fmt_param <- function(x, digits = 4L) {
   fmt_short(x, digits = digits)
-}
-
-with_sink <- function(file, expr) {
-  con <- base::file(file, open = "wt")
-  sink(con)
-  sink(con, type = "message")
-  on.exit({
-    sink(type = "message")
-    sink()
-    close(con)
-  }, add = TRUE)
-  force(expr)
 }
 
 parse_positive_integer <- function(x, name) {
@@ -241,26 +235,25 @@ scenario_id_list <- 1:37
 ## current dose; Stage II stops at N_s2. One-stage does not use either threshold.
 two_stage_sizes <- data.frame(
   allocation = "two_stage",
-  Nmax = c(30L, 60L),
-  N_s1 = c(15L, 30L),
-  N_s2 = c(30L, 60L),
+  Nmax = c(30L),
+  N_s1 = c(6L),
+  N_s2 = c(30L),
   stringsAsFactors = FALSE
 )
 one_stage_sizes <- data.frame(
   allocation = "one_stage",
-  Nmax = c(30L, 60L),
-  N_s1 = c(30L, 60L),
-  N_s2 = c(30L, 60L),
+  Nmax = c(30L),
+  N_s1 = c(30L),
+  N_s2 = c(30L),
   stringsAsFactors = FALSE
 )
 design_size_grid <- rbind(two_stage_sizes, one_stage_sizes)
 
-## The default comparison pairs the existing random-carryover models with the
-## additive previous-dose models. Add rows to compare other valid pairings.
+## Default to the additive previous-dose toxicity and efficacy models.
 model_grid <- data.frame(
-  model_id = c("random_carryover", "previous_dose_additive"),
-  crm_r_model = c("random", "previous_dose"),
-  efficacy_model = c("dose_specific_carryover", "previous_dose_additive"),
+  model_id = "previous_dose_additive",
+  crm_r_model = "previous_dose",
+  efficacy_model = "previous_dose_additive",
   stringsAsFactors = FALSE
 )
 
@@ -275,17 +268,17 @@ crm_prior_grid <- data.frame(
 ## The carryover prior applies to dose_specific_carryover. The additive-alpha
 ## prior applies to previous_dose_additive efficacy.
 efficacy_prior_grid <- data.frame(
-  efficacy_prior_id = "regular_beta_0p15_0p85_carry_beta_0p15_0p85",
-  efficacy_a = 0.15,
-  efficacy_b = 0.85,
+  efficacy_prior_id = "regular_beta_0p5_0p5_carry_beta_1_1",
+  efficacy_a = 0.5,
+  efficacy_b = 0.5,
   carry_a = 0.15,
   carry_b = 0.85,
-  efficacy_additive_alpha_a = 0.15,
-  efficacy_additive_alpha_b = 0.85,
+  efficacy_additive_alpha_a = c(0.15, 0.3, 0.5, 1),
+  efficacy_additive_alpha_b = c(0.85, 0.7, 0.5, 1),
   stringsAsFactors = FALSE
 )
 enrollment_schemes <- data.frame(
-  enrollment_scheme = c("continuous", "ipde_first"),
+  enrollment_scheme = "continuous",
   stringsAsFactors = FALSE
 )
 lambda_T_grid <- 0.3
@@ -301,14 +294,14 @@ ipde_grid <- data.frame(
   stringsAsFactors = FALSE
 )
 alpha_grid <- data.frame(
-  toxicity_ipde_alpha = 0,
-  efficacy_ipde_alpha = 0,
+  toxicity_ipde_alpha = c(0, 0.3, 0.6, 0.9),
+  efficacy_ipde_alpha = c(0, 0.3, 0.6, 0.9),
   stringsAsFactors = FALSE
 )
 
 utility_scores <- c(u00 = 40, u01 = 100, u10 = 0, u11 = 60)
 cohort_size <- 3L
-cycle_max <- 1L
+cycle_max <- 2L
 T_assess <- 28
 m_U <- 6L
 crm_skeleton <- c(0.15, 0.20, 0.30, 0.35, 0.45)
@@ -409,54 +402,10 @@ run_one_phase12_task <- function(task) {
     ".rds"
   )
   outfile <- file.path(outdir, filename)
-  logfile <- file.path(
-    outdir,
-    paste0(
-      scenario_name, "-CRM-", method_tag,
-      "-j", task$job_i,
-      "-b", task$block_id,
-      ".log"
-    )
-  )
+  cat("Task", task$task_id, "/", task$setting_id,
+      "scenario", task$Scenario, "job", task$job_i, "\n")
 
-  with_sink(logfile, {
-    cat("====================================\n")
-    cat("AIDE Phase I/II cluster task\n")
-    cat("====================================\n")
-    cat("Task:", task$task_id, "\n")
-    cat("Setting ID:", task$setting_id, "\n")
-    cat("Scenario set:", task$scenario_set, "\n")
-    cat("Scenario:", task$Scenario, "\n")
-    cat("Source scenario:", task$Source_Scenario, "\n")
-    cat("Scenario group:", task$Scenario_Group, "\n")
-    cat("Scenario attempt:", task$Attempt, "\n")
-    cat("Job:", task$job_i, "\n")
-    cat("Block:", task$block_id, "\n")
-    cat("ntrial.block:", task$ntrial.block, "\n")
-    cat("Seed:", task$seed.block, "\n")
-    cat("Allocation:", task$allocation, "\n")
-    cat("Nmax / N_s1 / N_s2:", task$Nmax, task$N_s1, task$N_s2, "\n")
-    cat("Target:", task$target, "\n")
-    cat("CRM r model:", task$crm_r_model, "\n")
-    cat("CRM prior a / b:", task$crm_a_r, task$crm_b_r, "\n")
-    cat("Efficacy model:", task$efficacy_model, "\n")
-    cat("Efficacy prior a / b:", task$efficacy_a, task$efficacy_b, "\n")
-    cat("Carryover prior a / b:", task$carry_a, task$carry_b, "\n")
-    cat("Additive efficacy alpha prior a / b:",
-        task$efficacy_additive_alpha_a, task$efficacy_additive_alpha_b, "\n")
-    cat("Utility type / lambda_T:", task$utility_type, task$lambda_T, "\n")
-    cat("Enrollment scheme:", task$enrollment_scheme, "\n")
-    cat("Arrival rate:", task$arrival_rate, "\n")
-    cat("T_assess / C / cycle_max / m_U:", task$T_assess, task$C, task$cycle_max, task$m_U, "\n")
-    cat("IPDE design / flexible:", task$ipde_design, task$flexible_ipde, "\n")
-    cat("Toxicity / efficacy IPDE alpha:", task$toxicity_ipde_alpha, task$efficacy_ipde_alpha, "\n")
-    cat("Optional random-CRM toxicity gate:", task$apply_random_crm_recycle_toxicity_rule, "\n")
-    cat("Optional random-CRM efficacy gate:", task$apply_random_crm_recycle_efficacy_rule, "\n")
-    cat("True toxicity:", paste(task$p_true, collapse = ", "), "\n")
-    cat("True efficacy:", paste(task$e_true, collapse = ", "), "\n")
-    cat("====================================\n\n")
-
-    result <- get_oc_sim_AIDE_phase_I_II(
+  result <- get_oc_sim_AIDE_phase_I_II(
       p_true = task$p_true,
       e_true = task$e_true,
       ntrial = task$ntrial.block,
@@ -504,40 +453,39 @@ run_one_phase12_task <- function(task) {
       min_eff_n_for_futility = task$min_eff_n_for_futility,
       apply_random_crm_recycle_toxicity_rule = task$apply_random_crm_recycle_toxicity_rule,
       apply_random_crm_recycle_efficacy_rule = task$apply_random_crm_recycle_efficacy_rule
-    )
+  )
 
-    result$task <- task
-    result$truth <- list(
-      p_true = task$p_true,
-      e_true = task$e_true,
-      target = task$target,
-      true_mtd = task$true_mtd,
-      true_obd = task$true_obd,
-      utility_type = task$utility_type
-    )
-    result$runner_settings <- list(
-      model_id = task$model_id,
-      crm_r_model = task$crm_r_model,
-      efficacy_model = task$efficacy_model,
-      efficacy_additive_alpha_prior = c(
-        task$efficacy_additive_alpha_a, task$efficacy_additive_alpha_b
-      ),
-      utility_scores = task$utility_scores,
-      m_U = task$m_U,
-      cycle_max = task$cycle_max,
-      T_assess = task$T_assess,
-      optional_random_crm_ipde_gates = list(
-        toxicity = task$apply_random_crm_recycle_toxicity_rule,
-        efficacy = task$apply_random_crm_recycle_efficacy_rule
-      ),
-      job_i = task$job_i,
-      block_id = task$block_id,
-      ntrial = task$ntrial.block,
-      seed = task$seed.block
-    )
-    saveRDS(result, outfile)
-    cat("\nSaved:", outfile, "\n")
-  })
+  result$task <- task
+  result$truth <- list(
+    p_true = task$p_true,
+    e_true = task$e_true,
+    target = task$target,
+    true_mtd = task$true_mtd,
+    true_obd = task$true_obd,
+    utility_type = task$utility_type
+  )
+  result$runner_settings <- list(
+    model_id = task$model_id,
+    crm_r_model = task$crm_r_model,
+    efficacy_model = task$efficacy_model,
+    efficacy_additive_alpha_prior = c(
+      task$efficacy_additive_alpha_a, task$efficacy_additive_alpha_b
+    ),
+    utility_scores = task$utility_scores,
+    m_U = task$m_U,
+    cycle_max = task$cycle_max,
+    T_assess = task$T_assess,
+    optional_random_crm_ipde_gates = list(
+      toxicity = task$apply_random_crm_recycle_toxicity_rule,
+      efficacy = task$apply_random_crm_recycle_efficacy_rule
+    ),
+    job_i = task$job_i,
+    block_id = task$block_id,
+    ntrial = task$ntrial.block,
+    seed = task$seed.block
+  )
+  saveRDS(result, outfile)
+  cat("Saved:", outfile, "\n")
 
   list(
     file = outfile,
