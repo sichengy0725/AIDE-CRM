@@ -80,6 +80,22 @@ stopifnot(
   grepl("jags_data$b_r <- b_r", crm_helper_text, fixed = TRUE)
 )
 
+## The preceding discount-factor r models use the same Gamma-ratio form for
+## both toxicity and dose-specific IPDE efficacy carryover parameters.
+random_crm_model_text <- paste(readLines("random_CRM.bug"), collapse = "\n")
+random_crm_tite_model_text <- paste(readLines("random_CRM_TITE.bug"), collapse = "\n")
+discount_efficacy_model_text <- paste(readLines("beta_binomial_dose_specific.jags"), collapse = "\n")
+stopifnot(
+  !grepl("dbeta", random_crm_model_text, fixed = TRUE),
+  !grepl("dbeta", random_crm_tite_model_text, fixed = TRUE),
+  !grepl("dbeta", discount_efficacy_model_text, fixed = TRUE),
+  grepl("g_r_1 ~ dgamma(a_r, 1)", random_crm_model_text, fixed = TRUE),
+  grepl("g_r_2 ~ dgamma(b_r, 1)", random_crm_tite_model_text, fixed = TRUE),
+  grepl("g_regular_1[j] ~ dgamma(a_r[j], 1)", discount_efficacy_model_text, fixed = TRUE),
+  grepl("g_carry_1[j] ~ dgamma(a_carry[j], 1)", discount_efficacy_model_text, fixed = TRUE),
+  grepl("g_carry_2[j] ~ dgamma(b_carry[j], 1)", discount_efficacy_model_text, fixed = TRUE)
+)
+
 ## The efficacy-futility rule uses the observed efficacy count at the dose:
 ## Pr(p_E < eta | y, n) = pbeta(eta, y + 1, n - y + 1).
 beta_eff_admin <- data.frame(

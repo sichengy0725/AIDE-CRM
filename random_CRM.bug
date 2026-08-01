@@ -11,12 +11,17 @@ model {
   #   ipde[i]        : 0 = regular assignment, 1 = IPDE/recycled assignment
   #   q[j]           : CRM skeleton probability for dose j
   #   tau_alpha      : precision for alpha prior, e.g. 1 / 2^2
-  #   a_r, b_r       : beta prior parameters for r
+  #   a_r, b_r       : Beta-prior shapes for r, represented as an
+  #                     equal-rate Gamma ratio
   ############################################################
 
   alpha ~ dnorm(0, tau_alpha)
 
-  r ~ dbeta(a_r, b_r)
+  # This is exactly Beta(a_r, b_r), but avoids direct Beta sampling when
+  # either shape is below one.
+  g_r_1 ~ dgamma(a_r, 1)
+  g_r_2 ~ dgamma(b_r, 1)
+  r <- g_r_1 / (g_r_1 + g_r_2)
 
   for (j in 1:J) {
     # CRM power model: p_j(alpha) = q_j ^ exp(alpha)

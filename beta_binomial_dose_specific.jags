@@ -1,9 +1,16 @@
 model {
   for (j in 1:ndose) {
-    ## Independent, prespecified priors for regular efficacy and the
-    ## dose-specific IPDE efficacy carryover parameter.
-    p_regular[j] ~ dbeta(a_r[j], b_r[j])
-    r_e[j] ~ dbeta(a_carry[j], b_carry[j])
+    ## Independent, prespecified Beta priors for regular efficacy and the
+    ## dose-specific IPDE efficacy carryover parameter, each represented as
+    ## a ratio of independent Gamma variables with a common rate.
+    g_regular_1[j] ~ dgamma(a_r[j], 1)
+    g_regular_2[j] ~ dgamma(b_r[j], 1)
+    p_regular[j] <- g_regular_1[j] /
+                    (g_regular_1[j] + g_regular_2[j])
+
+    g_carry_1[j] ~ dgamma(a_carry[j], 1)
+    g_carry_2[j] ~ dgamma(b_carry[j], 1)
+    r_e[j] <- g_carry_1[j] / (g_carry_1[j] + g_carry_2[j])
 
     ## IPDE efficacy at dose j: pi*_Ej = r_Ej + (1-r_Ej) pi_Ej.
     p_ipde[j] <- r_e[j] + (1 - r_e[j]) * p_regular[j]
