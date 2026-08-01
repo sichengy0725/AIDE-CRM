@@ -696,6 +696,35 @@ round_numeric_df <- function(dat, digits = 4L) {
   dat
 }
 
+make_phase12_output_tag <- function() {
+  crm_priors <- unique(paste0(
+    fmt_param(crm_prior_grid$crm_a_r), "x",
+    fmt_param(crm_prior_grid$crm_b_r)
+  ))
+  efficacy_priors <- unique(paste0(
+    fmt_param(efficacy_prior_grid$efficacy_a), "x",
+    fmt_param(efficacy_prior_grid$efficacy_b)
+  ))
+  carryover_priors <- unique(paste0(
+    fmt_param(efficacy_prior_grid$carry_a), "x",
+    fmt_param(efficacy_prior_grid$carry_b)
+  ))
+  additive_alpha_priors <- unique(paste0(
+    fmt_param(efficacy_prior_grid$efficacy_additive_alpha_a), "x",
+    fmt_param(efficacy_prior_grid$efficacy_additive_alpha_b)
+  ))
+
+  paste0(
+    "AIDE_phase_I_II",
+    "_models", paste(unique(model_grid$model_id), collapse = "_"),
+    "_N", paste(fmt_short(unique(design_size_grid$Nmax)), collapse = "_"),
+    "_rp", paste(crm_priors, collapse = "_"),
+    "_ep", paste(efficacy_priors, collapse = "_"),
+    "_cp", paste(carryover_priors, collapse = "_"),
+    "_ap", paste(additive_alpha_priors, collapse = "_")
+  )
+}
+
 dose_summary <- do.call(rbind, all.dose.summary)
 table_summary <- do.call(rbind, all.table.summary)
 missing_summary <- do.call(rbind, missing.log)
@@ -707,7 +736,7 @@ job_tag <- if (length(jobs_expected) > 1L &&
 } else {
   paste0("selected_", length(jobs_expected), "_jobs")
 }
-tag <- paste0("AIDE_phase_I_II_IDX_", job_tag)
+tag <- paste0(make_phase12_output_tag(), "_IDX_", job_tag)
 
 dose_csv <- file.path(out_dir, paste0(tag, "_dose_summary.csv"))
 table_csv <- file.path(out_dir, paste0(tag, "_table_summary.csv"))
