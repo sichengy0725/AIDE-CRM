@@ -56,7 +56,8 @@ model_grid <- data.frame(
   stringsAsFactors = FALSE
 )
 
-## Beta(a, b) prior for random CRM r or the additive toxicity alpha.
+## Beta-equivalent prior shapes for random CRM r or the additive toxicity
+## alpha. The JAGS models implement these through equal-rate Gamma ratios.
 crm_prior_grid <- data.frame(
   crm_prior_id = "r_beta_0p15_0p85",
   crm_a_r = 0.15,
@@ -64,8 +65,9 @@ crm_prior_grid <- data.frame(
   stringsAsFactors = FALSE
 )
 
-## Independent Beta priors for regular efficacy, dose-specific carryover, and
-## the shared additive efficacy alpha. Each row supplies Beta(a, b) priors.
+## Beta-equivalent prior shapes for regular efficacy, dose-specific carryover,
+## and the shared additive efficacy alpha. The JAGS models implement these
+## through equal-rate Gamma ratios.
 efficacy_prior_grid <- data.frame(
   efficacy_prior_id = "regular_beta_0p15_0p85_carry_beta_0p15_0p85",
   efficacy_a = 0.15,
@@ -416,9 +418,13 @@ make_metadata <- function(result, task_id) {
     Target_Toxicity = as.numeric(truth$target),
     Allocation = as.character(task_value(task, "allocation")),
     Nmax = as.integer(task_value(task, "Nmax")),
+    Sample_Size = as.integer(task_value(task, "Nmax")),
     N_s1 = as.integer(task_value(task, "N_s1")),
     N_s2 = as.integer(task_value(task, "N_s2", task_value(task, "Nmax"))),
     Model = "CRM",
+    Model_ID = as.character(task_value(
+      task, "model_id", task_value(runner, "model_id")
+    )),
     CRM_r_Model = as.character(task_value(task, "crm_r_model", "random")),
     CRM_Prior_a = as.numeric(task_value(task, "crm_a_r")),
     CRM_Prior_b = as.numeric(task_value(task, "crm_b_r")),
