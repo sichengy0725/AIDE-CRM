@@ -19,7 +19,7 @@ out_dir <- "OC_summary_AIDE_phase_I_II"
 ## Match the one-trial-per-IDX LSF array that produced the current files.
 ## The file names shown are job-1001 through job-2000, giving 1,000 trials
 ## per task. Change this range if a different IDX array was submitted.
-jobs_expected <- 1001:2000
+jobs_expected <- 1:1000
 ntrial_per_job_expected <- 1L
 seed_base_expected <- 1L
 block_id_expected <- 1L
@@ -34,25 +34,25 @@ scenario_id_list <- 1:37
 ## limit. One-stage does not use either threshold.
 two_stage_sizes <- data.frame(
   allocation = "two_stage",
-  Nmax = c(30L, 60L),
-  N_s1 = c(15L, 30L),
-  N_s2 = c(30L, 60L),
+  Nmax = c(30L),
+  N_s1 = c(6L),
+  N_s2 = c(30L),
   stringsAsFactors = FALSE
 )
 one_stage_sizes <- data.frame(
   allocation = "one_stage",
-  Nmax = c(30L, 60L),
-  N_s1 = c(30L, 60L),
-  N_s2 = c(30L, 60L),
+  Nmax = c(30L),
+  N_s1 = c(30L),
+  N_s2 = c(30L),
   stringsAsFactors = FALSE
 )
 design_size_grid <- rbind(two_stage_sizes, one_stage_sizes)
 
 ## Keep this paired model grid synchronized with the OC runner.
 model_grid <- data.frame(
-  model_id = c("random_carryover", "previous_dose_additive"),
-  crm_r_model = c("random", "previous_dose"),
-  efficacy_model = c("dose_specific_carryover", "previous_dose_additive"),
+  model_id = c("previous_dose_additive"),
+  crm_r_model = c("previous_dose"),
+  efficacy_model = c("previous_dose_additive"),
   stringsAsFactors = FALSE
 )
 
@@ -60,8 +60,8 @@ model_grid <- data.frame(
 ## alpha. The JAGS models implement these through equal-rate Gamma ratios.
 crm_prior_grid <- data.frame(
   crm_prior_id = "r_beta_0p15_0p85",
-  crm_a_r = 0.15,
-  crm_b_r = 0.85,
+  crm_a_r = c(0.15, 0.3, 0.5, 1),
+  crm_b_r = c(0.85, 0.7, 0.5, 1),
   stringsAsFactors = FALSE
 )
 
@@ -69,7 +69,7 @@ crm_prior_grid <- data.frame(
 ## and the shared additive efficacy alpha. The JAGS models implement these
 ## through equal-rate Gamma ratios.
 efficacy_prior_grid <- data.frame(
-  efficacy_prior_id = "regular_beta_0p15_0p85_carry_beta_0p15_0p85",
+  efficacy_prior_id = "regular_beta_0p5_0p5_carry_beta_1_1",
   efficacy_a = 0.15,
   efficacy_b = 0.85,
   carry_a = 0.15,
@@ -80,7 +80,7 @@ efficacy_prior_grid <- data.frame(
 )
 
 enrollment_schemes <- data.frame(
-  enrollment_scheme = c("continuous", "ipde_first"),
+  enrollment_scheme = c("continuous"),
   stringsAsFactors = FALSE
 )
 lambda_T_grid <- 0.3
@@ -96,8 +96,8 @@ ipde_grid <- data.frame(
   stringsAsFactors = FALSE
 )
 alpha_grid <- data.frame(
-  toxicity_ipde_alpha = 0,
-  efficacy_ipde_alpha = 0,
+  toxicity_ipde_alpha = c(0, 0.3, 0.6, 0.9),
+  efficacy_ipde_alpha = c(0, 0.3, 0.6, 0.9),
   stringsAsFactors = FALSE
 )
 
@@ -105,7 +105,7 @@ alpha_grid <- data.frame(
 ## run configuration.  They do not change the task IDs, but should also match
 ## the corresponding values in run_oc_AIDE_phase_I_II.R.
 cohort_size <- 3L
-cycle_max <- 1L
+cycle_max <- 2L
 T_assess <- 28
 m_U <- 6L
 crm_skeleton <- c(0.15, 0.20, 0.30, 0.35, 0.45)
@@ -113,7 +113,7 @@ crm_alpha_sd <- sqrt(2)
 efficacy_threshold <- 0.20
 futility_cutoff <- 0.95
 min_eff_n_for_futility <- 0L
-apply_random_crm_recycle_toxicity_rule <- FALSE
+apply_random_crm_recycle_toxicity_rule <- TRUE
 apply_random_crm_recycle_efficacy_rule <- FALSE
 
 if (!dir.exists(results_root)) stop("Results directory does not exist: ", results_root)
@@ -718,6 +718,7 @@ make_phase12_output_tag <- function() {
     "AIDE_phase_I_II",
     "_models", paste(unique(model_grid$model_id), collapse = "_"),
     "_N", paste(fmt_short(unique(design_size_grid$Nmax)), collapse = "_"),
+    "_ncycle", fmt_short(cycle_max),
     "_rp", paste(crm_priors, collapse = "_"),
     "_ep", paste(efficacy_priors, collapse = "_"),
     "_cp", paste(carryover_priors, collapse = "_"),
