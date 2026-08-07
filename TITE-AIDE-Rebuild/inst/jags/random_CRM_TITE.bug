@@ -1,0 +1,39 @@
+model {
+
+  ############################################################
+  # AIDE-CRM TITE discount model with random r
+  #
+  # Data required:
+  #   N              : total number of dose assignments
+  #   J              : number of dose levels
+  #   y[i]           : observed DLT by decision time, 0/1
+  #   dose[i]        : assigned dose level, integer 1,...,J
+  #   ipde[i]        : 0 = regular assignment, 1 = IPDE/recycled assignment
+  #   w[i]           : TITE follow-up weight in [0, 1]
+  #   q[j]           : CRM skeleton probability for dose j
+  #   tau_alpha      : precision for alpha prior, e.g. 1 / 2^2
+  #   a_r, b_r       : Beta-prior shapes for r, represented as an
+  #                     equal-rate Gamma ratio
+  ############################################################
+
+  alpha ~ dnorm(beta_mean, tau_alpha)
+
+  # This is exactly Beta(a_r, b_r), but avoids direct Beta sampling when
+  # either shape is below one.
+  g_r_1 ~ dgamma(a_r, 1)
+  g_r_2 ~ dgamma(b_r, 1)
+  r <- g_r_1 / (g_r_1 + g_r_2)
+
+  for (j in 1:J) {
+    p[j] <- pow(q[j], exp(alpha))
+    theta_ipde[j] <- r + (1 - r) * p[j]
+  }
+
+  for (i in 1:N) {
+    theta_base[i] <- (1 - ipde[i]) * p[dose[i]] +
+                     ipde[i] * theta_ipde[dose[i]]
+    theta[i] <- w[i] * theta_base[i]
+
+    y[i] ~ dbern(theta[i])
+  }
+}

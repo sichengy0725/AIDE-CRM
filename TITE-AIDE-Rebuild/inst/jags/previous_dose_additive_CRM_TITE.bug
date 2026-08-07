@@ -1,0 +1,21 @@
+model {
+  # Additive previous-dose skeleton CRM with TITE weighting.
+  beta ~ dnorm(beta_mean, tau_beta)
+  g_alpha_1 ~ dgamma(a_r, 1)
+  g_alpha_2 ~ dgamma(b_r, 1)
+  alpha <- g_alpha_1 / (g_alpha_1 + g_alpha_2)
+
+  for (j in 1:J) {
+    p[j] <- pow(q[j], exp(beta))
+    theta_ipde[j] <- min(1, p[j] + alpha * p[max(1, j - 1)])
+  }
+
+  for (i in 1:N) {
+    theta_regular[i] <- p[dose[i]]
+    theta_retreated[i] <- min(1, p[dose[i]] + alpha * p[previous_dose[i]])
+    theta_base[i] <- (1 - ipde[i]) * theta_regular[i] + ipde[i] * theta_retreated[i]
+    # A pending non-DLT has likelihood 1 - w[i] * theta_base[i].
+    theta[i] <- w[i] * theta_base[i]
+    y[i] ~ dbern(theta[i])
+  }
+}

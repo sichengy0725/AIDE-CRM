@@ -243,6 +243,8 @@ make_phase12_config_tag <- function(task) {
     "-cp", fmt_param(task$carry_a), "x", fmt_param(task$carry_b),
     "-ap", fmt_param(task$efficacy_additive_alpha_a), "x",
     fmt_param(task$efficacy_additive_alpha_b),
+    "-eth", fmt_short(efficacy_threshold),
+    "-fut", fmt_short(futility_cutoff),
     "-w", fmt_short(T_assess),
     "-c", fmt_short(cohort_size),
     "-cyc", fmt_short(cycle_max),

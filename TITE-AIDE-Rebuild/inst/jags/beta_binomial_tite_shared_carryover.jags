@@ -1,0 +1,24 @@
+model {
+  ## Delayed-outcome efficacy model E-RS with one shared discount parameter.
+  g_carry_1 ~ dgamma(a_carry, 1)
+  g_carry_2 ~ dgamma(b_carry, 1)
+  r_e <- g_carry_1 / (g_carry_1 + g_carry_2)
+
+  for (j in 1:ndose) {
+    g_regular_1[j] ~ dgamma(a_regular[j], 1)
+    g_regular_2[j] ~ dgamma(b_regular[j], 1)
+    p_regular[j] <- g_regular_1[j] / (g_regular_1[j] + g_regular_2[j])
+    p_ipde[j] <- r_e + (1 - r_e) * p_regular[j]
+  }
+
+  for (i in 1:N) {
+    theta_eff[i] <- (1 - ipde[i]) * p_regular[dose[i]] +
+                    ipde[i] * p_ipde[dose[i]]
+    theta_safe[i] <- max(eps, min(1 - eps, theta_eff[i]))
+    loglik[i] <- eff_ascertained[i] * eff[i] * log(theta_safe[i]) +
+      (eff_ascertained[i] * (1 - eff[i]) +
+       (1 - eff_ascertained[i]) * eff_weight[i]) * log(1 - theta_safe[i])
+    phi[i] <- -loglik[i] + zero_trick_constant
+    zeros[i] ~ dpois(phi[i])
+  }
+}

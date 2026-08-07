@@ -1,0 +1,26 @@
+model {
+  ## Delayed-outcome efficacy model E-AS.  The additive carryover alpha is
+  ## shared across destination doses and uses the patient's preceding dose.
+  g_alpha_1 ~ dgamma(a_alpha, 1)
+  g_alpha_2 ~ dgamma(b_alpha, 1)
+  alpha <- g_alpha_1 / (g_alpha_1 + g_alpha_2)
+
+  for (j in 1:ndose) {
+    g_regular_1[j] ~ dgamma(a_regular[j], 1)
+    g_regular_2[j] ~ dgamma(b_regular[j], 1)
+    p_regular[j] <- g_regular_1[j] / (g_regular_1[j] + g_regular_2[j])
+  }
+
+  for (i in 1:N) {
+    theta_ipde[i] <- min(1, p_regular[dose[i]] +
+                          alpha * p_regular[previous_dose[i]])
+    theta_eff[i] <- (1 - ipde[i]) * p_regular[dose[i]] +
+                    ipde[i] * theta_ipde[i]
+    theta_safe[i] <- max(eps, min(1 - eps, theta_eff[i]))
+    loglik[i] <- eff_ascertained[i] * eff[i] * log(theta_safe[i]) +
+      (eff_ascertained[i] * (1 - eff[i]) +
+       (1 - eff_ascertained[i]) * eff_weight[i]) * log(1 - theta_safe[i])
+    phi[i] <- -loglik[i] + zero_trick_constant
+    zeros[i] ~ dpois(phi[i])
+  }
+}

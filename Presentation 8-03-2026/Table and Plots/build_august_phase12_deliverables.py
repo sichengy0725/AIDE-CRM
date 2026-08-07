@@ -92,10 +92,86 @@ EFFICACY_RUN = PriorRun(
 )
 
 N30_COMPARISON_DIR = AUGUST_DIR / "Table and Plots" / "Phase I-II"
+RANDOM_MODEL_DIR = AUGUST_DIR / "Table and Plots" / "Random Model"
+ALPHA_MODEL_DIR = AUGUST_DIR / "Table and Plots" / "Alpha Model"
+COMBINED_IPDE_ALPHA_CSV = AUGUST_DIR / (
+    "AIDE_phase_I_II_modelsprevious_dose_additive_N30_"
+    "rp0p15x0p85_0p3x0p7_0p5x0p5_1x1_ep0p5x0p5_"
+    "cp0p15x0p85_ap0p15x0p85_IDX_0001_to_1000_dose_summary.csv"
+)
+ALL_METHODS_CYCLE1_CSV = AUGUST_DIR / (
+    "AIDE_phase_I_II_modelsrandom_carryoever_previous_dose_additive_N30_ncycle1_"
+    "rp0p15x0p85_ep0p5x0p5_cp0p15x0p85_ap0p15x0p85_IDX_0001_to_1000_"
+    "dose_summary.csv"
+)
+
+RANDOM_TOXICITY_RUN = PriorRun(
+    key="toxicity",
+    summary_csv=AUGUST_DIR / (
+        "AIDE_phase_I_II_modelsrandom_carryoever_N30_ncycle2_"
+        "rp0p15x0p85_0p3x0p7_0p5x0p5_1x1_ep0p5x0p5_"
+        "cp0p15x0p85_ap0p15x0p85_IDX_0001_to_1000_dose_summary.csv"
+    ),
+    output_dir=RANDOM_MODEL_DIR,
+    prior_a_column="CRM_Prior_a",
+    prior_b_column="CRM_Prior_b",
+    display_label="Toxicity prior",
+    table_prefix="phase12_toxicity_prior",
+    one_stage_table_prefix="phase12_toxicity_prior_one_stage",
+    plot_prefix="phase12_toxicity_prior",
+    README_prior_description="the CRM toxicity prior",
+)
+
+RANDOM_EFFICACY_RUN = PriorRun(
+    key="efficacy",
+    summary_csv=AUGUST_DIR / (
+        "AIDE_phase_I_II_modelsrandom_carryoever_N30_ncycle2_"
+        "rp0p15x0p85_ep0p5x0p5_cp0p15x0p85_ap0p15x0p85_"
+        "0p3x0p7_0p5x0p5_1x1_IDX_0001_to_1000_dose_summary.csv"
+    ),
+    output_dir=RANDOM_MODEL_DIR,
+    prior_a_column="Efficacy_Additive_Alpha_Prior_a",
+    prior_b_column="Efficacy_Additive_Alpha_Prior_b",
+    display_label="Efficacy additive alpha prior",
+    table_prefix="phase12_efficacy_prior",
+    one_stage_table_prefix="phase12_efficacy_prior_one_stage",
+    plot_prefix="phase12_efficacy_prior",
+    README_prior_description="the additive-efficacy-alpha prior",
+)
+
+ALPHA_TOXICITY_RUN = PriorRun(
+    key=TOXICITY_RUN.key,
+    summary_csv=TOXICITY_RUN.summary_csv,
+    output_dir=ALPHA_MODEL_DIR,
+    prior_a_column=TOXICITY_RUN.prior_a_column,
+    prior_b_column=TOXICITY_RUN.prior_b_column,
+    display_label=TOXICITY_RUN.display_label,
+    table_prefix="phase12_toxicity_prior",
+    one_stage_table_prefix="phase12_toxicity_prior_one_stage",
+    plot_prefix=TOXICITY_RUN.plot_prefix,
+    README_prior_description=TOXICITY_RUN.README_prior_description,
+)
+
+ALPHA_EFFICACY_RUN = PriorRun(
+    key=EFFICACY_RUN.key,
+    summary_csv=EFFICACY_RUN.summary_csv,
+    output_dir=ALPHA_MODEL_DIR,
+    prior_a_column=EFFICACY_RUN.prior_a_column,
+    prior_b_column=EFFICACY_RUN.prior_b_column,
+    display_label=EFFICACY_RUN.display_label,
+    table_prefix="phase12_efficacy_prior",
+    one_stage_table_prefix="phase12_efficacy_prior_one_stage",
+    plot_prefix=EFFICACY_RUN.plot_prefix,
+    README_prior_description=EFFICACY_RUN.README_prior_description,
+)
 
 DESIGNS = (
     {"allocation": "two_stage", "n_s1": 6, "label": "allocation = two_stage"},
     {"allocation": "one_stage", "n_s1": 30, "label": "allocation = one_stage"},
+)
+IPDE_ALPHA_UTILITIES = (
+    (2, 0.3, "U2"),
+    (3, 1.0, "U3"),
 )
 
 
@@ -144,7 +220,7 @@ def validate_prior_source(data: pd.DataFrame, run: PriorRun) -> None:
     required = {
         "Allocation", "Nmax", "N_s1", "Utility_Type", "Lambda_T", "Dose",
         "Scenario", "Toxicity_IPDE_Alpha", "Efficacy_IPDE_Alpha", "n_valid",
-        "ntrial_from_files", "OBD_Selection_pct", "Pts_Treated",
+        "ntrial_from_files", "OBD_Selection_pct", "Pts_Treated", "IPDE_Doses",
         "No_OBD_Selection_pct", run.prior_a_column, run.prior_b_column,
     }
     missing = sorted(required - set(data.columns))
@@ -204,6 +280,7 @@ def extract_prior_records(
             records[scenario][prior] = {
                 "selected": rows["OBD_Selection_pct"].astype(float).tolist(),
                 "treated": rows["Pts_Treated"].astype(float).tolist(),
+                "ipde_patients": rows["IPDE_Doses"].astype(float).tolist(),
                 "stop": float(rows["No_OBD_Selection_pct"].iloc[0]),
                 "n_valid": int(rows["n_valid"].iloc[0]),
             }
@@ -286,10 +363,13 @@ def draw_table_row(
     shaded: bool = False,
     decimals: int = 1,
     compact: bool = False,
+    row_height: float | None = None,
+    font_size: float | None = None,
+    baseline: float | None = None,
 ) -> float:
-    row_height = 9.8 if compact else 13.2
-    font_size = 7.4 if compact else 9.5
-    baseline = 7.2 if compact else 9.6
+    row_height = row_height if row_height is not None else (9.8 if compact else 13.2)
+    font_size = font_size if font_size is not None else (7.4 if compact else 9.5)
+    baseline = baseline if baseline is not None else (7.2 if compact else 9.6)
     if shaded:
         pdf.setFillColor(colors.HexColor("#F6F6F6"))
         pdf.rect(LEFT, y - row_height + 2, TABLE_WIDTH, row_height, fill=1, stroke=0)
@@ -308,10 +388,19 @@ def draw_table_row(
     return y - row_height
 
 
-def draw_group_header(pdf: canvas.Canvas, y: float, label: str, *, compact: bool) -> float:
-    row_height = 9.8 if compact else 13.2
-    font_size = 7.6 if compact else 9.6
-    baseline = 7.2 if compact else 9.6
+def draw_group_header(
+    pdf: canvas.Canvas,
+    y: float,
+    label: str,
+    *,
+    compact: bool,
+    row_height: float | None = None,
+    font_size: float | None = None,
+    baseline: float | None = None,
+) -> float:
+    row_height = row_height if row_height is not None else (9.8 if compact else 13.2)
+    font_size = font_size if font_size is not None else (7.6 if compact else 9.6)
+    baseline = baseline if baseline is not None else (7.2 if compact else 9.6)
     pdf.setFillColor(colors.HexColor("#E7E7E7"))
     pdf.rect(LEFT, y - row_height + 2, TABLE_WIDTH, row_height, fill=1, stroke=0)
     pdf.setFillColor(colors.HexColor("#202020"))
@@ -359,7 +448,14 @@ def draw_prior_table_scenario(
             pdf, y, prior_label(run, prior), records[prior]["treated"], None,
             compact=compact,
         )
-    return y - (3 if compact else 9)
+    y = draw_group_header(pdf, y, "Mean IPDE patients", compact=compact)
+    for prior in PRIORS:
+        y = draw_table_row(
+            pdf, y, prior_label(run, prior), records[prior]["ipde_patients"], None,
+            compact=compact,
+        )
+    # Preserve room for three scenarios while keeping the footer clear.
+    return y - 3
 
 
 def write_prior_table(
@@ -383,7 +479,7 @@ def write_prior_table(
             len(groups),
             (
                 f"AIDE Phase I/II: {design['label']}, Utility 2 (Lambda_T = 0.3). "
-                "Selection % is OBD selection; Stop % is no OBD selection. "
+                "Selection % is OBD selection; Stop % is no OBD selection; IPDE patients are mean recycled patients. "
                 "Toxicity and efficacy IPDE alphas are both the listed alpha."
             ),
         )
@@ -396,6 +492,326 @@ def write_prior_table(
         pdf.showPage()
     finalize_pdf(pdf, temporary_path, output)
     return output
+
+
+def extract_prior_both_utility_records(
+    data: pd.DataFrame,
+    run: PriorRun,
+    alpha: float,
+    design: dict[str, Any],
+) -> dict[int, dict[tuple[float, float], dict[int, dict[str, Any]]]]:
+    """Select the N=30 U2 and U3 records for one prior-sensitivity table."""
+    subset = data[
+        close_to(data["Toxicity_IPDE_Alpha"], alpha)
+        & close_to(data["Efficacy_IPDE_Alpha"], alpha)
+        & (data["Allocation"] == design["allocation"])
+        & (data["Nmax"] == 30)
+        & (data["N_s1"] == design["n_s1"])
+    ].copy()
+    records: dict[int, dict[tuple[float, float], dict[int, dict[str, Any]]]] = {}
+    for scenario in range(1, 38):
+        records[scenario] = {}
+        for prior in PRIORS:
+            a, b = prior
+            records[scenario][prior] = {}
+            for utility_type, lambda_t, _ in IPDE_ALPHA_UTILITIES:
+                rows = subset[
+                    (subset["Scenario"] == scenario)
+                    & close_to(subset[run.prior_a_column], a)
+                    & close_to(subset[run.prior_b_column], b)
+                    & (subset["Utility_Type"] == utility_type)
+                    & close_to(subset["Lambda_T"], lambda_t)
+                ].sort_values("Dose")
+                if len(rows) != 5 or rows["Dose"].astype(int).tolist() != [1, 2, 3, 4, 5]:
+                    raise ValueError(
+                        f"Expected five dose rows for {run.key}, scenario {scenario}, "
+                        f"utility {utility_type}, alpha {alpha}, {design['label']}, "
+                        f"Beta({a}, {b}); found {len(rows)}."
+                    )
+                if (
+                    (rows["n_valid"].astype(float) <= 0).any()
+                    or not (rows["n_valid"].astype(float) == rows["ntrial_from_files"].astype(float)).all()
+                ):
+                    raise ValueError(
+                        f"Invalid replicate count for {run.key}, scenario {scenario}, "
+                        f"utility {utility_type}, alpha {alpha}, {design['label']}, Beta({a}, {b})."
+                    )
+                records[scenario][prior][utility_type] = {
+                    "selected": rows["OBD_Selection_pct"].astype(float).tolist(),
+                    "treated": rows["Pts_Treated"].astype(float).tolist(),
+                    "ipde_patients": rows["IPDE_Doses"].astype(float).tolist(),
+                    "stop": float(rows["No_OBD_Selection_pct"].iloc[0]),
+                }
+    return records
+
+
+def draw_prior_both_utility_table_scenario(
+    pdf: canvas.Canvas,
+    y: float,
+    scenario: int,
+    truth: dict[str, list[float]],
+    records: dict[tuple[float, float], dict[int, dict[str, Any]]],
+    run: PriorRun,
+) -> float:
+    """Draw a dense but legible prior-sensitivity scenario with U2 and U3 rows."""
+    row_height = 10.8
+    font_size = 8.2
+    baseline = 8.0
+    pdf.setFillColor(colors.HexColor("#EFEFEF"))
+    pdf.rect(LEFT, y - 16, TABLE_WIDTH, 16, fill=1, stroke=0)
+    pdf.setFillColor(colors.black)
+    pdf.setFont("Helvetica-Bold", 12)
+    pdf.drawString(LEFT + 8, y - 11, f"Scenario {scenario}")
+    y -= 18
+    y = draw_table_row(
+        pdf, y, "DLT rate", truth["dlt"], None, decimals=2, compact=False,
+        row_height=row_height, font_size=font_size, baseline=baseline,
+    )
+    y = draw_table_row(
+        pdf, y, "Efficacy rate", truth["efficacy"], None, decimals=2, compact=False,
+        row_height=row_height, font_size=font_size, baseline=baseline,
+    )
+    y = draw_table_row(
+        pdf, y, "Utility 2", truth["utility2"], None, compact=False,
+        row_height=row_height, font_size=font_size, baseline=baseline,
+    )
+    y = draw_table_row(
+        pdf, y, "Utility 3", truth["utility3"], None, compact=False,
+        row_height=row_height, font_size=font_size, baseline=baseline,
+    )
+    y -= 1
+    for group_label, metric in (
+        ("OBD selection (%)", "selected"),
+        ("Mean patients treated", "treated"),
+        ("Mean IPDE patients", "ipde_patients"),
+    ):
+        y = draw_group_header(
+            pdf, y, group_label, compact=False, row_height=row_height,
+            font_size=font_size + 0.2, baseline=baseline,
+        )
+        for prior in PRIORS:
+            for utility_type, _, utility_label in IPDE_ALPHA_UTILITIES:
+                record = records[prior][utility_type]
+                y = draw_table_row(
+                    pdf,
+                    y,
+                    f"{utility_label} - {prior_label(run, prior)}",
+                    record[metric],
+                    record["stop"] if metric == "selected" else None,
+                    shaded=True,
+                    compact=False,
+                    row_height=row_height,
+                    font_size=font_size,
+                    baseline=baseline,
+                )
+    return y - 4
+
+
+def write_prior_both_utility_table(
+    run: PriorRun,
+    alpha: float,
+    design: dict[str, Any],
+    truth: dict[int, dict[str, list[float]]],
+    records: dict[int, dict[tuple[float, float], dict[int, dict[str, Any]]]],
+) -> Path:
+    """Write a prior-sensitivity PDF with both utility definitions in every scenario."""
+    prefix = run.one_stage_table_prefix if design["allocation"] == "one_stage" else run.table_prefix
+    filename = f"{prefix}_alpha{alpha_label(alpha).replace('.', 'p')}_scenarios_1_to_37_tables.pdf"
+    output = run.output_dir / filename
+    groups = combined_ipde_alpha_scenario_groups()
+    pdf, temporary_path = make_pdf_canvas(output)
+    for page_number, scenarios in enumerate(groups, start=1):
+        draw_table_header(
+            pdf,
+            "Phase I/II Operating Characteristics",
+            (
+                f"{run.display_label} comparison - {design['label']} - IPDE alpha = "
+                f"{alpha_label(alpha)} - both utilities - N = 30"
+            ),
+            page_number,
+            len(groups),
+            (
+                "U2: Lambda_T = 0.3; U3: Lambda_T = 1.0. Selection % is OBD selection; "
+                "Stop % is no OBD selection; IPDE patients are mean recycled patients. "
+                "Toxicity and efficacy IPDE alphas are both the listed alpha."
+            ),
+        )
+        y = PAGE_HEIGHT - 130
+        for scenario in scenarios:
+            y = draw_prior_both_utility_table_scenario(
+                pdf, y, scenario, truth[scenario], records[scenario], run,
+            )
+        pdf.showPage()
+    finalize_pdf(pdf, temporary_path, output)
+    return output
+
+
+def write_prior_both_utility_readme(run: PriorRun, table_outputs: list[Path]) -> None:
+    """Document the refreshed prior-sensitivity tables without duplicating the Phase I-II alpha tables."""
+    tables = "\n".join(f"  - {path.name}" for path in table_outputs)
+    (run.output_dir / "README.txt").write_text(
+        "Built from the August Phase I/II N=30 summary listed below.\n\n"
+        f"Source: {run.summary_csv.name}\n\n"
+        "Tables: eight 19-page landscape PDFs covering scenarios 1-37 at IPDE alpha 0, 0.3, 0.6, and 0.9. "
+        "For every alpha, one table is supplied per allocation design (allocation = one_stage and allocation = two_stage). "
+        "Each table includes both utilities: U2 (Utility_Type=2, Lambda_T=0.3) and U3 "
+        "(Utility_Type=3, Lambda_T=1.0). Every scenario shows OBD selection, mean patients treated, "
+        "mean IPDE patients, and Stop %.\n\n"
+        f"Prior varied: {run.README_prior_description}. The four settings are Beta(0.15,0.85), "
+        "Beta(0.30,0.70), Beta(0.50,0.50), and Beta(1,1).\n"
+        "Toxicity and efficacy IPDE alpha are both set to the listed alpha in each output.\n\n"
+        "Table files:\n"
+        f"{tables}\n",
+        encoding="utf-8",
+    )
+
+
+def build_prior_both_utility_outputs(run: PriorRun) -> list[Path]:
+    """Refresh all named prior-sensitivity PDFs with U2 and U3 in the same table."""
+    if not run.summary_csv.exists():
+        raise FileNotFoundError(run.summary_csv)
+    run.output_dir.mkdir(parents=True, exist_ok=True)
+    data = pd.read_csv(run.summary_csv)
+    validate_prior_source(data, run)
+    truth = load_truth()
+    outputs = [
+        write_prior_both_utility_table(
+            run,
+            alpha,
+            design,
+            truth,
+            extract_prior_both_utility_records(data, run, alpha, design),
+        )
+        for alpha in ALPHAS
+        for design in DESIGNS
+    ]
+    write_prior_both_utility_readme(run, outputs)
+    return outputs
+
+
+def validate_model_prior_source(
+    data: pd.DataFrame,
+    run: PriorRun,
+    expected_model_id: str,
+) -> None:
+    """Verify a model-specific N=30 prior run before publishing its tables."""
+    validate_prior_source(data, run)
+    required = {"Model_ID", "Cycle_Max"}
+    missing = sorted(required - set(data.columns))
+    if missing:
+        raise ValueError(f"{run.summary_csv.name} is missing required columns: {missing}")
+    observed_models = set(data["Model_ID"].astype(str).unique())
+    if observed_models != {expected_model_id}:
+        raise ValueError(
+            f"{run.summary_csv.name} has Model_ID {sorted(observed_models)}; "
+            f"expected {expected_model_id}."
+        )
+    observed_cycles = set(data["Cycle_Max"].astype(int).unique())
+    if observed_cycles != {2}:
+        raise ValueError(
+            f"{run.summary_csv.name} has Cycle_Max {sorted(observed_cycles)}; expected 2."
+        )
+
+
+def write_model_prior_both_utility_table(
+    run: PriorRun,
+    model_label: str,
+    alpha: float,
+    design: dict[str, Any],
+    truth: dict[int, dict[str, list[float]]],
+    records: dict[int, dict[tuple[float, float], dict[int, dict[str, Any]]]],
+) -> Path:
+    """Write a model-specific prior table with explicit one_stage/two_stage filenames."""
+    filename = (
+        f"phase12_{run.key}_prior_{design['allocation']}_"
+        f"alpha{alpha_label(alpha).replace('.', 'p')}_scenarios_1_to_37_tables.pdf"
+    )
+    output = run.output_dir / filename
+    groups = combined_ipde_alpha_scenario_groups()
+    pdf, temporary_path = make_pdf_canvas(output)
+    for page_number, scenarios in enumerate(groups, start=1):
+        draw_table_header(
+            pdf,
+            "Phase I/II Operating Characteristics",
+            (
+                f"{model_label} - {run.display_label} comparison - {design['label']} - "
+                f"IPDE alpha = {alpha_label(alpha)} - both utilities - N = 30"
+            ),
+            page_number,
+            len(groups),
+            (
+                "U2: Lambda_T = 0.3; U3: Lambda_T = 1.0. Selection % is OBD selection; "
+                "Stop % is no OBD selection; IPDE patients are mean recycled patients. "
+                "Toxicity and efficacy IPDE alphas are both the listed alpha."
+            ),
+        )
+        y = PAGE_HEIGHT - 130
+        for scenario in scenarios:
+            y = draw_prior_both_utility_table_scenario(
+                pdf, y, scenario, truth[scenario], records[scenario], run,
+            )
+        pdf.showPage()
+    finalize_pdf(pdf, temporary_path, output)
+    return output
+
+
+def write_model_prior_readme(
+    output_dir: Path,
+    model_label: str,
+    model_description: str,
+    runs: tuple[PriorRun, PriorRun],
+    table_outputs: list[Path],
+) -> None:
+    """Describe the separate toxicity- and efficacy-prior tables for one model family."""
+    tables = "\n".join(f"  - {path.name}" for path in table_outputs)
+    sources = "\n".join(f"- Presentation 8-03-2026/{run.summary_csv.name}" for run in runs)
+    output_dir.mkdir(parents=True, exist_ok=True)
+    (output_dir / "README.txt").write_text(
+        f"{model_label} prior-sensitivity tables for the August Phase I/II N=30, Cycle_Max=2 runs.\n\n"
+        f"Model: {model_description}\n\n"
+        "Sources:\n"
+        f"{sources}\n\n"
+        "Tables: 16 landscape PDFs covering toxicity-prior and efficacy-prior sensitivity at IPDE alpha 0, 0.3, "
+        "0.6, and 0.9. Filenames explicitly identify one_stage or two_stage. Each table contains both utilities: "
+        "U2 (Utility_Type=2, Lambda_T=0.3) and U3 (Utility_Type=3, Lambda_T=1.0), with scenarios 1-37 "
+        "shown two per page.\n\n"
+        "The four prior settings are Beta(0.15,0.85), Beta(0.30,0.70), Beta(0.50,0.50), and Beta(1,1). "
+        "Every table reports OBD selection, mean patients treated, mean IPDE patients, and Stop %.\n\n"
+        "Table files:\n"
+        f"{tables}\n",
+        encoding="utf-8",
+    )
+
+
+def build_model_prior_outputs(
+    output_dir: Path,
+    model_label: str,
+    model_description: str,
+    expected_model_id: str,
+    runs: tuple[PriorRun, PriorRun],
+) -> list[Path]:
+    """Create parallel toxicity- and efficacy-prior PDF sets for one model family."""
+    truth = load_truth()
+    outputs: list[Path] = []
+    for run in runs:
+        if not run.summary_csv.exists():
+            raise FileNotFoundError(run.summary_csv)
+        data = pd.read_csv(run.summary_csv)
+        validate_model_prior_source(data, run, expected_model_id)
+        for alpha in ALPHAS:
+            for design in DESIGNS:
+                outputs.append(
+                    write_model_prior_both_utility_table(
+                        run,
+                        model_label,
+                        alpha,
+                        design,
+                        truth,
+                        extract_prior_both_utility_records(data, run, alpha, design),
+                    )
+                )
+    write_model_prior_readme(output_dir, model_label, model_description, runs, outputs)
+    return outputs
 
 
 def extract_ipde_alpha_records(
@@ -431,6 +847,7 @@ def extract_ipde_alpha_records(
             output[scenario][alpha] = {
                 "selected": rows["OBD_Selection_pct"].astype(float).tolist(),
                 "treated": rows["Pts_Treated"].astype(float).tolist(),
+                "ipde_patients": rows["IPDE_Doses"].astype(float).tolist(),
                 "stop": float(rows["No_OBD_Selection_pct"].iloc[0]),
             }
     return output
@@ -479,7 +896,18 @@ def draw_ipde_alpha_table_scenario(
             None,
             compact=compact,
         )
-    return y - (3 if compact else 9)
+    y = draw_group_header(pdf, y, "Mean IPDE patients", compact=compact)
+    for alpha in ALPHAS:
+        y = draw_table_row(
+            pdf,
+            y,
+            f"IPDE alpha = {alpha_label(alpha)}",
+            records[alpha]["ipde_patients"],
+            None,
+            compact=compact,
+        )
+    # Preserve room for three scenarios while keeping the footer clear.
+    return y - 3
 
 
 def write_ipde_alpha_table(
@@ -503,7 +931,8 @@ def write_ipde_alpha_table(
             len(groups),
             (
                 "Utility 2 (Lambda_T = 0.3). Fixed model priors: CRM toxicity Beta(0.15,0.85) and "
-                "additive-efficacy-alpha Beta(0.15,0.85). Both IPDE alphas equal the listed row value."
+                "additive-efficacy-alpha Beta(0.15,0.85). Both IPDE alphas equal the listed row value; "
+                "IPDE patients are mean recycled patients."
             ),
         )
         y = PAGE_HEIGHT - 130
@@ -515,6 +944,179 @@ def write_ipde_alpha_table(
         pdf.showPage()
     finalize_pdf(pdf, temporary_path, output)
     return output
+
+
+def validate_combined_ipde_alpha_source(data: pd.DataFrame) -> None:
+    """Validate the fixed-prior source used for the combined alpha comparisons."""
+    required = {
+        "Allocation", "Nmax", "N_s1", "Utility_Type", "Lambda_T", "Dose", "Scenario",
+        "CRM_Prior_a", "CRM_Prior_b", "Efficacy_Additive_Alpha_Prior_a",
+        "Efficacy_Additive_Alpha_Prior_b", "Toxicity_IPDE_Alpha", "Efficacy_IPDE_Alpha",
+        "OBD_Selection_pct", "Pts_Treated", "IPDE_Doses", "No_OBD_Selection_pct",
+        "n_valid", "ntrial_from_files",
+    }
+    missing = sorted(required - set(data.columns))
+    if missing:
+        raise ValueError(
+            f"{COMBINED_IPDE_ALPHA_CSV.name} is missing required columns: {missing}"
+        )
+    if sorted(data["Scenario"].unique().tolist()) != list(range(1, 38)):
+        raise ValueError("The combined IPDE-alpha source must contain scenarios 1 through 37.")
+
+
+def extract_combined_ipde_alpha_records(
+    data: pd.DataFrame,
+    design: dict[str, Any],
+) -> dict[int, dict[int, dict[float, dict[str, Any]]]]:
+    """Compare shared IPDE alpha at fixed Beta(0.15, 0.85) priors for U2 and U3."""
+    subset = data[
+        (data["Allocation"] == design["allocation"])
+        & (data["Nmax"] == 30)
+        & (data["N_s1"] == design["n_s1"])
+        & close_to(data["CRM_Prior_a"], 0.15)
+        & close_to(data["CRM_Prior_b"], 0.85)
+        & close_to(data["Efficacy_Additive_Alpha_Prior_a"], 0.15)
+        & close_to(data["Efficacy_Additive_Alpha_Prior_b"], 0.85)
+    ].copy()
+    output: dict[int, dict[int, dict[float, dict[str, Any]]]] = {}
+    for scenario in range(1, 38):
+        output[scenario] = {}
+        for utility_type, lambda_t, _ in IPDE_ALPHA_UTILITIES:
+            output[scenario][utility_type] = {}
+            for alpha in ALPHAS:
+                rows = subset[
+                    (subset["Scenario"] == scenario)
+                    & (subset["Utility_Type"] == utility_type)
+                    & close_to(subset["Lambda_T"], lambda_t)
+                    & close_to(subset["Toxicity_IPDE_Alpha"], alpha)
+                    & close_to(subset["Efficacy_IPDE_Alpha"], alpha)
+                ].sort_values("Dose")
+                if len(rows) != 5 or rows["Dose"].astype(int).tolist() != [1, 2, 3, 4, 5]:
+                    raise ValueError(
+                        f"Expected five dose rows for scenario {scenario}, utility {utility_type}, "
+                        f"IPDE alpha {alpha}, {design['allocation']}; found {len(rows)}."
+                    )
+                if (
+                    (rows["n_valid"].astype(float) <= 0).any()
+                    or not (rows["n_valid"].astype(float) == rows["ntrial_from_files"].astype(float)).all()
+                ):
+                    raise ValueError(
+                        f"Invalid replicate count for scenario {scenario}, utility {utility_type}, "
+                        f"IPDE alpha {alpha}, {design['allocation']}."
+                    )
+                output[scenario][utility_type][alpha] = {
+                    "selected": rows["OBD_Selection_pct"].astype(float).tolist(),
+                    "treated": rows["Pts_Treated"].astype(float).tolist(),
+                    "ipde_patients": rows["IPDE_Doses"].astype(float).tolist(),
+                    "stop": float(rows["No_OBD_Selection_pct"].iloc[0]),
+                }
+    return output
+
+
+def draw_combined_ipde_alpha_table_scenario(
+    pdf: canvas.Canvas,
+    y: float,
+    scenario: int,
+    truth: dict[str, list[float]],
+    records: dict[int, dict[float, dict[str, Any]]],
+) -> float:
+    """Draw one scenario with both utility definitions, using a readable dense layout."""
+    row_height = 10.8
+    font_size = 8.2
+    baseline = 8.0
+    pdf.setFillColor(colors.HexColor("#EFEFEF"))
+    pdf.rect(LEFT, y - 16, TABLE_WIDTH, 16, fill=1, stroke=0)
+    pdf.setFillColor(colors.black)
+    pdf.setFont("Helvetica-Bold", 12)
+    pdf.drawString(LEFT + 8, y - 11, f"Scenario {scenario}")
+    y -= 18
+    y = draw_table_row(
+        pdf, y, "DLT rate", truth["dlt"], None, decimals=2, compact=False,
+        row_height=row_height, font_size=font_size, baseline=baseline,
+    )
+    y = draw_table_row(
+        pdf, y, "Efficacy rate", truth["efficacy"], None, decimals=2, compact=False,
+        row_height=row_height, font_size=font_size, baseline=baseline,
+    )
+    y = draw_table_row(
+        pdf, y, "Utility 2", truth["utility2"], None, compact=False,
+        row_height=row_height, font_size=font_size, baseline=baseline,
+    )
+    y = draw_table_row(
+        pdf, y, "Utility 3", truth["utility3"], None, compact=False,
+        row_height=row_height, font_size=font_size, baseline=baseline,
+    )
+    y -= 1
+    for group_label, metric in (
+        ("OBD selection (%)", "selected"),
+        ("Mean patients treated", "treated"),
+        ("Mean IPDE patients", "ipde_patients"),
+    ):
+        y = draw_group_header(
+            pdf, y, group_label, compact=False, row_height=row_height,
+            font_size=font_size + 0.2, baseline=baseline,
+        )
+        for utility_type, _, utility_label in IPDE_ALPHA_UTILITIES:
+            for alpha in ALPHAS:
+                record = records[utility_type][alpha]
+                y = draw_table_row(
+                    pdf,
+                    y,
+                    f"{utility_label} - IPDE alpha = {alpha_label(alpha)}",
+                    record[metric],
+                    record["stop"] if metric == "selected" else None,
+                    shaded=True,
+                    compact=False,
+                    row_height=row_height,
+                    font_size=font_size,
+                    baseline=baseline,
+                )
+    return y - 4
+
+
+def combined_ipde_alpha_scenario_groups() -> list[list[int]]:
+    """Two scenarios per page retain a legible label and row font with both utilities."""
+    return [list(range(start, min(start + 2, 38))) for start in range(1, 38, 2)]
+
+
+def write_combined_ipde_alpha_tables() -> list[Path]:
+    """Create one-stage and two-stage IPDE-alpha tables with U2 and U3 together."""
+    if not COMBINED_IPDE_ALPHA_CSV.exists():
+        raise FileNotFoundError(COMBINED_IPDE_ALPHA_CSV)
+    data = pd.read_csv(COMBINED_IPDE_ALPHA_CSV)
+    validate_combined_ipde_alpha_source(data)
+    truth = load_truth()
+    groups = combined_ipde_alpha_scenario_groups()
+    outputs: list[Path] = []
+    for design in DESIGNS:
+        records = extract_combined_ipde_alpha_records(data, design)
+        output = N30_COMPARISON_DIR / (
+            f"phase12_ipde_alpha_comparison_{design['allocation']}_"
+            "scenarios_1_to_37_tables.pdf"
+        )
+        pdf, temporary_path = make_pdf_canvas(output)
+        for page_number, scenarios in enumerate(groups, start=1):
+            draw_table_header(
+                pdf,
+                "Phase I/II Operating Characteristics",
+                f"IPDE alpha comparison - {design['label']} - both utilities - N = 30",
+                page_number,
+                len(groups),
+                (
+                    "Fixed priors: CRM toxicity Beta(0.15, 0.85) and additive efficacy Beta(0.15, 0.85). "
+                    "U2: Lambda_T = 0.3; U3: Lambda_T = 1.0. Both IPDE alphas equal the listed row value; "
+                    "IPDE patients are mean recycled patients."
+                ),
+            )
+            y = PAGE_HEIGHT - 130
+            for scenario in scenarios:
+                y = draw_combined_ipde_alpha_table_scenario(
+                    pdf, y, scenario, truth[scenario], records[scenario],
+                )
+            pdf.showPage()
+        finalize_pdf(pdf, temporary_path, output)
+        outputs.append(output)
+    return outputs
 
 
 PLOT_COLORS = (colors.HexColor("#0072B2"), colors.HexColor("#D55E00"), colors.HexColor("#009E73"), colors.HexColor("#CC79A7"))
@@ -722,9 +1324,10 @@ def write_prior_readme(
     (run.output_dir / "README.txt").write_text(
         "Built from the August Phase I/II N=30 summary listed below.\n\n"
         f"Source: {run.summary_csv.name}\n\n"
-        "Tables: eight 12-page landscape PDFs covering scenarios 1-37 at IPDE alpha 0, 0.3, 0.6, and 0.9. "
+        "Tables: eight 13-page landscape PDFs covering scenarios 1-37 at IPDE alpha 0, 0.3, 0.6, and 0.9. "
         "For every alpha, one table is supplied per allocation design (allocation = one_stage and allocation = two_stage). "
-        "Each table uses Utility Type 2 and Lambda_T = 0.3, and shows OBD selection, mean patients treated, and Stop %.\n\n"
+        "Each table uses Utility Type 2 and Lambda_T = 0.3, and shows OBD selection, mean patients treated, "
+        "mean IPDE patients, and Stop %.\n\n"
         "IPDE-alpha comparison: two additional 12-page landscape PDFs compare IPDE alpha 0, 0.3, 0.6, and 0.9 "
         "while holding both the CRM toxicity prior and additive-efficacy-alpha prior at Beta(0.15,0.85). "
         "One table is supplied for allocation = one_stage and one for allocation = two_stage.\n\n"
@@ -814,33 +1417,65 @@ def parse_efftox_html(path: Path) -> dict[int, dict[str, Any]]:
     return records
 
 
-def extract_default_aide_records(
+def validate_cycle1_all_methods_source(data: pd.DataFrame) -> None:
+    required = {
+        "Scenario", "Dose", "Allocation", "Nmax", "N_s1", "Model_ID",
+        "CRM_r_Model", "Efficacy_Model", "Cycle_Max", "Utility_Type",
+        "Lambda_T", "OBD_Selection_pct", "Pts_Treated", "No_OBD_Selection_pct",
+        "n_valid", "ntrial_from_files",
+    }
+    missing = sorted(required - set(data.columns))
+    if missing:
+        raise ValueError(f"{ALL_METHODS_CYCLE1_CSV.name} is missing required columns: {missing}")
+    if set(data["Model_ID"]) != {"random_carryoever", "previous_dose_additive"}:
+        raise ValueError("Cycle-1 source must contain random_carryoever and previous_dose_additive models.")
+    if set(data["Cycle_Max"].astype(int)) != {1}:
+        raise ValueError("The all-method source must contain Cycle_Max = 1 only.")
+    expected_models = {
+        "random_carryoever": ("random", "dose_specific_carryover"),
+        "previous_dose_additive": ("previous_dose", "previous_dose_additive"),
+    }
+    for model_id, (crm_model, efficacy_model) in expected_models.items():
+        rows = data[data["Model_ID"] == model_id]
+        observed = set(zip(rows["CRM_r_Model"], rows["Efficacy_Model"], strict=True))
+        if observed != {(crm_model, efficacy_model)}:
+            raise ValueError(
+                f"Unexpected model configuration for {model_id}: {sorted(observed)}."
+            )
+
+
+def extract_cycle1_aide_records(
     data: pd.DataFrame,
+    model_id: str,
     allocation: str,
     utility_type: int,
     lambda_t: float,
 ) -> dict[int, dict[str, Any]]:
     n_s1 = 30 if allocation == "one_stage" else 6
     subset = data[
-        (data["Allocation"] == allocation)
+        (data["Model_ID"] == model_id)
+        & (data["Cycle_Max"] == 1)
+        & (data["Allocation"] == allocation)
         & (data["Nmax"] == 30)
         & (data["N_s1"] == n_s1)
         & (data["Utility_Type"] == utility_type)
         & close_to(data["Lambda_T"], lambda_t)
-        & close_to(data["CRM_Prior_a"], 0.15)
-        & close_to(data["CRM_Prior_b"], 0.85)
-        & close_to(data["Efficacy_Additive_Alpha_Prior_a"], 0.15)
-        & close_to(data["Efficacy_Additive_Alpha_Prior_b"], 0.85)
-        & close_to(data["Toxicity_IPDE_Alpha"], 0.0)
-        & close_to(data["Efficacy_IPDE_Alpha"], 0.0)
     ].copy()
     output: dict[int, dict[str, Any]] = {}
     for scenario in range(1, 38):
         rows = subset[subset["Scenario"] == scenario].sort_values("Dose")
         if len(rows) != 5 or rows["Dose"].astype(int).tolist() != [1, 2, 3, 4, 5]:
             raise ValueError(
-                f"Expected five baseline AIDE rows for scenario {scenario}, allocation={allocation}, "
+                f"Expected five {model_id} AIDE rows for scenario {scenario}, allocation={allocation}, "
                 f"utility={utility_type}; found {len(rows)}."
+            )
+        if (
+            (rows["n_valid"].astype(float) <= 0).any()
+            or not (rows["n_valid"].astype(float) == rows["ntrial_from_files"].astype(float)).all()
+        ):
+            raise ValueError(
+                f"Invalid replicate count for {model_id}, scenario {scenario}, allocation={allocation}, "
+                f"utility={utility_type}."
             )
         output[scenario] = {
             "treated": rows["Pts_Treated"].astype(float).tolist(),
@@ -885,10 +1520,12 @@ def draw_method_table_scenario(
 
 
 def write_refreshed_n30_table() -> Path:
-    """Build the August N=30 all-method table with alpha-based AIDE results."""
+    """Build the N=30, Cycle_Max=1 all-method table using the random-carryover AIDE results."""
     truth = load_truth(JULY_RAW_DIR / "Set_5dose_adaptive_r_37_true_MTD_OBD_summary_lambda1.csv")
-    aide_data = pd.read_csv(TOXICITY_RUN.summary_csv)
-    validate_prior_source(aide_data, TOXICITY_RUN)
+    if not ALL_METHODS_CYCLE1_CSV.exists():
+        raise FileNotFoundError(ALL_METHODS_CYCLE1_CSV)
+    aide_data = pd.read_csv(ALL_METHODS_CYCLE1_CSV)
+    validate_cycle1_all_methods_source(aide_data)
     boin = parse_operating_characteristics_pdf(JULY_RAW_DIR / "BOIN12 Result N = 30.pdf")
     uboin: dict[int, dict[str, Any]] = {}
     for label, count, offset in (("Sce1-10", 10, 0), ("Sce11-20", 10, 10), ("Sce21-30", 10, 20), ("Sce31-37", 7, 30)):
@@ -907,28 +1544,39 @@ def write_refreshed_n30_table() -> Path:
         "BOIN12": boin,
         "U-BOIN": uboin,
         "EffTox": efftox,
-        "AIDE one_stage (Utility 2)": extract_default_aide_records(aide_data, "one_stage", 2, 0.3),
-        "AIDE one_stage (Utility 3)": extract_default_aide_records(aide_data, "one_stage", 3, 1.0),
-        "AIDE two_stage (Utility 2)": extract_default_aide_records(aide_data, "two_stage", 2, 0.3),
-        "AIDE two_stage (Utility 3)": extract_default_aide_records(aide_data, "two_stage", 3, 1.0),
+        "AIDE one_stage (U2)": extract_cycle1_aide_records(
+            aide_data, "random_carryoever", "one_stage", 2, 0.3
+        ),
+        "AIDE one_stage (U3)": extract_cycle1_aide_records(
+            aide_data, "random_carryoever", "one_stage", 3, 1.0
+        ),
+        "AIDE two_stage (U2)": extract_cycle1_aide_records(
+            aide_data, "random_carryoever", "two_stage", 2, 0.3
+        ),
+        "AIDE two_stage (U3)": extract_cycle1_aide_records(
+            aide_data, "random_carryoever", "two_stage", 3, 1.0
+        ),
     }
     output_dir = N30_COMPARISON_DIR
     output_dir.mkdir(parents=True, exist_ok=True)
     output = output_dir / "phase12_all_methods_N30_scenarios_1_to_37_tables.pdf"
-    groups = table_scenario_groups()
+    # Seven methods are displayed in each operating-characteristic block;
+    # two scenarios per page preserves the source table's readable font size.
+    groups = scenario_groups(2)
     pdf, temporary_path = make_pdf_canvas(output)
     method_order = tuple(sources)
     for page_number, scenarios in enumerate(groups, start=1):
         draw_table_header(
             pdf,
             "Phase I/II Operating Characteristics",
-            "Method comparison - N = 30 (AIDE is an alpha-based model)",
+            "Method comparison - N = 30, Cycle_Max = 1",
             page_number,
             len(groups),
-            "AIDE is an alpha-based model. AIDE one_stage and AIDE two_stage are shown explicitly. Utility 2: Type = 2, Lambda_T = 0.3; Utility 3: Type = 3, Lambda_T = 1.",
+            "AIDE rows use random CRM toxicity carryover plus dose-specific efficacy carryover. "
+            "U2: Type = 2, Lambda_T = 0.3; U3: Type = 3, Lambda_T = 1.",
         )
         y = PAGE_HEIGHT - 130
-        compact = len(scenarios) > 1
+        compact = False
         for scenario in scenarios:
             y = draw_method_table_scenario(
                 pdf,
@@ -942,18 +1590,27 @@ def write_refreshed_n30_table() -> Path:
     finalize_pdf(pdf, temporary_path, output)
 
     (output_dir / "README.txt").write_text(
-        "N=30 table refreshed from the August N=30 AIDE prior-sensitivity result and the July raw comparison results.\n\n"
-        "Model description: AIDE is an alpha-based model.\n\n"
+        "N=30, Cycle_Max=1 table refreshed from the newest August random-carryover AIDE summary and the July raw comparison results.\n\n"
+        "AIDE rows shown: one_stage and two_stage for Utilities 2 and 3.\n\n"
         "AIDE source:\n"
-        f"- Presentation 8-03-2026/{TOXICITY_RUN.summary_csv.name}\n"
-        "- Baseline setting used for AIDE rows: CRM toxicity prior Beta(0.15,0.85), additive-efficacy-alpha prior Beta(0.15,0.85), and toxicity/efficacy IPDE alpha = 0.\n"
-        "- AIDE one_stage uses Allocation=one_stage; AIDE two_stage uses Allocation=two_stage.\n\n"
+        f"- Presentation 8-03-2026/{ALL_METHODS_CYCLE1_CSV.name}\n"
+        "- AIDE values use the random-carryover model: random CRM toxicity carryover plus dose-specific efficacy carryover.\n"
+        "- Every AIDE setting has Cycle_Max=1, 1,000 trials, and continuous enrollment.\n"
+        "- One-stage and two-stage designs are shown for Utilities 2 and 3.\n\n"
         "Raw July sources retained for the comparator rows:\n"
         "- BOIN12 Result N = 30.pdf\n"
         "- U-BOIN Sce1-10 / Sce11-20 / Sce21-30 / Sce31-37 N = 30 S1 = 9.pdf\n"
         "- EffTox N = 30.html\n\n"
-        "The table covers scenarios 1-37. Each scenario groups OBD selection rows together, followed by mean-patient-allocation rows. Stop % is no-dose-selection probability. "
-        "AIDE Utility 2 uses Utility_Type=2 and Lambda_T=0.3; Utility 3 uses Utility_Type=3 and Lambda_T=1.\n\n"
+        "The table covers scenarios 1-37, two per page. Each scenario groups OBD selection rows together, followed by mean-patient-allocation rows. Stop % is no-dose-selection probability. "
+        "U2 means Utility_Type=2 and Lambda_T=0.3; U3 means Utility_Type=3 and Lambda_T=1.\n\n"
+        "IPDE-alpha comparison tables:\n"
+        "- phase12_ipde_alpha_comparison_one_stage_scenarios_1_to_37_tables.pdf\n"
+        "- phase12_ipde_alpha_comparison_two_stage_scenarios_1_to_37_tables.pdf\n\n"
+        "These two tables use the additive previous-dose source below, fix both the CRM toxicity and additive-efficacy "
+        "priors at Beta(0.15, 0.85), and show U2 and U3 together for IPDE alpha values 0, 0.3, 0.6, and 0.9:\n"
+        f"- Presentation 8-03-2026/{COMBINED_IPDE_ALPHA_CSV.name}\n\n"
+        "Each comparison table covers scenarios 1-37, two per page. U2 and U3 rows appear within each OBD-selection, "
+        "mean-treated, and mean-IPDE-patient block.\n\n"
         "The prior July N=60 table is retained unchanged.\n",
         encoding="utf-8",
     )

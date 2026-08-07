@@ -1,0 +1,26 @@
+model {
+  ## Delayed-outcome efficacy model E-AD.  alpha[j] is indexed by the
+  ## recycled administration's destination dose j.
+  for (j in 1:ndose) {
+    g_alpha_1[j] ~ dgamma(a_alpha[j], 1)
+    g_alpha_2[j] ~ dgamma(b_alpha[j], 1)
+    alpha[j] <- g_alpha_1[j] / (g_alpha_1[j] + g_alpha_2[j])
+
+    g_regular_1[j] ~ dgamma(a_regular[j], 1)
+    g_regular_2[j] ~ dgamma(b_regular[j], 1)
+    p_regular[j] <- g_regular_1[j] / (g_regular_1[j] + g_regular_2[j])
+  }
+
+  for (i in 1:N) {
+    theta_ipde[i] <- min(1, p_regular[dose[i]] +
+                          alpha[dose[i]] * p_regular[previous_dose[i]])
+    theta_eff[i] <- (1 - ipde[i]) * p_regular[dose[i]] +
+                    ipde[i] * theta_ipde[i]
+    theta_safe[i] <- max(eps, min(1 - eps, theta_eff[i]))
+    loglik[i] <- eff_ascertained[i] * eff[i] * log(theta_safe[i]) +
+      (eff_ascertained[i] * (1 - eff[i]) +
+       (1 - eff_ascertained[i]) * eff_weight[i]) * log(1 - theta_safe[i])
+    phi[i] <- -loglik[i] + zero_trick_constant
+    zeros[i] ~ dpois(phi[i])
+  }
+}
