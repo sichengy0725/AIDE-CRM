@@ -5,8 +5,7 @@
 
 source("TITE-AIDE.R")
 settings <- aide_tite_oc_settings()
-scenario_set <- tools::file_path_sans_ext(basename(settings$scenario_file))
-results_root <- paste0("oc_results_cluster_TITE_AIDE_phase_I_II_", scenario_set)
+results_root <- "oc_tite_aide"
 out_dir <- "OC_summary_TITE_AIDE_phase_I_II"
 jobs_expected <- 1:1000
 ntrial_per_job <- 1L
@@ -18,8 +17,7 @@ tasks <- aide_tite_make_tasks(settings, truth, 1L, ntrial_per_job, getwd())
 
 task_file <- function(task, job) {
   task$job_i <- as.integer(job); task$ntrial <- ntrial_per_job; task$seed <- settings$seed_base + (job - 1L) * ntrial_per_job
-  file.path(results_root, aide_tite_tag(task), paste0("P12TITE-SC", task$Scenario, "-", task$model_id,
-    "-j", task$job_i, "-b1-s", task$seed, "-n", task$ntrial, ".rds"))
+  file.path(results_root, aide_tite_tag(task), sprintf("tite-sc%02d-j%04d.rds", task$Scenario, task$job_i))
 }
 trial_matrix <- function(results, field, ndose) do.call(rbind, lapply(results, function(x) as.matrix(x[[field]])))
 safe_mean <- function(x) if (all(is.na(x))) NA_real_ else mean(x, na.rm = TRUE)

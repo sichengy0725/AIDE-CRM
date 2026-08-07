@@ -57,24 +57,10 @@ aide_tite_setting_grid <- function(settings) {
   out$setting_id <- seq_len(nrow(out)); out
 }
 
-aide_tite_tag <- function(task) paste0(
-  "P12TITE-a", if (task$allocation == "two_stage") "2s" else "1s",
-  "-N", task$Nmax, "-s1", task$s1_Max, "-s2", task$N_s2,
-  "-u", task$utility_type, "-l", aide_tite_fmt(task$lambda_T),
-  "-tm", task$toxicity_model, "-em", task$efficacy_model,
-  "-rp", aide_tite_fmt(task$toxicity_a), "x", aide_tite_fmt(task$toxicity_b),
-  "-ep", aide_tite_fmt(task$efficacy_a), "x", aide_tite_fmt(task$efficacy_b),
-  "-cp", aide_tite_fmt(task$carry_a), "x", aide_tite_fmt(task$carry_b),
-  "-ap", aide_tite_fmt(task$additive_a), "x", aide_tite_fmt(task$additive_b),
-  "-w", aide_tite_fmt(task$T_assess), "-c", task$cohort_size, "-cyc", task$cycle_max,
-  "-rate", aide_tite_fmt(task$arrival_rate), "-neval", task$n_eval,
-  "-toxcut", aide_tite_fmt(task$toxicity_elimination_cutoff),
-  "-effthr", aide_tite_fmt(task$efficacy_threshold), "-futcut", aide_tite_fmt(task$futility_cutoff),
-  "-mineff", task$min_eff_n_for_futility,
-  "-itrisk", as.integer(task$apply_individual_toxicity_risk), "-itcut", aide_tite_fmt(task$toxicity_ipde_overdose_cutoff),
-  "-iebenefit", as.integer(task$apply_individual_efficacy_benefit), "-iemin", aide_tite_fmt(task$efficacy_ipde_min_increment),
-  "-ta", aide_tite_fmt(task$toxicity_ipde_alpha), "-ea", aide_tite_fmt(task$efficacy_ipde_alpha)
-)
+# `setting_id` indexes the complete non-scenario OC grid, so it is a compact,
+# stable and unique directory name.  The full parameter set remains in each
+# saved result as `result$task` and is restored by the extraction script.
+aide_tite_tag <- function(task) sprintf("s%03d", as.integer(task$setting_id))
 
 aide_tite_make_tasks <- function(settings, truth, job_i, ntrial, root) {
   grid <- aide_tite_setting_grid(settings); tasks <- vector("list", nrow(grid) * nrow(truth)); k <- 0L

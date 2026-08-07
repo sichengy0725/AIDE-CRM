@@ -38,7 +38,7 @@ Rscript run_oc_TITE_AIDE_phase_I_II.R 1 1 1
 Rscript extract_result_TITE_AIDE_phase_I_II.R
 ```
 
-They write JAGS TITE-AIDE results under `oc_results_cluster_TITE_AIDE_phase_I_II_*` and extraction files under `OC_summary_TITE_AIDE_phase_I_II/`.
+They write JAGS TITE-AIDE results under `oc_tite_aide/` and extraction files under `OC_summary_TITE_AIDE_phase_I_II/`. Results use compact paths such as `oc_tite_aide/s001/tite-sc01-j1001.rds`; the complete parameter grid remains stored in each result's `task` element.
 
 ## Optional individual recycle screens
 
