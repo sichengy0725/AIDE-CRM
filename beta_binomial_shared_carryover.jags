@@ -1,0 +1,21 @@
+model {
+  ## Independent dose-specific priors for regular efficacy and one shared
+  ## IPDE discount/carryover parameter across all dose levels.  The ratios of
+  ## equal-rate Gamma variables induce the requested Beta priors.
+  g_carry_1 ~ dgamma(a_carry, 1)
+  g_carry_2 ~ dgamma(b_carry, 1)
+  r_e <- g_carry_1 / (g_carry_1 + g_carry_2)
+
+  for (j in 1:ndose) {
+    g_regular_1[j] ~ dgamma(a_r[j], 1)
+    g_regular_2[j] ~ dgamma(b_r[j], 1)
+    p_regular[j] <- g_regular_1[j] /
+                    (g_regular_1[j] + g_regular_2[j])
+
+    ## The common discount r_e is shared between dose levels.
+    p_ipde[j] <- r_e + (1 - r_e) * p_regular[j]
+
+    y_regular[j] ~ dbin(p_regular[j], n_regular[j])
+    y_ipde[j] ~ dbin(p_ipde[j], n_ipde[j])
+  }
+}

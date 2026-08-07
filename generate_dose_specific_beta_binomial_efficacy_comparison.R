@@ -88,18 +88,21 @@ generate_efficacy_data <- function(p_regular,
   out[, c("patient_id", "dose", "group", "efficacy", "p_regular_true", "p_ipde_true")]
 }
 
-#' Fit a dose-specific or hierarchical beta-binomial efficacy model in JAGS.
+#' Fit a shared-carryover, dose-specific-carryover, or hierarchical
+#' beta-binomial efficacy model in JAGS.
 #'
 #' For the dose-specific model, a_r and b_r define independent priors for
 #' regular efficacy pi_Ej, while a_carry and b_carry define independent priors
-#' for the dose-specific IPDE carryover r_Ej. The model uses
-#' pi*_Ej = r_Ej + (1-r_Ej)pi_Ej. In the hierarchical model, a_carry/b_carry
+#' for the IPDE carryover. The dose-specific model uses r_Ej at dose j, while
+#' the shared_carryover model uses one r_E across all dose levels. Both use
+#' pi*_Ej = r_E + (1-r_E)pi_Ej. In the hierarchical model, a_carry/b_carry
 #' are unused.
 #'
 #' @param dose_data Output from generate_efficacy_data().
 #' @param a_r,b_r Positive Beta shapes for regular efficacy.
-#' @param a_carry,b_carry Positive Beta shapes for dose-specific IPDE carryover.
-#' @param prior_type "dose_specific" or "hierarchical".
+#' @param a_carry,b_carry Positive Beta shapes for IPDE carryover. For
+#'   shared_carryover, these must be scalars or constant across dose levels.
+#' @param prior_type "dose_specific", "shared_carryover", or "hierarchical".
 #' @param model_file Optional path to the corresponding JAGS model file.
 #' @param n_chains,n_adapt,n_burnin,n_iter,thin JAGS MCMC settings.
 #' @param seed Optional JAGS random-number seed.
@@ -110,7 +113,7 @@ generate_efficacy_data <- function(p_regular,
 fit_beta_binomial_efficacy <- function(dose_data,
                                        a_r,
                                        b_r,
-                                       prior_type = c("dose_specific", "hierarchical"),
+                                        prior_type = c("dose_specific", "shared_carryover", "hierarchical"),
                                        a_carry = 1,
                                        b_carry = 9,
                                        model_file = NULL,
@@ -164,6 +167,10 @@ fit_beta_binomial_efficacy <- function(dose_data,
   b_r <- expand_shape(b_r, "b_r")
   a_carry <- expand_shape(a_carry, "a_carry")
   b_carry <- expand_shape(b_carry, "b_carry")
+  if (prior_type == "shared_carryover" &&
+      (any(a_carry != a_carry[1L]) || any(b_carry != b_carry[1L]))) {
+    stop("For shared_carryover, a_carry and b_carry must be scalar or constant across dose levels.")
+  }
 
   count_by_dose <- function(group_name) {
     vapply(seq_len(ndose), function(j) {
@@ -184,6 +191,7 @@ fit_beta_binomial_efficacy <- function(dose_data,
     model_file <- switch(
       prior_type,
       dose_specific = "beta_binomial_dose_specific.jags",
+      shared_carryover = "beta_binomial_shared_carryover.jags",
       hierarchical = "beta_binomial_hierarchical.jags"
     )
   }
@@ -208,11 +216,16 @@ fit_beta_binomial_efficacy <- function(dose_data,
     n_ipde = n_ipde,
     y_ipde = y_ipde
   )
-  if (prior_type == "dose_specific") {
+  if (prior_type %in% c("dose_specific", "shared_carryover")) {
     jags_data$a_r <- a_r
     jags_data$b_r <- b_r
-    jags_data$a_carry <- a_carry
-    jags_data$b_carry <- b_carry
+    if (prior_type == "dose_specific") {
+      jags_data$a_carry <- a_carry
+      jags_data$b_carry <- b_carry
+    } else {
+      jags_data$a_carry <- a_carry[1L]
+      jags_data$b_carry <- b_carry[1L]
+    }
   } else {
     jags_data$a0 <- mean(a_r)
     jags_data$b0 <- mean(b_r)
@@ -242,6 +255,8 @@ fit_beta_binomial_efficacy <- function(dose_data,
     stats::update(jags_model, n.iter = n_burnin, progress.bar = "none")
   }
   monitored_parameters <- if (prior_type == "dose_specific") {
+    c("p_regular", "p_ipde", "r_e")
+  } else if (prior_type == "shared_carryover") {
     c("p_regular", "p_ipde", "r_e")
   } else {
     c("p_regular", "p_ipde")
@@ -278,6 +293,16 @@ fit_beta_binomial_efficacy <- function(dose_data,
       function(j) summarize_probability("r_e", j),
       numeric(3)
     ))
+  } else if (prior_type == "shared_carryover") {
+    shared_summary <- c(
+      mean = mean(draws[, "r_e"]),
+      lcl = stats::quantile(draws[, "r_e"], 0.025, names = FALSE),
+      ucl = stats::quantile(draws[, "r_e"], 0.975, names = FALSE)
+    )
+    matrix(
+      rep(shared_summary, each = ndose), nrow = ndose,
+      dimnames = list(NULL, c("mean", "lcl", "ucl"))
+    )
   } else {
     matrix(NA_real_, nrow = ndose, ncol = 3L,
            dimnames = list(NULL, c("mean", "lcl", "ucl")))
@@ -315,7 +340,8 @@ fit_beta_binomial_efficacy <- function(dose_data,
 #'   to generate_efficacy_data().
 #' @param ntrial Number of simulated trials.
 #' @param a_r,b_r,a_carry,b_carry Beta prior shapes passed to fit_beta_binomial_efficacy().
-#' @param prior_type JAGS model to fit: "dose_specific" or "hierarchical".
+#' @param prior_type JAGS model to fit: "dose_specific", "shared_carryover",
+#'   or "hierarchical".
 #' @param plot_file Optional PNG output path.  Use NULL to display the plot on
 #'   the active graphics device.
 #' @return A list containing the average posterior estimates and all trial-level
@@ -328,7 +354,7 @@ run_efficacy_trial <- function(p_regular,
                                ntrial,
                                a_r,
                                b_r,
-                               prior_type = c("dose_specific", "hierarchical"),
+                                prior_type = c("dose_specific", "shared_carryover", "hierarchical"),
                                a_carry = 1,
                                b_carry = 9,
                                model_file = NULL,

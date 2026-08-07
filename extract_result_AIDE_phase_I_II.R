@@ -50,9 +50,19 @@ design_size_grid <- rbind(two_stage_sizes, one_stage_sizes)
 
 ## Keep this paired model grid synchronized with the OC runner.
 model_grid <- data.frame(
-  model_id = c("previous_dose_additive"),
-  crm_r_model = c("previous_dose"),
-  efficacy_model = c("previous_dose_additive"),
+  model_id = c(
+    "discount_shared", "discount_dose_specific",
+    "additive_shared", "additive_dose_specific"
+  ),
+  carryover_model = c(
+    "discount_shared", "discount_dose_specific",
+    "additive_shared", "additive_dose_specific"
+  ),
+  crm_r_model = c("random", "random", "previous_dose", "previous_dose"),
+  efficacy_model = c(
+    "shared_carryover", "dose_specific_carryover",
+    "previous_dose_additive", "dose_specific_previous_dose_additive"
+  ),
   stringsAsFactors = FALSE
 )
 
@@ -60,8 +70,8 @@ model_grid <- data.frame(
 ## alpha. The JAGS models implement these through equal-rate Gamma ratios.
 crm_prior_grid <- data.frame(
   crm_prior_id = "r_beta_0p15_0p85",
-  crm_a_r = c(0.15, 0.3, 0.5, 1),
-  crm_b_r = c(0.85, 0.7, 0.5, 1),
+  crm_a_r = 0.15,
+  crm_b_r = 0.85,
   stringsAsFactors = FALSE
 )
 
@@ -70,12 +80,12 @@ crm_prior_grid <- data.frame(
 ## through equal-rate Gamma ratios.
 efficacy_prior_grid <- data.frame(
   efficacy_prior_id = "regular_beta_0p5_0p5_carry_beta_1_1",
-  efficacy_a = 0.15,
-  efficacy_b = 0.85,
+  efficacy_a = 0.5,
+  efficacy_b = 0.5,
   carry_a = 0.15,
   carry_b = 0.85,
-  efficacy_additive_alpha_a = 0.15,
-  efficacy_additive_alpha_b = 0.85,
+  efficacy_additive_alpha_a = c(0.15, 0.3, 0.5, 1),
+  efficacy_additive_alpha_b = c(0.85, 0.7, 0.5, 1),
   stringsAsFactors = FALSE
 )
 
@@ -113,7 +123,7 @@ crm_alpha_sd <- sqrt(2)
 efficacy_threshold <- 0.20
 futility_cutoff <- 0.95
 min_eff_n_for_futility <- 0L
-apply_random_crm_recycle_toxicity_rule <- TRUE
+apply_random_crm_recycle_toxicity_rule <- FALSE
 apply_random_crm_recycle_efficacy_rule <- FALSE
 
 if (!dir.exists(results_root)) stop("Results directory does not exist: ", results_root)
@@ -225,6 +235,7 @@ make_phase12_config_tag <- function(task) {
     "-u", task$utility_type,
     "-l", fmt_short(task$lambda_T),
     "-en", enrollment_tag,
+    "-cm", task$carryover_model,
     "-tm", task$crm_r_model,
     "-em", task$efficacy_model,
     "-rp", fmt_param(task$crm_a_r), "x", fmt_param(task$crm_b_r),
@@ -424,6 +435,9 @@ make_metadata <- function(result, task_id) {
     Model = "CRM",
     Model_ID = as.character(task_value(
       task, "model_id", task_value(runner, "model_id")
+    )),
+    Carryover_Model = as.character(task_value(
+      task, "carryover_model", task_value(runner, "carryover_model")
     )),
     CRM_r_Model = as.character(task_value(task, "crm_r_model", "random")),
     CRM_Prior_a = as.numeric(task_value(task, "crm_a_r")),
