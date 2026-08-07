@@ -6,6 +6,13 @@
 ## Usage: Rscript run_oc_TITE_AIDE_phase_I_II.R [workers] [ntrial] [IDX]
 ## ============================================================
 
+lib_path <- "/rsrch8/home/biostatistics/syang10/R/x86_64-pc-linux-gnu-library/4.4"
+if (dir.exists(lib_path)) {
+  .libPaths(c(lib_path, .libPaths()))
+}
+library(rjags)
+library(coda)
+
 args <- commandArgs(trailingOnly = TRUE)
 script_file <- sub("^--file=", "", commandArgs(FALSE)[grepl("^--file=", commandArgs(FALSE))])
 if (length(script_file) == 1L && file.exists(script_file)) setwd(dirname(normalizePath(script_file)))
