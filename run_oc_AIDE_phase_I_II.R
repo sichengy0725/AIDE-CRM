@@ -303,6 +303,9 @@ utility_grid <- rbind(
 )
 arrival_grid <- data.frame(arrival_rate = 1 / 56, stringsAsFactors = FALSE)
 ipde_grid <- data.frame(
+  ## ipde_design = 1 with flexible_ipde = TRUE permits recycling from every
+  ## prior dose to every eligible destination: upward, downward, skipped, or
+  ## the same current dose.
   ipde_design = 1L,
   flexible_ipde = TRUE,
   stringsAsFactors = FALSE

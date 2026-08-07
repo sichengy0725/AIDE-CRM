@@ -60,9 +60,11 @@ aide_fit_toxicity <- function(interim, config, ndose) {
   if (!all(p_cols %in% colnames(draws)) || !all(ipde_cols %in% colnames(draws))) stop("The toxicity JAGS model did not return all dose summaries.")
   carry_draws <- if (additive) draws[, "alpha"] else draws[, "r"]
   prob_overtox <- colMeans(draws[, p_cols, drop = FALSE] > tx$target)
+  prob_ipde_overtox <- colMeans(draws[, ipde_cols, drop = FALSE] > tx$target)
   list(model = tx$model, p_regular_mean = colMeans(draws[, p_cols, drop = FALSE]),
        carryover_mean = rep(mean(carry_draws), ndose), p_ipde_mean = colMeans(draws[, ipde_cols, drop = FALSE]),
-       prob_overtox_by_dose = prob_overtox, eliminated = prob_overtox > tx$cutoff,
+       prob_overtox_by_dose = prob_overtox, prob_ipde_overtox_by_dose = prob_ipde_overtox,
+       eliminated = prob_overtox > tx$cutoff,
        skeleton = skeleton, posterior_carryover_mean = mean(carry_draws))
 }
 

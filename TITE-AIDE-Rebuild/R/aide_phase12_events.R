@@ -57,20 +57,46 @@ aide_queue_retreat_opportunity <- function(state, admin_id, config) {
 }
 
 aide_queue_next_new <- function(state) { i <- which(state$queue$type == "new" & state$queue$status == "waiting"); if (!length(i)) integer(0) else i[order(state$queue$time[i], state$queue$seq[i])][1L] }
+aide_retreat_individual_risk_screen <- function(state, queue_index, config) {
+  if (!isTRUE(state$cohort$open) || is.null(state$cohort$risk_context)) return(list(allowed = TRUE, reason = "eligible"))
+  dose <- state$cohort$next_dose; risk <- state$cohort$risk_context
+  if (isTRUE(config$recycle$apply_individual_toxicity_risk)) {
+    prob <- risk$prob_toxicity_ipde_overdose[dose]
+    if (!is.finite(prob) || prob > config$recycle$toxicity_ipde_overdose_cutoff)
+      return(list(allowed = FALSE, reason = "blocked_individual_toxicity_risk", toxicity_overdose_probability = prob))
+  }
+  if (isTRUE(config$recycle$apply_individual_efficacy_benefit)) {
+    benefit <- risk$p_efficacy_ipde[dose] - risk$p_efficacy[dose]
+    if (!is.finite(benefit) || benefit <= config$recycle$efficacy_ipde_min_increment)
+      return(list(allowed = FALSE, reason = "blocked_individual_efficacy_benefit", efficacy_increment = benefit))
+  }
+  list(allowed = TRUE, reason = "eligible")
+}
+
 aide_queue_next_retreat <- function(state, config) {
   i <- which(state$queue$type == "retreat" & state$queue$status == "waiting")
-  if (!length(i)) return(integer(0))
+  if (!length(i)) return(list(state = state, index = integer(0)))
   for (k in i[order(state$queue$time[i], state$queue$seq[i])]) {
     a <- state$admin[match(state$queue$source_admin_id[k], state$admin$admin_id), , drop = FALSE]
     e <- aide_retreat_structural_eligibility(a, state$t_now, config)
-    if (e$eligible) return(k)
+    if (e$eligible) {
+      risk <- aide_retreat_individual_risk_screen(state, k, config)
+      if (risk$allowed) return(list(state = state, index = k))
+      if (state$queue$last_reason[k] != risk$reason) {
+        state$queue$last_reason[k] <- risk$reason
+        state$logs$retreat_log <- aide_add_row(state$logs$retreat_log, list(queue_id = state$queue$queue_id[k], time = state$t_now,
+          patient_id = state$queue$patient_id[k], source_admin_id = state$queue$source_admin_id[k], eligible = FALSE,
+          reason = risk$reason, status = "waiting", cohort_id = state$cohort$cohort_id, assigned_dose = state$cohort$next_dose))
+      }
+      next
+    }
     state$queue$status[k] <- "removed_ineligible"; state$queue$last_reason[k] <- e$reason
   }
-  integer(0)
+  list(state = state, index = integer(0))
 }
 
 aide_select_assignment_opportunity <- function(state, config) {
-  i <- aide_queue_next_new(state); if (length(i)) return(i)
+  i <- aide_queue_next_new(state); if (length(i)) return(list(state = state, index = i))
   aide_queue_next_retreat(state, config)
 }
 
@@ -99,7 +125,7 @@ aide_append_administration <- function(state, queue_index, config, scenario) {
 
 aide_fill_open_cohort <- function(state, config, scenario) {
   while (state$cohort$open && state$cohort$filled < state$cohort$capacity && nrow(state$admin) < config$design$Nmax) {
-    i <- aide_select_assignment_opportunity(state, config); if (!length(i)) break
+    selected <- aide_select_assignment_opportunity(state, config); state <- selected$state; i <- selected$index; if (!length(i)) break
     state <- aide_append_administration(state, i, config, scenario)
   }
   if (state$cohort$filled >= state$cohort$capacity) {
@@ -116,6 +142,8 @@ aide_open_cohort <- function(state, decision) {
   state$counters$cohort <- state$counters$cohort + 1L
   state$cohort <- list(open = TRUE, cohort_id = state$counters$cohort, opened_time = state$t_now, next_dose = decision$next_dose,
     decision_action = decision$action, stage = decision$stage, capacity = state$cohort$capacity, filled = 0L, decision_id = state$counters$decision)
+  state$cohort$risk_context <- list(p_efficacy = decision$p_efficacy, p_efficacy_ipde = decision$p_efficacy_ipde,
+    prob_toxicity_ipde_overdose = decision$prob_toxicity_ipde_overdose)
   state$current_dose <- decision$next_dose; state$stage$active <- decision$stage; state$stage$transitioned <- state$stage$transitioned || isTRUE(decision$stage_transition)
   state
 }

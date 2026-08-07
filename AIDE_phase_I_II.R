@@ -97,6 +97,42 @@ aide_phase12_dose_threshold_reached <- function(n_by_dose, threshold) {
   any(is.finite(n_by_dose) & n_by_dose >= threshold)
 }
 
+## Determine whether a patient most recently treated at previous_dose can be
+## recycled at next_dose.  A same-dose recycle is permitted for both IPDE
+## designs.  Without flexible_ipde, movement remains upward-only; with it,
+## downward recycling follows the selected any-dose/adjacent-dose rule.
+aide_phase12_recycle_dose_eligible <- function(previous_dose,
+                                                next_dose,
+                                                ipde_design,
+                                                flexible_ipde) {
+  previous_dose <- as.numeric(previous_dose)
+  if (length(next_dose) != 1L || !is.finite(next_dose) ||
+      next_dose < 1L || next_dose != as.integer(next_dose)) {
+    stop("next_dose must be a positive integer.")
+  }
+  if (length(ipde_design) != 1L || !ipde_design %in% c(1L, 2L)) {
+    stop("ipde_design must be 1 (any dose) or 2 (adjacent dose).")
+  }
+  flexible_ipde <- aide_phase12_validate_logical_flag(
+    flexible_ipde, "flexible_ipde"
+  )
+  if (any(!is.finite(previous_dose)) || any(previous_dose < 1L) ||
+      any(previous_dose != as.integer(previous_dose))) {
+    stop("previous_dose must contain positive integer dose indices.")
+  }
+  previous_dose <- as.integer(previous_dose)
+  next_dose <- as.integer(next_dose)
+  if (flexible_ipde && ipde_design == 1L) {
+    rep(TRUE, length(previous_dose))
+  } else if (flexible_ipde && ipde_design == 2L) {
+    abs(previous_dose - next_dose) <= 1L
+  } else if (ipde_design == 1L) {
+    previous_dose <= next_dose
+  } else {
+    previous_dose >= next_dose - 1L & previous_dose <= next_dose
+  }
+}
+
 ## True recycled-patient efficacy. At a proposed dose d2 for a patient most
 ## recently treated at d1, this is min(1, p2 + alpha * p1), where p2 is the
 ## recycled-efficacy base at d2 and p1 is regular efficacy at d1.
@@ -1616,7 +1652,7 @@ simulate_AIDE_phase_I_II <- function(
   }
 
   eligible_ipde_ids <- function(next_dose, stage, futility = NULL) {
-    if (cycle_max <= 1L || (next_dose <= 1L && !flexible_ipde)) {
+    if (cycle_max <= 1L) {
       return(integer(0))
     }
     if (is.null(futility)) futility <- futility_state()
@@ -1628,15 +1664,12 @@ simulate_AIDE_phase_I_II <- function(
     }
     state <- latest_patient_state()
     if (nrow(state) == 0L) return(integer(0))
-    dose_ok <- if (flexible_ipde && ipde_design == 1L) {
-      state$dose != next_dose
-    } else if (flexible_ipde && ipde_design == 2L) {
-      abs(state$dose - next_dose) == 1L
-    } else if (ipde_design == 1L) {
-      state$dose < next_dose
-    } else {
-      state$dose == next_dose - 1L
-    }
+    dose_ok <- aide_phase12_recycle_dose_eligible(
+      previous_dose = state$dose,
+      next_dose = next_dose,
+      ipde_design = ipde_design,
+      flexible_ipde = flexible_ipde
+    )
     ## An IPDE administration requires completion of a cycle with neither a
     ## DLT nor an efficacy response, as specified for the efficacy-enabled
     ## design.  t_eval is set only after both endpoint times are observed.

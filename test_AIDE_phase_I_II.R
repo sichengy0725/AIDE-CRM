@@ -58,6 +58,20 @@ stopifnot(
   !aide_phase12_dose_threshold_reached(c(3L, 3L, 3L), 6L),
   aide_phase12_dose_threshold_reached(c(3L, 6L, 3L), 6L)
 )
+stopifnot(
+  ## Same-dose recycling is eligible under both IPDE designs.
+  aide_phase12_recycle_dose_eligible(1L, 1L, 1L, FALSE),
+  aide_phase12_recycle_dose_eligible(1L, 1L, 2L, FALSE),
+  aide_phase12_recycle_dose_eligible(2L, 2L, 1L, TRUE),
+  aide_phase12_recycle_dose_eligible(2L, 2L, 2L, TRUE),
+  aide_phase12_recycle_dose_eligible(1L, 3L, 1L, TRUE),
+  aide_phase12_recycle_dose_eligible(3L, 1L, 1L, TRUE),
+  ## Existing movement restrictions remain in force.
+  !aide_phase12_recycle_dose_eligible(3L, 2L, 1L, FALSE),
+  !aide_phase12_recycle_dose_eligible(3L, 1L, 2L, FALSE),
+  aide_phase12_recycle_dose_eligible(1L, 2L, 2L, FALSE),
+  aide_phase12_recycle_dose_eligible(3L, 2L, 2L, TRUE)
+)
 
 ## The additive previous-dose models must pair a recycled administration with
 ## that same patient's immediately preceding dose, not the last global dose.

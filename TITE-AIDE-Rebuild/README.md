@@ -40,6 +40,19 @@ Rscript extract_result_TITE_AIDE_phase_I_II.R
 
 They write JAGS TITE-AIDE results under `oc_results_cluster_TITE_AIDE_phase_I_II_*` and extraction files under `OC_summary_TITE_AIDE_phase_I_II/`.
 
+## Optional individual recycle screens
+
+Set these in `aide_tite_oc_settings()` to apply a screen to a structurally eligible retreat candidate at the frozen next dose of an open cohort:
+
+```r
+apply_individual_toxicity_risk = TRUE,
+toxicity_ipde_overdose_cutoff = .95,
+apply_individual_efficacy_benefit = TRUE,
+efficacy_ipde_min_increment = .05
+```
+
+The toxicity screen blocks a retreat when the posterior probability that its IPDE toxicity exceeds the target is above the cutoff. The efficacy screen blocks it when `P(IPDE efficacy) - P(regular efficacy)` is less than or equal to the requested minimum increment. A blocked retreat stays in the queue for reconsideration under a later cohort dose.
+
 ## Deliberate compatibility boundary
 
 `simulate_AIDE_phase_I_II()` is retained as a lightweight compatibility wrapper for `config`/`scenario` calls and basic legacy scalar inputs.  Legacy recycle-destination controls (`ipde_design`, `flexible_ipde`, `random_crm_*`) are intentionally rejected because the rebuild has one design-selected cohort dose.

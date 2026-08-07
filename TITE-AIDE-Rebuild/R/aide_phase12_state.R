@@ -12,7 +12,7 @@ aide_phase12_initialize_state <- function(config, scenario, seed = NULL) {
     cohort = list(open = TRUE, cohort_id = 1L, opened_time = config$time$t0,
                   next_dose = config$design$start_dose, decision_action = "initial",
                   stage = if (config$design$allocation == "two_stage") "stage1" else "one_stage",
-                  capacity = config$design$cohort_size, filled = 0L, decision_id = 0L),
+                capacity = config$design$cohort_size, filled = 0L, decision_id = 0L, risk_context = NULL),
     current_dose = config$design$start_dose,
     stage = list(active = if (config$design$allocation == "two_stage") "stage1" else "one_stage", transitioned = FALSE),
     eliminated = rep(FALSE, scenario$ndose), futile = rep(FALSE, scenario$ndose),

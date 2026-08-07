@@ -32,7 +32,10 @@ aide_phase12_config <- function(
                       stage2_mtd_ceiling = TRUE),
     utility = list(type = 1L, lambda_T = 1, scores = c(0, 1, -1, 0),
                    tie_break = "lower_dose"),
-    recycle = list(priority = "new_first"),
+    recycle = list(priority = "new_first", apply_individual_toxicity_risk = FALSE,
+                   toxicity_ipde_overdose_cutoff = .95,
+                   apply_individual_efficacy_benefit = FALSE,
+                   efficacy_ipde_min_increment = 0),
     reporting = list(verbose = FALSE, store_raw_tables = TRUE), ...) {
   allocation <- match.arg(allocation)
   config <- list(
@@ -64,7 +67,11 @@ aide_phase12_config <- function(
                                                tie_break = "lower_dose")),
     recycle = aide_phase12_merge(recycle, list(priority = "new_first",
                                                drop_new_trigger_on_n_eval = TRUE,
-                                               retain_retreat_trigger_on_n_eval = TRUE)),
+                                               retain_retreat_trigger_on_n_eval = TRUE,
+                                               apply_individual_toxicity_risk = FALSE,
+                                               toxicity_ipde_overdose_cutoff = .95,
+                                               apply_individual_efficacy_benefit = FALSE,
+                                               efficacy_ipde_min_increment = 0)),
     reporting = aide_phase12_merge(reporting, list(verbose = FALSE, store_raw_tables = TRUE))
   )
   aide_phase12_validate_config(config)
@@ -99,6 +106,9 @@ aide_phase12_validate_config <- function(config, scenario = NULL) {
   if (!config$toxicity$model %in% choices$toxicity || !config$efficacy$model %in% choices$efficacy)
     stop("Selected toxicity or efficacy TITE backend is unavailable.")
   if (!identical(config$recycle$priority, "new_first")) stop("The rebuilt TITE engine requires recycle$priority = 'new_first'.")
+  if (!is.finite(config$recycle$toxicity_ipde_overdose_cutoff) || config$recycle$toxicity_ipde_overdose_cutoff <= 0 || config$recycle$toxicity_ipde_overdose_cutoff >= 1 ||
+      !is.finite(config$recycle$efficacy_ipde_min_increment) || config$recycle$efficacy_ipde_min_increment < 0)
+    stop("Individual recycle-risk thresholds are invalid.")
   if (!is.null(config$toxicity$prior))
     stop("toxicity$prior is not a CRM prior. Use beta_prior_mean/beta_prior_sd for the CRM curve and carryover_prior for r or alpha.")
   if (length(config$toxicity$carryover_prior) != 2L || length(config$efficacy$prior) != 2L ||

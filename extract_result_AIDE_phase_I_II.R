@@ -101,6 +101,8 @@ utility_grid <- rbind(
 )
 arrival_grid <- data.frame(arrival_rate = 1 / 56, stringsAsFactors = FALSE)
 ipde_grid <- data.frame(
+  ## Must match the runner: all-level IPDE recycling, including skipped and
+  ## same-dose recycling, is selected by ipde_design = 1 and flexible_ipde.
   ipde_design = 1L,
   flexible_ipde = TRUE,
   stringsAsFactors = FALSE

@@ -18,16 +18,26 @@ aide_tite_oc_settings <- function() list(
     data.frame(allocation = "one_stage", Nmax = 30L, s1_Max = 30L, N_s2 = 30L)
   ),
   model_grid = data.frame(
-    model_id = c("discount_shared", "discount_dose_specific", "additive_shared", "additive_dose_specific"),
-    toxicity_model = c("discount_r", "discount_r", "additive_alpha", "additive_alpha"),
-    efficacy_model = c("shared_carryover", "dose_specific_carryover", "previous_dose_additive", "dose_specific_previous_dose_additive")
+    # Shared additive-alpha toxicity in both comparisons; efficacy varies
+    # between shared and destination-dose-specific additive alpha.
+    model_id = c("additive_shared", "additive_dose_specific"),
+    toxicity_model = c("additive_alpha", "additive_alpha"),
+    efficacy_model = c("previous_dose_additive", "dose_specific_previous_dose_additive")
   ),
   toxicity_prior_grid = data.frame(toxicity_a = .15, toxicity_b = .85),
   efficacy_prior_grid = data.frame(efficacy_a = .5, efficacy_b = .5, carry_a = .15, carry_b = .85,
     additive_a = c(.15, .3, .5, 1), additive_b = c(.85, .7, .5, 1)),
   utility_grid = rbind(data.frame(utility_type = 2L, lambda_T = .3), data.frame(utility_type = 3L, lambda_T = 1)),
   arrival_grid = data.frame(arrival_rate = 1 / 56),
-  alpha_grid = data.frame(toxicity_ipde_alpha = c(0, .3, .6, .9), efficacy_ipde_alpha = c(0, .3, .6, .9))
+  alpha_grid = data.frame(toxicity_ipde_alpha = c(0, .3, .6, .9), efficacy_ipde_alpha = c(0, .3, .6, .9)),
+  toxicity_elimination_cutoff = .95,
+  efficacy_threshold = .20,
+  futility_cutoff = .95,
+  min_eff_n_for_futility = 0L,
+  apply_individual_toxicity_risk = FALSE,
+  toxicity_ipde_overdose_cutoff = .95,
+  apply_individual_efficacy_benefit = FALSE,
+  efficacy_ipde_min_increment = 0
 )
 
 aide_tite_read_truth <- function(file, scenario_ids) {
@@ -58,6 +68,11 @@ aide_tite_tag <- function(task) paste0(
   "-ap", aide_tite_fmt(task$additive_a), "x", aide_tite_fmt(task$additive_b),
   "-w", aide_tite_fmt(task$T_assess), "-c", task$cohort_size, "-cyc", task$cycle_max,
   "-rate", aide_tite_fmt(task$arrival_rate), "-neval", task$n_eval,
+  "-toxcut", aide_tite_fmt(task$toxicity_elimination_cutoff),
+  "-effthr", aide_tite_fmt(task$efficacy_threshold), "-futcut", aide_tite_fmt(task$futility_cutoff),
+  "-mineff", task$min_eff_n_for_futility,
+  "-itrisk", as.integer(task$apply_individual_toxicity_risk), "-itcut", aide_tite_fmt(task$toxicity_ipde_overdose_cutoff),
+  "-iebenefit", as.integer(task$apply_individual_efficacy_benefit), "-iemin", aide_tite_fmt(task$efficacy_ipde_min_increment),
   "-ta", aide_tite_fmt(task$toxicity_ipde_alpha), "-ea", aide_tite_fmt(task$efficacy_ipde_alpha)
 )
 
@@ -71,7 +86,14 @@ aide_tite_make_tasks <- function(settings, truth, job_i, ntrial, root) {
       p_true = as.numeric(unlist(tr[paste0("Tox_Dose", 1:5)], use.names = FALSE)),
       e_true = as.numeric(unlist(tr[paste0("Eff_Dose", 1:5)], use.names = FALSE)),
       cohort_size = settings$cohort_size, cycle_max = settings$cycle_max, T_assess = settings$T_assess,
-      n_eval = settings$n_eval, m_U = settings$m_U, skeleton = settings$skeleton, utility_scores = settings$utility_scores, root = root))
+      n_eval = settings$n_eval, m_U = settings$m_U, skeleton = settings$skeleton, utility_scores = settings$utility_scores,
+      toxicity_elimination_cutoff = settings$toxicity_elimination_cutoff,
+      efficacy_threshold = settings$efficacy_threshold, futility_cutoff = settings$futility_cutoff,
+      min_eff_n_for_futility = settings$min_eff_n_for_futility,
+      apply_individual_toxicity_risk = settings$apply_individual_toxicity_risk,
+      toxicity_ipde_overdose_cutoff = settings$toxicity_ipde_overdose_cutoff,
+      apply_individual_efficacy_benefit = settings$apply_individual_efficacy_benefit,
+      efficacy_ipde_min_increment = settings$efficacy_ipde_min_increment, root = root))
   }
   tasks
 }
@@ -80,9 +102,14 @@ aide_tite_task_config <- function(task) aide_phase12_config(
   allocation = task$allocation, cohort_size = task$cohort_size, Nmax = task$Nmax, s1_Max = task$s1_Max,
   N_s2 = task$N_s2, n_eval = task$n_eval, m_U = task$m_U, cycle_max = task$cycle_max,
   time = list(arrival_rate = task$arrival_rate, t0 = 0, T_assess = task$T_assess),
-  toxicity = list(model = task$toxicity_model, target = task$target, cutoff = .95, skeleton = task$skeleton,
+  toxicity = list(model = task$toxicity_model, target = task$target, cutoff = task$toxicity_elimination_cutoff, skeleton = task$skeleton,
     beta_prior_mean = 0, beta_prior_sd = sqrt(2), carryover_prior = c(task$toxicity_a, task$toxicity_b)),
   efficacy = list(model = task$efficacy_model, prior = c(task$efficacy_a, task$efficacy_b),
-    carryover_prior = c(task$carry_a, task$carry_b), threshold = .20, futility_cutoff = .95, min_eff_n_for_futility = 0L),
+    carryover_prior = c(task$carry_a, task$carry_b), threshold = task$efficacy_threshold,
+    futility_cutoff = task$futility_cutoff, min_eff_n_for_futility = task$min_eff_n_for_futility),
+  recycle = list(priority = "new_first", apply_individual_toxicity_risk = task$apply_individual_toxicity_risk,
+    toxicity_ipde_overdose_cutoff = task$toxicity_ipde_overdose_cutoff,
+    apply_individual_efficacy_benefit = task$apply_individual_efficacy_benefit,
+    efficacy_ipde_min_increment = task$efficacy_ipde_min_increment),
   utility = list(type = task$utility_type, lambda_T = task$lambda_T, scores = task$utility_scores)
 )
