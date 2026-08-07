@@ -5,7 +5,7 @@
 
 source("TITE-AIDE.R")
 settings <- aide_tite_oc_settings()
-results_root <- "oc_tite_aide"
+results_root <- aide_tite_results_root(settings)
 out_dir <- "OC_summary_TITE_AIDE_phase_I_II"
 jobs_expected <- 1:1000
 ntrial_per_job <- 1L

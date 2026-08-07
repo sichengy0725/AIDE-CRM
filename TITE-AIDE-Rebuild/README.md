@@ -38,7 +38,7 @@ Rscript run_oc_TITE_AIDE_phase_I_II.R 1 1 1
 Rscript extract_result_TITE_AIDE_phase_I_II.R
 ```
 
-They write JAGS TITE-AIDE results under `oc_tite_aide/` and extraction files under `OC_summary_TITE_AIDE_phase_I_II/`. Results use compact paths such as `oc_tite_aide/s001/tite-sc01-j1001.rds`; the complete parameter grid remains stored in each result's `task` element.
+They write JAGS TITE-AIDE results under `oc_tite_aide/<results_id>/` and extraction files under `OC_summary_TITE_AIDE_phase_I_II/`. Results use compact paths such as `oc_tite_aide/baseline/s001/tite-sc01-j1001.rds`; the complete parameter grid remains stored in each result's `task` element. Before a materially different OC run, change `results_id` in `aide_tite_oc_settings()`. Existing results are protected from overwrite by default; set `overwrite_results = TRUE` only when intentionally replacing a run.
 
 ## Optional individual recycle screens
 

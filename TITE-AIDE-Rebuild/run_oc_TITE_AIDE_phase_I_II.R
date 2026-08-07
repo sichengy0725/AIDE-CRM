@@ -29,7 +29,7 @@ ntrial <- if (length(args) >= 2L) positive_integer(args[2L], "ntrial") else sett
 job_i <- job_index(args)
 if (workers != 1L) warning("workers is retained for run_oc_AIDE_phase_I_II compatibility; execution is sequential.")
 truth <- aide_tite_read_truth(settings$scenario_file, settings$scenario_ids)
-results_root <- "oc_tite_aide"
+results_root <- aide_tite_results_root(settings)
 dir.create(results_root, recursive = TRUE, showWarnings = FALSE)
 tasks <- aide_tite_make_tasks(settings, truth, job_i, ntrial, getwd())
 
@@ -40,6 +40,9 @@ run_task <- function(task) {
   folder <- file.path(results_root, tag); dir.create(folder, recursive = TRUE, showWarnings = FALSE)
   filename <- sprintf("tite-sc%02d-j%04d.rds", task$Scenario, task$job_i)
   outfile <- file.path(folder, filename)
+  if (file.exists(outfile) && !isTRUE(settings$overwrite_results))
+    stop("Refusing to overwrite an existing result: ", outfile,
+         ". Set a new results_id for a new analysis, or set overwrite_results = TRUE to replace it.")
   cat("Task", task$task_id, "/", length(tasks), "scenario", task$Scenario, "\n")
   config <- aide_tite_task_config(task)
   scenario <- aide_phase12_scenario(task$p_true, task$e_true,
