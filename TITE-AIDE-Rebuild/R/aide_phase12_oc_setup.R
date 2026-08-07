@@ -9,9 +9,6 @@ aide_tite_cross_join <- function(x, y) merge(x, y, by = NULL, sort = FALSE)
 aide_tite_oc_settings <- function() list(
   scenario_file = file.path("..", "Set_5dose_adaptive_r_37_true_MTD_OBD_summary_lambda1.csv"),
   scenario_ids = 1:37,
-  # Change this before launching a materially different OC configuration.
-  results_id = "baseline",
-  overwrite_results = FALSE,
   seed_base = 1L, ntrial = 1L, cohort_size = 3L, cycle_max = 2L,
   T_assess = 28, n_eval = 3L, m_U = 6L,
   skeleton = c(.15, .20, .30, .35, .45),
@@ -60,16 +57,29 @@ aide_tite_setting_grid <- function(settings) {
   out$setting_id <- seq_len(nrow(out)); out
 }
 
-# `setting_id` indexes the complete non-scenario OC grid, so it is a compact,
-# stable and unique directory name.  The full parameter set remains in each
-# saved result as `result$task` and is restored by the extraction script.
-aide_tite_tag <- function(task) sprintf("s%03d", as.integer(task$setting_id))
-
-aide_tite_results_root <- function(settings) {
-  if (!is.character(settings$results_id) || length(settings$results_id) != 1L ||
-      !nzchar(settings$results_id) || grepl("[^A-Za-z0-9_.-]", settings$results_id))
-    stop("results_id must be a nonempty filename-safe label (letters, numbers, dot, dash, underscore).")
-  file.path("oc_tite_aide", settings$results_id)
+aide_tite_tag <- function(task) {
+  # Individual-risk details are included only when their corresponding rule is
+  # active.  n_eval is intentionally omitted to keep directory names short.
+  individual_risk <- paste0(
+    if (isTRUE(task$apply_individual_toxicity_risk)) paste0("-itcut", aide_tite_fmt(task$toxicity_ipde_overdose_cutoff)) else "",
+    if (isTRUE(task$apply_individual_efficacy_benefit)) paste0("-iemin", aide_tite_fmt(task$efficacy_ipde_min_increment)) else ""
+  )
+  paste0(
+    "P12TITE-a", if (task$allocation == "two_stage") "2s" else "1s",
+    "-N", task$Nmax, "-s1", task$s1_Max, "-s2", task$N_s2,
+    "-u", task$utility_type, "-l", aide_tite_fmt(task$lambda_T),
+    "-tm", task$toxicity_model, "-em", task$efficacy_model,
+    "-rp", aide_tite_fmt(task$toxicity_a), "x", aide_tite_fmt(task$toxicity_b),
+    "-ep", aide_tite_fmt(task$efficacy_a), "x", aide_tite_fmt(task$efficacy_b),
+    "-cp", aide_tite_fmt(task$carry_a), "x", aide_tite_fmt(task$carry_b),
+    "-ap", aide_tite_fmt(task$additive_a), "x", aide_tite_fmt(task$additive_b),
+    "-w", aide_tite_fmt(task$T_assess), "-c", task$cohort_size, "-cyc", task$cycle_max,
+    "-rate", aide_tite_fmt(task$arrival_rate),
+    "-toxcut", aide_tite_fmt(task$toxicity_elimination_cutoff),
+    "-effthr", aide_tite_fmt(task$efficacy_threshold), "-futcut", aide_tite_fmt(task$futility_cutoff),
+    "-mineff", task$min_eff_n_for_futility, individual_risk,
+    "-ta", aide_tite_fmt(task$toxicity_ipde_alpha), "-ea", aide_tite_fmt(task$efficacy_ipde_alpha)
+  )
 }
 
 aide_tite_make_tasks <- function(settings, truth, job_i, ntrial, root) {

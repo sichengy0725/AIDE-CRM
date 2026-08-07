@@ -5,7 +5,8 @@
 
 source("TITE-AIDE.R")
 settings <- aide_tite_oc_settings()
-results_root <- aide_tite_results_root(settings)
+scenario_set <- tools::file_path_sans_ext(basename(settings$scenario_file))
+results_root <- paste0("oc_results_cluster_TITE_AIDE_phase_I_II_", scenario_set)
 out_dir <- "OC_summary_TITE_AIDE_phase_I_II"
 jobs_expected <- 1:1000
 ntrial_per_job <- 1L
