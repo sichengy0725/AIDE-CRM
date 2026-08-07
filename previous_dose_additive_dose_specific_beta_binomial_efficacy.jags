@@ -1,0 +1,30 @@
+model {
+  ## Dose-specific additive previous-dose efficacy model.  alpha[j] is used
+  ## for a recycled administration at current dose j:
+  ## Pr(E[i] = 1 | IPDE) = min(1, p_regular[dose[i]] +
+  ##                           alpha[dose[i]] * p_regular[previous_dose[i]]).
+  ## Gamma ratios give the requested independent Beta priors for alpha[j] and
+  ## p_regular[j].
+  for (j in 1:ndose) {
+    g_alpha_1[j] ~ dgamma(a_alpha[j], 1)
+    g_alpha_2[j] ~ dgamma(b_alpha[j], 1)
+    alpha[j] <- g_alpha_1[j] / (g_alpha_1[j] + g_alpha_2[j])
+
+    g_regular_1[j] ~ dgamma(a_regular[j], 1)
+    g_regular_2[j] ~ dgamma(b_regular[j], 1)
+    p_regular[j] <- g_regular_1[j] /
+                    (g_regular_1[j] + g_regular_2[j])
+  }
+
+  for (i in 1:N) {
+    theta_regular[i] <- p_regular[dose[i]]
+    theta_ipde[i] <- min(
+      1,
+      p_regular[dose[i]] +
+        alpha[dose[i]] * p_regular[previous_dose[i]]
+    )
+    theta[i] <- (1 - ipde[i]) * theta_regular[i] +
+                ipde[i] * theta_ipde[i]
+    eff[i] ~ dbern(theta[i])
+  }
+}

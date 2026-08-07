@@ -30,8 +30,29 @@ stopifnot(
   all(c("continuous", "ipde_first") %in%
       eval(phase12_formals$enrollment_scheme)),
   all(c("previous_dose") %in% eval(phase12_formals$crm_r_model)),
-  all(c("dose_specific_carryover", "previous_dose_additive") %in%
-      eval(phase12_formals$efficacy_model))
+  all(c(
+    "shared_carryover", "dose_specific_carryover",
+    "previous_dose_additive", "dose_specific_previous_dose_additive"
+  ) %in% eval(phase12_formals$efficacy_model))
+)
+carryover_map <- lapply(
+  c(
+    "discount_shared", "discount_dose_specific",
+    "additive_shared", "additive_dose_specific"
+  ),
+  aide_phase12_carryover_model_map
+)
+stopifnot(
+  identical(vapply(carryover_map, `[[`, character(1), "toxicity_model"), c(
+    "discount_shared", "discount_shared", "additive_shared", "additive_shared"
+  )),
+  identical(vapply(carryover_map, `[[`, character(1), "crm_r_model"), c(
+    "random", "random", "previous_dose", "previous_dose"
+  )),
+  identical(vapply(carryover_map, `[[`, character(1), "efficacy_model"), c(
+    "shared_carryover", "dose_specific_carryover",
+    "previous_dose_additive", "dose_specific_previous_dose_additive"
+  ))
 )
 stopifnot(
   !aide_phase12_dose_threshold_reached(c(3L, 3L, 3L), 6L),
@@ -62,12 +83,18 @@ stopifnot(
 )
 stopifnot(file.exists("previous_dose_additive_CRM.bug"))
 stopifnot(file.exists("previous_dose_additive_beta_binomial_efficacy.jags"))
+stopifnot(file.exists("previous_dose_additive_dose_specific_beta_binomial_efficacy.jags"))
+stopifnot(file.exists("beta_binomial_shared_carryover.jags"))
 
 ## Additive toxicity and efficacy models implement all intended Beta priors
 ## through ratios of independent, equal-rate Gamma variables. The toxicity
 ## runner retains its public a_r/b_r interface and sends those names to JAGS.
 toxicity_model_text <- paste(readLines("previous_dose_additive_CRM.bug"), collapse = "\n")
 efficacy_model_text <- paste(readLines("previous_dose_additive_beta_binomial_efficacy.jags"), collapse = "\n")
+efficacy_dose_specific_additive_model_text <- paste(
+  readLines("previous_dose_additive_dose_specific_beta_binomial_efficacy.jags"),
+  collapse = "\n"
+)
 crm_helper_text <- paste(readLines("AIDE_CRM_helper_modified.R"), collapse = "\n")
 stopifnot(
   !grepl("dbeta", toxicity_model_text, fixed = TRUE),
@@ -76,6 +103,10 @@ stopifnot(
   grepl("g_alpha_2 ~ dgamma(b_r, 1)", toxicity_model_text, fixed = TRUE),
   grepl("g_regular_1[j] ~ dgamma(a_regular[j], 1)", efficacy_model_text, fixed = TRUE),
   grepl("g_regular_2[j] ~ dgamma(b_regular[j], 1)", efficacy_model_text, fixed = TRUE),
+  grepl("g_alpha_1[j] ~ dgamma(a_alpha[j], 1)",
+        efficacy_dose_specific_additive_model_text, fixed = TRUE),
+  grepl("alpha[dose[i]] * p_regular[previous_dose[i]]",
+        efficacy_dose_specific_additive_model_text, fixed = TRUE),
   grepl("jags_data$a_r <- a_r", crm_helper_text, fixed = TRUE),
   grepl("jags_data$b_r <- b_r", crm_helper_text, fixed = TRUE)
 )
@@ -83,17 +114,22 @@ stopifnot(
 ## The preceding discount-factor r models use the same Gamma-ratio form for
 ## both toxicity and dose-specific IPDE efficacy carryover parameters.
 random_crm_model_text <- paste(readLines("random_CRM.bug"), collapse = "\n")
-random_crm_tite_model_text <- paste(readLines("random_CRM_TITE.bug"), collapse = "\n")
 discount_efficacy_model_text <- paste(readLines("beta_binomial_dose_specific.jags"), collapse = "\n")
+shared_discount_efficacy_model_text <- paste(
+  readLines("beta_binomial_shared_carryover.jags"), collapse = "\n"
+)
 stopifnot(
   !grepl("dbeta", random_crm_model_text, fixed = TRUE),
-  !grepl("dbeta", random_crm_tite_model_text, fixed = TRUE),
   !grepl("dbeta", discount_efficacy_model_text, fixed = TRUE),
+  !grepl("dbeta", shared_discount_efficacy_model_text, fixed = TRUE),
   grepl("g_r_1 ~ dgamma(a_r, 1)", random_crm_model_text, fixed = TRUE),
-  grepl("g_r_2 ~ dgamma(b_r, 1)", random_crm_tite_model_text, fixed = TRUE),
+  grepl("g_r_2 ~ dgamma(b_r, 1)", random_crm_model_text, fixed = TRUE),
   grepl("g_regular_1[j] ~ dgamma(a_r[j], 1)", discount_efficacy_model_text, fixed = TRUE),
   grepl("g_carry_1[j] ~ dgamma(a_carry[j], 1)", discount_efficacy_model_text, fixed = TRUE),
-  grepl("g_carry_2[j] ~ dgamma(b_carry[j], 1)", discount_efficacy_model_text, fixed = TRUE)
+  grepl("g_carry_2[j] ~ dgamma(b_carry[j], 1)", discount_efficacy_model_text, fixed = TRUE),
+  grepl("g_carry_1 ~ dgamma(a_carry, 1)", shared_discount_efficacy_model_text, fixed = TRUE),
+  grepl("r_e <- g_carry_1 / (g_carry_1 + g_carry_2)",
+        shared_discount_efficacy_model_text, fixed = TRUE)
 )
 
 ## The efficacy-futility rule uses the observed efficacy count at the dose:

@@ -143,6 +143,7 @@ make_phase12_config_tag <- function(task) {
     "-u", task$utility_type,
     "-l", fmt_short(task$lambda_T),
     "-en", enrollment_tag,
+    "-cm", task$carryover_model,
     "-tm", task$crm_r_model,
     "-em", task$efficacy_model,
     "-rp", fmt_param(task$crm_a_r), "x", fmt_param(task$crm_b_r),
@@ -249,11 +250,22 @@ one_stage_sizes <- data.frame(
 )
 design_size_grid <- rbind(two_stage_sizes, one_stage_sizes)
 
-## Default to the additive previous-dose toxicity and efficacy models.
+## Four paired carryover options: efficacy can be shared or dose-specific,
+## while toxicity remains one of the two shared CRM models.
 model_grid <- data.frame(
-  model_id = "previous_dose_additive",
-  crm_r_model = "previous_dose",
-  efficacy_model = "previous_dose_additive",
+  model_id = c(
+    "discount_shared", "discount_dose_specific",
+    "additive_shared", "additive_dose_specific"
+  ),
+  carryover_model = c(
+    "discount_shared", "discount_dose_specific",
+    "additive_shared", "additive_dose_specific"
+  ),
+  crm_r_model = c("random", "random", "previous_dose", "previous_dose"),
+  efficacy_model = c(
+    "shared_carryover", "dose_specific_carryover",
+    "previous_dose_additive", "dose_specific_previous_dose_additive"
+  ),
   stringsAsFactors = FALSE
 )
 
@@ -265,8 +277,8 @@ crm_prior_grid <- data.frame(
   crm_b_r = 0.85,
   stringsAsFactors = FALSE
 )
-## The carryover prior applies to dose_specific_carryover. The additive-alpha
-## prior applies to previous_dose_additive efficacy.
+## The carryover prior applies to the discount efficacy models; the
+## additive-alpha prior applies to the additive efficacy models.
 efficacy_prior_grid <- data.frame(
   efficacy_prior_id = "regular_beta_0p5_0p5_carry_beta_1_1",
   efficacy_a = 0.5,
@@ -423,6 +435,7 @@ run_one_phase12_task <- function(task) {
 
       model = "CRM",
       target = task$target,
+      carryover_model = task$carryover_model,
       crm_r_model = task$crm_r_model,
       crm_skeleton = task$crm_skeleton,
       crm_alpha_sd = task$crm_alpha_sd,
@@ -466,6 +479,7 @@ run_one_phase12_task <- function(task) {
   )
   result$runner_settings <- list(
     model_id = task$model_id,
+    carryover_model = task$carryover_model,
     crm_r_model = task$crm_r_model,
     efficacy_model = task$efficacy_model,
     efficacy_additive_alpha_prior = c(
@@ -544,6 +558,7 @@ for (setting_row in seq_len(nrow(setting_grid))) {
       N_s1 = as.integer(setting$N_s1),
       N_s2 = as.integer(setting$N_s2),
       model_id = as.character(setting$model_id),
+      carryover_model = as.character(setting$carryover_model),
       crm_r_model = as.character(setting$crm_r_model),
       crm_prior_id = as.character(setting$crm_prior_id),
       crm_a_r = as.numeric(setting$crm_a_r),
