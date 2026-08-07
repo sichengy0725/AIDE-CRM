@@ -56,11 +56,7 @@ for (task in tasks) {
 }
 if (!length(all_summaries)) stop("No result files were found.")
 dose_summary <- do.call(rbind, all_summaries); missing_summary <- do.call(rbind, missing)
-tag <- paste0(
-  "TITE_AIDE_phase_I_II_Efficacy_Threshold_", aide_tite_fmt(settings$efficacy_threshold),
-  "_Futility_Cutoff_", aide_tite_fmt(settings$futility_cutoff),
-  "_IDX_", sprintf("%04d", min(jobs_expected)), "_to_", sprintf("%04d", max(jobs_expected))
-)
+tag <- paste0("TITE_AIDE_phase_I_II_IDX_", sprintf("%04d", min(jobs_expected)), "_to_", sprintf("%04d", max(jobs_expected)))
 utils::write.csv(dose_summary, file.path(out_dir, paste0(tag, "_dose_summary.csv")), row.names = FALSE)
 utils::write.csv(missing_summary, file.path(out_dir, paste0(tag, "_missing_jobs.csv")), row.names = FALSE)
 saveRDS(dose_summary, file.path(out_dir, paste0(tag, "_dose_summary.rds")))
