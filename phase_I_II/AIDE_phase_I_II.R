@@ -1866,7 +1866,9 @@ simulate_AIDE_phase_I_II <- function(
     probabilities <- allocation_state$utility[top_two] /
       sum(allocation_state$utility[top_two])
     list(
-      dose = sample(top_two, n_to_enroll, replace = TRUE, prob = probabilities),
+      dose = top_two[sample.int(
+        length(top_two), n_to_enroll, replace = TRUE, prob = probabilities
+      )],
       probabilities = paste0(
         "D", top_two, "=",
         formatC(probabilities, format = "f", digits = 3L),
