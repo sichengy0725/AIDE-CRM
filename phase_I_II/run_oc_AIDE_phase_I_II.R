@@ -234,7 +234,7 @@ ntrial.total <- 1L
 seed_base <- 1L
 
 ## Use all scenario IDs in the truth file by default.
-scenario_id_list <- 1:37
+scenario_id_list <- 1:38
 
 ## For two-stage allocation, N_s1 is the cumulative Stage I administration
 ## threshold. Stage I transitions only after N_s1 and a stay decision; Stage II

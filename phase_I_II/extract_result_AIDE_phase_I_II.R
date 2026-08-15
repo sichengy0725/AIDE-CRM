@@ -26,7 +26,7 @@ block_id_expected <- 1L
 
 ## The runner uses all 37 scenarios in the supplied truth file.  Keep this
 ## list synchronized if you run a subset of scenarios.
-scenario_id_list <- 1:37
+scenario_id_list <- 1:38
 
 ## For two-stage allocation, N_s1 is the cumulative Stage I administration
 ## threshold. Stage I ends only after N_s1 and a stay decision; Stage II ends
