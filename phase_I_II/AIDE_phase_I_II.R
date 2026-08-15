@@ -2056,6 +2056,10 @@ simulate_AIDE_phase_I_II <- function(
       allocation_state <- current_utility_allocation(
         toxicity_fit_now, futility_now
       )
+      if (length(allocation_state$admissible) == 0L) {
+        stop_reason <- "no_one_stage_admissible_dose"
+        break
+      }
       allocated_dose <- choose_one_stage_dose(allocation_state)
       record_decision(
         "one_stage",
