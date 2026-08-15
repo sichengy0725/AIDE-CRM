@@ -11,10 +11,11 @@ aide_final_analysis <- function(state, config, scenario) {
     elimination = eliminated, futility = futile, utilities = aide_compute_utility(eff$p_regular_mean, tox$p_regular_mean, config$utility),
     toxicity = tox, efficacy = eff))
   MTD <- tox_candidates[which.min(abs(tox$p_regular_mean[tox_candidates] - config$toxicity$target))]
+  utilities <- aide_compute_utility(eff$p_regular_mean, tox$p_regular_mean, config$utility)
   obd_candidates <- tox_candidates[!futile[tox_candidates] & tox_candidates <= MTD]
-  OBD <- if (length(obd_candidates)) aide_select_lowest_tied(eff$p_regular_mean, obd_candidates) else NA_integer_
+  OBD <- if (length(obd_candidates)) aide_select_lowest_tied(utilities, obd_candidates) else NA_integer_
   list(MTD = MTD, OBD = OBD, no_selection_reason = if (is.na(OBD)) "all_safe_doses_futile" else NA_character_,
-       elimination = eliminated, futility = futile, utilities = aide_compute_utility(eff$p_regular_mean, tox$p_regular_mean, config$utility),
+       elimination = eliminated, futility = futile, utilities = utilities,
        toxicity = tox, efficacy = eff, final_time = t_final)
 }
 

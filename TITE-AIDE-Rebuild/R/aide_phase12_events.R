@@ -134,7 +134,14 @@ aide_fill_open_cohort <- function(state, config, scenario) {
       decision_id = state$cohort$decision_id, stage = state$cohort$stage, action = state$cohort$decision_action,
       next_dose = state$cohort$next_dose, filled = state$cohort$filled, closed_time = state$t_now))
   }
-  if (nrow(state$admin) >= config$design$Nmax) { state$active <- FALSE; state$stop_reason <- "administration_cap" }
+  stage2_dose_cap <- state$cohort$stage == "stage2" &&
+    any(tabulate(state$admin$dose[state$admin$stage == "stage2"],
+                 nbins = length(state$eliminated)) >= config$design$N_s2)
+  if (stage2_dose_cap) {
+    state$active <- FALSE; state$stop_reason <- "stage2_dose_cap"
+  } else if (nrow(state$admin) >= config$design$Nmax) {
+    state$active <- FALSE; state$stop_reason <- "administration_cap"
+  }
   state
 }
 
@@ -149,9 +156,17 @@ aide_open_cohort <- function(state, decision) {
 }
 
 aide_record_decision <- function(state, decision, event, gate, config) {
+  allocation_probabilities <- decision$allocation_probabilities %||% numeric(0)
+  allocation_text <- if (length(allocation_probabilities)) {
+    paste(paste0(names(allocation_probabilities), "=", formatC(allocation_probabilities,
+          format = "f", digits = 3L)), collapse = ";")
+  } else {
+    NA_character_
+  }
   state$logs$decision_log <- aide_add_row(state$logs$decision_log, list(decision_id = state$counters$decision, time = state$t_now,
     trigger_event_id = event$event_id, current_dose = decision$current_dose, stage = decision$stage, action = decision$action,
-    next_dose = decision$next_dose, n_eval_blocked = gate$blocked, trigger_type = ifelse(event$event_type == "new_arrival", "new", "retreat"),
+    next_dose = decision$next_dose, stage2_allocation = decision$stage2_allocation %||% NA_character_,
+    allocation_probabilities = allocation_text, n_eval_blocked = gate$blocked, trigger_type = ifelse(event$event_type == "new_arrival", "new", "retreat"),
     trigger_disposition = gate$trigger_disposition, n_eval_required = config$design$n_eval, n_eval_observed = gate$n_eval_observed,
     stop_trial = decision$stop_trial, stop_reason = decision$stop_reason))
   state

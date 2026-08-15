@@ -111,8 +111,21 @@ aide_update_futility <- function(efficacy_fit, previous) list(
 )
 
 aide_compute_utility <- function(p_e, p_t, settings) {
-  # Utility 1 uses response benefit minus a toxicity penalty; other scores remain configurable.
-  p_e - settings$lambda_T * p_t
+  utility_type <- as.integer(settings$type)
+  scores <- as.numeric(settings$scores)
+  if (length(scores) != 4L || any(!is.finite(scores)))
+    stop("utility$scores must contain four finite values: u00, u01, u10, and u11.")
+  names(scores) <- c("u00", "u01", "u10", "u11")
+  switch(
+    as.character(utility_type),
+    "1" = p_e,
+    "2" = p_e - settings$lambda_T * p_t,
+    "3" = scores[["u00"]] * (1 - p_t) * (1 - p_e) +
+      scores[["u01"]] * (1 - p_t) * p_e +
+      scores[["u10"]] * p_t * (1 - p_e) +
+      scores[["u11"]] * p_t * p_e,
+    stop("utility$type must be 1, 2, or 3.")
+  )
 }
 
 aide_toxicity_recommendation <- function(current_dose, toxicity_fit, config, eliminated) {

@@ -7,7 +7,7 @@ The implementation has one event clock for both allocation strategies. A closed 
 ## Layout
 
 - `R/` - configuration, state, endpoint, model, decision, event, final-analysis, and OC modules.
-- `inst/jags/` - the four delayed-outcome efficacy likelihoods specified for E-RD, E-RS, E-AD, and E-AS.  The R engine uses summary-only native adapters by default; these files support a JAGS backend without changing the public contract.
+- `inst/jags/` - the JAGS TITE-CRM toxicity and delayed-outcome efficacy likelihoods used by the simulator.
 - `tests/testthat/` - base-R executable regression checks for the finalised event-loop rules.
 - `TITE-AIDE.R` - source this one file to load the public API.
 
@@ -25,7 +25,7 @@ scenario <- aide_phase12_scenario(
 trial <- simulate_AIDE_phase_I_II_event(config, scenario, seed = 1)
 ```
 
-Toxicity uses the bundled JAGS skeleton TITE-CRM models: a random discount-`r` model or an additive previous-dose-`alpha` model. It uses the TITE likelihood `1 - w * theta` for pending non-DLTs. Efficacy uses one of the four bundled delayed-outcome JAGS models. `toxicity$beta_prior_mean` and `toxicity$beta_prior_sd` describe the CRM curve prior; `toxicity$carryover_prior` is the Beta prior for `r` or additive `alpha`. `toxicity$prior` is intentionally unsupported because it is not a CRM prior. Both `rjags` and `coda` must be available in the active R library.
+Toxicity uses the bundled JAGS skeleton TITE-CRM models: a random discount-`r` model or an additive previous-dose-`alpha` model. It uses the TITE likelihood `1 - w * theta` for pending non-DLTs. Efficacy uses one of the four bundled delayed-outcome JAGS models. `toxicity$beta_prior_mean` and `toxicity$beta_prior_sd` describe the CRM curve prior; `toxicity$carryover_prior` is the Beta prior for `r` or additive `alpha`. `toxicity$prior` is intentionally unsupported because it is not a CRM prior. Both `rjags` and `coda` must be available in the active R library; the rebuild has no non-JAGS fitting backend.
 
 The result retains only posterior summaries and audit tables; neither posterior draws nor model diagnostics are stored.
 

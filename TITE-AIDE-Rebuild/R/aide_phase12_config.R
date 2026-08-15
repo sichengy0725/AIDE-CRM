@@ -29,7 +29,8 @@ aide_phase12_config <- function(
                     n_chains = 3L, n_adapt = 1000L, n_burnin = 1000L,
                     n_iter = 4000L, thin = 2L),
     monitoring = list(no_skipping = TRUE, restrict_to_tried = FALSE,
-                      stage2_mtd_ceiling = TRUE),
+                      stage2_mtd_ceiling = TRUE,
+                      stage2_allocation = "highest_utility"),
     utility = list(type = 1L, lambda_T = 1, scores = c(0, 1, -1, 0),
                    tie_break = "lower_dose"),
     recycle = list(priority = "new_first", apply_individual_toxicity_risk = FALSE,
@@ -61,7 +62,8 @@ aide_phase12_config <- function(
                                                  backend = "jags")),
     monitoring = aide_phase12_merge(monitoring, list(no_skipping = TRUE,
                                                      restrict_to_tried = FALSE,
-                                                     stage2_mtd_ceiling = TRUE)),
+                                                     stage2_mtd_ceiling = TRUE,
+                                                     stage2_allocation = "highest_utility")),
     utility = aide_phase12_merge(utility, list(type = 1L, lambda_T = 1,
                                                scores = c(0, 1, -1, 0),
                                                tie_break = "lower_dose")),
@@ -100,6 +102,8 @@ aide_phase12_validate_config <- function(config, scenario = NULL) {
   if (!d$allocation %in% c("one_stage", "two_stage") ||
       any(!is.finite(numeric_design)) || any(unlist(d[c("cohort_size", "Nmax", "n_eval", "cycle_max", "start_dose")]) < 1))
     stop("Invalid design configuration.")
+  if (d$s1_Max < 1L || d$s1_Max > d$Nmax || d$N_s2 < 1L || d$N_s2 > d$Nmax)
+    stop("s1_Max and N_s2 must be positive administration thresholds no greater than Nmax.")
   if (!is.finite(config$time$T_assess) || config$time$T_assess <= 0 ||
       !is.finite(config$time$arrival_rate) || config$time$arrival_rate <= 0)
     stop("time requires one positive common T_assess and positive arrival_rate.")
@@ -116,6 +120,8 @@ aide_phase12_validate_config <- function(config, scenario = NULL) {
   if (!is.null(config$toxicity$skeleton) &&
       (any(!is.finite(config$toxicity$skeleton)) || any(config$toxicity$skeleton <= 0 | config$toxicity$skeleton >= 1)))
     stop("toxicity$skeleton must contain probabilities strictly between 0 and 1.")
+  if (!config$monitoring$stage2_allocation %in% c("highest_utility", "top2_randomized"))
+    stop("monitoring$stage2_allocation must be 'highest_utility' or 'top2_randomized'.")
   if (!is.finite(config$toxicity$beta_prior_mean) || !is.finite(config$toxicity$beta_prior_sd) ||
       config$toxicity$beta_prior_sd <= 0 || any(as.integer(unlist(config$toxicity[c("n_chains", "n_adapt", "n_burnin", "n_iter", "thin")])) < c(1L, 0L, 0L, 1L, 1L)))
     stop("The CRM beta prior or JAGS MCMC controls are invalid.")

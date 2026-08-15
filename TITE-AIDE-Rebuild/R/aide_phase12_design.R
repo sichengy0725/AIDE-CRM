@@ -39,8 +39,27 @@ aide_two_stage_decision <- function(state, toxicity_recommendation, admissible, 
   candidates <- admissible$doses
   if (config$monitoring$stage2_mtd_ceiling) candidates <- candidates[candidates <= state$current_dose]
   if (!length(candidates)) return(list(stop_trial = TRUE, stop_reason = "no_stage2_candidate", next_dose = NA_integer_, stage = active, stage_transition = transition))
-  next_dose <- aide_select_lowest_tied(efficacy_fit$p_regular_mean, candidates)
-  list(stop_trial = FALSE, stop_reason = NA_character_, next_dose = next_dose, candidate_doses = candidates, stage = active, stage_transition = transition)
+  utility <- aide_compute_utility(efficacy_fit$p_regular_mean, toxicity_fit$p_regular_mean, config$utility)
+  ranked <- candidates[order(-utility[candidates], candidates)]
+  if (identical(config$monitoring$stage2_allocation, "top2_randomized")) {
+    top_two <- ranked[seq_len(min(2L, length(ranked)))]
+    weights <- utility[top_two]
+    probabilities <- if (all(is.finite(weights)) && all(weights >= 0) && sum(weights) > 0) {
+      weights / sum(weights)
+    } else {
+      rep(1 / length(top_two), length(top_two))
+    }
+    next_dose <- sample(top_two, size = 1L, prob = probabilities)
+    allocation_probabilities <- setNames(probabilities, paste0("D", top_two))
+  } else {
+    next_dose <- aide_select_lowest_tied(utility, candidates)
+    allocation_probabilities <- setNames(1, paste0("D", next_dose))
+  }
+  list(stop_trial = FALSE, stop_reason = NA_character_, next_dose = next_dose,
+       candidate_doses = candidates, utility = utility, stage = active,
+       stage_transition = transition,
+       stage2_allocation = config$monitoring$stage2_allocation,
+       allocation_probabilities = allocation_probabilities)
 }
 
 aide_make_design_decision <- function(state, toxicity_fit, efficacy_fit, config, scenario) {
@@ -59,6 +78,8 @@ aide_make_design_decision <- function(state, toxicity_fit, efficacy_fit, config,
        prob_toxicity_ipde_overdose = toxicity_fit$prob_ipde_overtox_by_dose,
        p_efficacy = efficacy_fit$p_regular_mean, p_efficacy_ipde = efficacy_fit$p_ipde_mean,
        utility = raw$utility %||% aide_compute_utility(efficacy_fit$p_regular_mean, toxicity_fit$p_regular_mean, config$utility),
+       stage2_allocation = raw$stage2_allocation %||% "not_applicable",
+       allocation_probabilities = raw$allocation_probabilities %||% numeric(0),
        toxicity_action = tox_rec$action, toxicity_recommended_dose = tox_rec$recommended_dose,
        toxicity_eliminated = state$eliminated, efficacy_futile = state$futile,
        futility = futility)
