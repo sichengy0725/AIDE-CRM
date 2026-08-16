@@ -76,6 +76,7 @@ make_phase12_tite_config_tag <- function(task) {
   paste0(
     "P12TITE-a", if (task$allocation == "two_stage") "2s" else "1s",
     "-N", task$Nmax, "-s1", task$N_s1, "-s2", task$N_s2,
+    "-s2a", task$stage2_allocation,
     "-u", task$utility_type, "-l", fmt_short(task$lambda_T),
     "-cm", task$carryover_model, "-tm", task$crm_r_model,
     "-em", task$efficacy_model,
@@ -102,18 +103,23 @@ ntrial.total <- 1L
 seed_base <- 1L
 scenario_id_list <- 1:38
 
-## Match the Phase I/II allocation grid: Stage I is toxicity-directed and
-## Stage II randomizes a single frozen TITE cohort dose from the two highest
-## utility doses.
-two_stage_sizes <- data.frame(
+## The Phase I/II grid contains three designs: one-stage highest utility,
+## two-stage highest utility, and two-stage randomization among the top two
+## utility doses.  Include stage2_allocation in the output tag so the two
+## two-stage designs never share result files.
+two_stage_top2_sizes <- data.frame(
   allocation = "two_stage", Nmax = 30L, N_s1 = 6L, N_s2 = 30L,
   stage2_allocation = "top2_randomized", stringsAsFactors = FALSE
+)
+two_stage_highest_sizes <- data.frame(
+  allocation = "two_stage", Nmax = 30L, N_s1 = 6L, N_s2 = 30L,
+  stage2_allocation = "highest_utility", stringsAsFactors = FALSE
 )
 one_stage_sizes <- data.frame(
   allocation = "one_stage", Nmax = 30L, N_s1 = 30L, N_s2 = 30L,
   stage2_allocation = "highest_utility", stringsAsFactors = FALSE
 )
-design_size_grid <- rbind(two_stage_sizes, one_stage_sizes)
+design_size_grid <- rbind(two_stage_top2_sizes, two_stage_highest_sizes, one_stage_sizes)
 
 model_grid <- data.frame(
   model_id = "additive_shared",

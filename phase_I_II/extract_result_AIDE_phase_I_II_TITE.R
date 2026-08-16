@@ -28,15 +28,19 @@ jobs_expected <- 1:1000
 ntrial_per_job <- 1L
 scenario_id_list <- 1:38
 
-two_stage_sizes <- data.frame(
+two_stage_top2_sizes <- data.frame(
   allocation = "two_stage", Nmax = 30L, N_s1 = 6L, N_s2 = 30L,
   stage2_allocation = "top2_randomized", stringsAsFactors = FALSE
+)
+two_stage_highest_sizes <- data.frame(
+  allocation = "two_stage", Nmax = 30L, N_s1 = 6L, N_s2 = 30L,
+  stage2_allocation = "highest_utility", stringsAsFactors = FALSE
 )
 one_stage_sizes <- data.frame(
   allocation = "one_stage", Nmax = 30L, N_s1 = 30L, N_s2 = 30L,
   stage2_allocation = "highest_utility", stringsAsFactors = FALSE
 )
-design_size_grid <- rbind(two_stage_sizes, one_stage_sizes)
+design_size_grid <- rbind(two_stage_top2_sizes, two_stage_highest_sizes, one_stage_sizes)
 model_grid <- data.frame(
   model_id = "additive_shared",
   carryover_model = "additive_shared",
@@ -113,6 +117,7 @@ make_phase12_tite_config_tag <- function(task) {
   paste0(
     "P12TITE-a", if (task$allocation == "two_stage") "2s" else "1s",
     "-N", task$Nmax, "-s1", task$N_s1, "-s2", task$N_s2,
+    "-s2a", task$stage2_allocation,
     "-u", task$utility_type, "-l", fmt_short(task$lambda_T),
     "-cm", task$carryover_model, "-tm", task$crm_r_model,
     "-em", task$efficacy_model,
@@ -229,7 +234,8 @@ summarize_task <- function(results, task) {
   data.frame(
     Task_ID = task$task_id, Scenario = task$Scenario,
     Source_Scenario = task$Source_Scenario, Scenario_Group = task$Scenario_Group,
-    Attempt = task$Attempt, Allocation = task$allocation, Model_ID = task$model_id,
+    Attempt = task$Attempt, Allocation = task$allocation,
+    Stage2_Allocation = task$stage2_allocation, Model_ID = task$model_id,
     Carryover_Model = task$carryover_model, Efficacy_Model = task$efficacy_model,
     Nmax = task$Nmax, N_s1 = task$N_s1, N_s2 = task$N_s2,
     n_eval = task$n_eval, Cycle_Max = task$cycle_max,
@@ -237,6 +243,8 @@ summarize_task <- function(results, task) {
     True_MTD = task$true_mtd, True_OBD = task$true_obd,
     Target_Toxicity = task$target, Utility_Type = task$utility_type,
     Lambda_T = task$lambda_T, Dose = seq_len(ndose),
+    Toxicity_IPDE_Alpha = task$toxicity_ipde_alpha,
+    Efficacy_IPDE_Alpha = task$efficacy_ipde_alpha,
     True_DLT_rate = task$p_true, True_Efficacy_rate = task$e_true,
     Estimated_CRM_pj = tox, Estimated_Efficacy = eff,
     Estimated_Utility = utility, Carryover_Mean = carry,

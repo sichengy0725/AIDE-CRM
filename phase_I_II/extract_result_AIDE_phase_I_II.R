@@ -32,12 +32,20 @@ scenario_id_list <- 1:38
 ## threshold. Stage I ends only after N_s1 and a stay decision; Stage II ends
 ## when a dose reaches N_s2. Nmax remains the total administration limit.
 ## One-stage does not use either threshold.
-two_stage_sizes <- data.frame(
+two_stage_top2_sizes <- data.frame(
   allocation = "two_stage",
   Nmax = c(30L),
   N_s1 = c(6L),
   N_s2 = c(30L),
   stage2_allocation = "top2_randomized",
+  stringsAsFactors = FALSE
+)
+two_stage_highest_sizes <- data.frame(
+  allocation = "two_stage",
+  Nmax = c(30L),
+  N_s1 = c(6L),
+  N_s2 = c(30L),
+  stage2_allocation = "highest_utility",
   stringsAsFactors = FALSE
 )
 one_stage_sizes <- data.frame(
@@ -48,7 +56,7 @@ one_stage_sizes <- data.frame(
   stage2_allocation = "highest_utility",
   stringsAsFactors = FALSE
 )
-design_size_grid <- rbind(two_stage_sizes, one_stage_sizes)
+design_size_grid <- rbind(two_stage_top2_sizes, two_stage_highest_sizes, one_stage_sizes)
 
 ## Keep this paired model grid synchronized with the OC runner.
 model_grid <- data.frame(
