@@ -1,0 +1,3 @@
+"scenario","version","toxicity_model","efficacy_model","user_seconds","system_seconds","elapsed_seconds","n_administrations","trial_end_time","MTD","OBD"
+18,"JAGS","discount_r","shared_carryover",1.69,0.0300000000000011,1.97999999998137,6,146.829804359335,2,1
+18,"integral","integral_discount_r","integral_shared_carryover",18.56,0.0300000000000011,18.7199999999721,6,146.829804359335,2,1

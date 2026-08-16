@@ -165,7 +165,9 @@ aide_record_decision <- function(state, decision, event, gate, config) {
   }
   state$logs$decision_log <- aide_add_row(state$logs$decision_log, list(decision_id = state$counters$decision, time = state$t_now,
     trigger_event_id = event$event_id, current_dose = decision$current_dose, stage = decision$stage, action = decision$action,
-    next_dose = decision$next_dose, stage2_allocation = decision$stage2_allocation %||% NA_character_,
+    next_dose = decision$next_dose, MTD = decision$MTD %||% NA_integer_,
+    provisional_OBD = decision$provisional_OBD %||% NA_integer_,
+    stage2_allocation = decision$stage2_allocation %||% NA_character_,
     allocation_probabilities = allocation_text, n_eval_blocked = gate$blocked, trigger_type = ifelse(event$event_type == "new_arrival", "new", "retreat"),
     trigger_disposition = gate$trigger_disposition, n_eval_required = config$design$n_eval, n_eval_observed = gate$n_eval_observed,
     stop_trial = decision$stop_trial, stop_reason = decision$stop_reason))

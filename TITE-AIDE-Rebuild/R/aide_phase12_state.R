@@ -17,7 +17,7 @@ aide_phase12_initialize_state <- function(config, scenario, seed = NULL) {
     stage = list(active = if (config$design$allocation == "two_stage") "stage1" else "one_stage", transitioned = FALSE),
     eliminated = rep(FALSE, scenario$ndose), futile = rep(FALSE, scenario$ndose),
     logs = list(event_log = aide_empty_df(c("event_id", "time", "seq", "event_type", "patient_id", "admin_id", "action")),
-    decision_log = aide_empty_df(c("decision_id", "time", "trigger_event_id", "current_dose", "stage", "action", "next_dose", "stage2_allocation", "allocation_probabilities", "n_eval_blocked", "trigger_type", "trigger_disposition", "n_eval_required", "n_eval_observed", "stop_trial", "stop_reason")),
+    decision_log = aide_empty_df(c("decision_id", "time", "trigger_event_id", "current_dose", "stage", "action", "next_dose", "MTD", "provisional_OBD", "stage2_allocation", "allocation_probabilities", "n_eval_blocked", "trigger_type", "trigger_disposition", "n_eval_required", "n_eval_observed", "stop_trial", "stop_reason")),
                 cohort_log = aide_empty_df(c("cohort_id", "time", "decision_id", "stage", "action", "next_dose", "filled", "closed_time")),
                 n_eval_log = aide_empty_df(c("decision_id", "time", "current_dose", "n_eval_required", "n_eval_observed", "evaluated_admin_ids", "blocked", "trigger_type", "trigger_disposition")),
                 retreat_log = aide_empty_df(c("queue_id", "time", "patient_id", "source_admin_id", "eligible", "reason", "status", "cohort_id", "assigned_dose"))),

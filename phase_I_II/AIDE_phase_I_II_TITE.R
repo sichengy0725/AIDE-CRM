@@ -12,6 +12,9 @@
 ##   * new arrivals have priority over recycled patients;
 ##   * n_eval blocks stay/escalate, but not de-escalation; and
 ##   * every opened cohort has one frozen dose.
+## Updated allocation rules: Stage II uses observed efficacy responses to
+## construct its utility allocation, and one-stage downward movement requires
+## a response-qualified destination unless safety requires otherwise.
 ## ============================================================
 
 `%||%` <- function(x, y) if (is.null(x)) y else x
