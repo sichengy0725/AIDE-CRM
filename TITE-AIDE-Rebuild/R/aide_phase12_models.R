@@ -28,6 +28,67 @@ aide_expand_beta_prior <- function(prior, ndose, name) {
   matrix(prior, ncol = 2L, byrow = TRUE)
 }
 
+aide_beta_binomial_futility <- function(interim, efficacy, ndose) {
+  ## Futility is deliberately separate from the delayed-outcome efficacy
+  ## model used for utility.  It has the specified Beta(1, 1) posterior and
+  ## therefore uses only outcomes that have already been ascertained.
+  if (length(ndose) != 1L || !is.finite(ndose) || ndose < 1L ||
+      ndose != as.integer(ndose)) {
+    stop("ndose must be a positive integer.")
+  }
+  ndose <- as.integer(ndose)
+  if (!is.data.frame(interim) || !all(c("dose", "y", "ascertained") %in% names(interim))) {
+    stop("interim efficacy data must contain dose, y, and ascertained columns.")
+  }
+  if (length(efficacy$threshold) != 1L || !is.finite(efficacy$threshold) ||
+      efficacy$threshold <= 0 || efficacy$threshold >= 1) {
+    stop("efficacy$threshold must be a scalar in (0, 1).")
+  }
+  if (length(efficacy$futility_cutoff) != 1L || !is.finite(efficacy$futility_cutoff) ||
+      efficacy$futility_cutoff <= 0 || efficacy$futility_cutoff >= 1) {
+    stop("efficacy$futility_cutoff must be a scalar in (0, 1).")
+  }
+  if (length(efficacy$min_eff_n_for_futility) != 1L ||
+      !is.finite(efficacy$min_eff_n_for_futility) ||
+      efficacy$min_eff_n_for_futility < 0 ||
+      efficacy$min_eff_n_for_futility != as.integer(efficacy$min_eff_n_for_futility)) {
+    stop("efficacy$min_eff_n_for_futility must be a non-negative integer.")
+  }
+  if (!nrow(interim)) {
+    n <- y <- integer(ndose)
+  } else {
+    dose <- as.integer(interim$dose)
+    if (any(!is.finite(interim$dose)) || any(is.na(dose)) ||
+        any(dose < 1L | dose > ndose)) {
+      stop("interim efficacy data contain an invalid dose.")
+    }
+    ascertained <- !is.na(interim$ascertained) & as.logical(interim$ascertained)
+    observed_y <- interim$y[ascertained]
+    if (any(is.na(observed_y)) || any(!observed_y %in% c(0L, 1L))) {
+      stop("Ascertainable efficacy outcomes must be coded 0 or 1.")
+    }
+    n <- tabulate(dose[ascertained], nbins = ndose)
+    y <- tabulate(dose[ascertained & interim$y == 1L], nbins = ndose)
+  }
+
+  ## p_E,j | D ~ Beta(1 + y_j, 1 + n_j - y_j).  Pending efficacy records
+  ## contribute to neither count and hence cannot affect this probability.
+  prob_below_threshold <- stats::pbeta(
+    efficacy$threshold,
+    shape1 = 1 + y,
+    shape2 = 1 + n - y
+  )
+  futile <- n >= as.integer(efficacy$min_eff_n_for_futility) &
+    prob_below_threshold > efficacy$futility_cutoff
+  list(
+    n_fully_ascertained_by_dose = as.integer(n),
+    y_fully_ascertained_by_dose = as.integer(y),
+    prob_below_threshold = prob_below_threshold,
+    futile = futile,
+    prior = c(1, 1)
+  )
+}
+
 aide_fit_toxicity <- function(interim, config, ndose) {
   # Skeleton TITE-CRM fit.  All MCMC draws are transient and immediately
   # reduced to posterior means/probabilities returned to the event engine.
@@ -70,6 +131,7 @@ aide_fit_toxicity <- function(interim, config, ndose) {
 
 aide_fit_efficacy <- function(interim, config, ndose) {
   aide_phase12_require_jags(); ef <- config$efficacy
+  futility <- aide_beta_binomial_futility(interim, ef, ndose)
   regular_prior <- aide_expand_beta_prior(ef$prior, ndose, "efficacy$prior")
   carry_prior <- aide_expand_beta_prior(ef$carryover_prior, ndose, "efficacy$carryover_prior")
   dat <- interim
@@ -95,18 +157,19 @@ aide_fit_efficacy <- function(interim, config, ndose) {
   p_draws <- draws[, p_cols, drop = FALSE]
   if (additive) { alpha_cols <- if (model == "previous_dose_additive") "alpha" else paste0("alpha[", seq_len(ndose), "]"); carry_draws <- if (length(alpha_cols) == 1L) matrix(draws[, alpha_cols], ncol = ndose, nrow = nrow(draws)) else draws[, alpha_cols, drop = FALSE]; ipde_draws <- matrix(pmin(1, p_draws + carry_draws * p_draws), nrow = nrow(p_draws), ncol = ncol(p_draws))
   } else { r_cols <- if (model == "shared_carryover") "r_e" else paste0("r_e[", seq_len(ndose), "]"); carry_draws <- if (length(r_cols) == 1L) matrix(draws[, r_cols], ncol = ndose, nrow = nrow(draws)) else draws[, r_cols, drop = FALSE]; ipde_draws <- carry_draws + (1 - carry_draws) * p_draws }
-  full_n <- full_y <- integer(ndose)
-  if (nrow(interim)) for (j in seq_len(ndose)) { x <- interim[interim$dose == j & interim$ascertained, , drop = FALSE]; full_n[j] <- nrow(x); full_y[j] <- sum(x$y) }
-  below <- colMeans(p_draws < ef$threshold)
-  futile <- full_n >= ef$min_eff_n_for_futility & below > ef$futility_cutoff
   list(model = model, p_regular_mean = colMeans(p_draws), carryover_mean = colMeans(carry_draws),
-       p_ipde_mean = colMeans(ipde_draws), prob_below_threshold = below, futile = futile,
-       n_fully_ascertained_by_dose = full_n)
+       p_ipde_mean = colMeans(ipde_draws),
+       prob_below_threshold = futility$prob_below_threshold,
+       futile = futility$futile,
+       n_fully_ascertained_by_dose = futility$n_fully_ascertained_by_dose,
+       y_fully_ascertained_by_dose = futility$y_fully_ascertained_by_dose,
+       futility_prior = futility$prior)
 }
 
 aide_update_futility <- function(efficacy_fit, previous) list(
   futile = previous | efficacy_fit$futile,
   n_fully_ascertained_by_dose = efficacy_fit$n_fully_ascertained_by_dose,
+  y_fully_ascertained_by_dose = efficacy_fit$y_fully_ascertained_by_dose,
   posterior_futility_probabilities = efficacy_fit$prob_below_threshold
 )
 

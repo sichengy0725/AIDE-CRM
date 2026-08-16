@@ -79,6 +79,39 @@ decision <- aide_two_stage_decision(
   two_stage_config
 )
 stopifnot(identical(sort(names(decision$allocation_probabilities)), c("D1", "D3")))
+stopifnot(isTRUE(decision$individual_randomization))
+stopifnot(identical(decision$allocation_doses, c(1L, 3L)))
+
+## A Stage II top-two cohort freezes its candidates at the triggering arrival,
+## then randomizes each enrolled patient separately. Setting all probability
+## on D1 makes the per-patient draw count observable without a stochastic test.
+randomization_state <- aide_phase12_initialize_state(
+  two_stage_config, aide_phase12_scenario(rep(.2, 5), rep(.4, 5)), seed = 1L
+)
+randomization_state$cohort$open <- FALSE
+randomization_state$stage$active <- "stage2"
+randomization_state$counters$decision <- 1L
+randomization_decision <- list(
+  next_dose = 3L, action = "stay", stage = "stage2", stage_transition = FALSE,
+  allocation_doses = c(1L, 3L), allocation_probabilities = c(D1 = 1, D3 = 0),
+  individual_randomization = TRUE,
+  p_efficacy = rep(.4, 5), p_efficacy_ipde = rep(.4, 5),
+  prob_toxicity_ipde_overdose = rep(0, 5)
+)
+randomization_state <- aide_open_cohort(randomization_state, randomization_decision)
+for (patient_id in seq_len(two_stage_config$design$cohort_size)) {
+  randomization_state <- aide_queue_add(
+    randomization_state, time = patient_id, seq = patient_id, type = "new",
+    patient_id = patient_id
+  )
+}
+randomization_state <- aide_fill_open_cohort(
+  randomization_state, two_stage_config,
+  aide_phase12_scenario(rep(.2, 5), rep(.4, 5))
+)
+stopifnot(randomization_state$cohort$randomization_draws == two_stage_config$design$cohort_size)
+stopifnot(identical(randomization_state$cohort$allocation_doses, c(1L, 3L)))
+stopifnot(all(randomization_state$admin$dose == 1L))
 
 case <- make_allocation_state(two_stage_config, "stage2", 3L, 1:3)
 admissible <- aide_build_admissible_set(
@@ -93,12 +126,12 @@ stopifnot(identical(sort(names(decision$allocation_probabilities)), c("D2", "D3"
 one_stage_config <- aide_phase12_config(
   allocation = "one_stage", Nmax = 18L, cohort_size = 3L
 )
-one_stage_fits <- make_fits(c(.1, .2, .25, .3, .45), c(.9, .8, .7, .1, .1))
+one_stage_fits <- make_fits(c(.1, .2, .25, .3, .45), c(.8, .9, .7, .1, .1))
 
-## With a lower utility target, one-stage allocation selects the highest
-## response-qualified destination; absent a response, it stays at the current
-## admissible dose.
-case <- make_allocation_state(one_stage_config, "one_stage", 4L, 1:4, 3L)
+## With a lower utility target, one-stage allocation selects the lowest
+## response-qualified dose between the target and current dose. A response
+## below the target cannot redirect allocation.
+case <- make_allocation_state(one_stage_config, "one_stage", 4L, 1:4, c(1L, 3L))
 admissible <- aide_build_admissible_set(
   case$state, one_stage_fits$toxicity, one_stage_fits$efficacy,
   one_stage_config, case$scenario

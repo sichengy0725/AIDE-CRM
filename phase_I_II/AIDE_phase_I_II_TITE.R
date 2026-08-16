@@ -7,14 +7,18 @@
 ## models to TITE-AIDE-Rebuild.  No integral approximation is available here.
 ##
 ## TITE rules inherited from the rebuild:
-##   * toxicity and efficacy use partial follow-up at each decision time;
+##   * toxicity uses partial follow-up at each decision time; efficacy uses
+##     its delayed-outcome model for utility, while futility uses only
+##     ascertained efficacy outcomes in a standalone Beta(1,1) rule;
 ##   * a closed cohort reopens only for a new arrival or eligible retreat;
 ##   * new arrivals have priority over recycled patients;
 ##   * n_eval blocks stay/escalate, but not de-escalation; and
-##   * every opened cohort has one frozen dose.
+##   * every opened cohort has one frozen dose, except Stage II top-two
+##     cohorts, which freeze their candidate set and randomize each position.
 ## Updated allocation rules: Stage II uses observed efficacy responses to
-## construct its utility allocation, and one-stage downward movement requires
-## a response-qualified destination unless safety requires otherwise.
+## construct its utility allocation, and one-stage downward movement selects
+## the lowest response-qualified destination between the utility target and
+## current dose unless safety requires otherwise.
 ## ============================================================
 
 `%||%` <- function(x, y) if (is.null(x)) y else x

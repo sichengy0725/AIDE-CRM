@@ -89,11 +89,16 @@ aide_one_stage_decision <- function(state, toxicity_recommendation, admissible, 
     next_dose <- d
   } else {
     response_observed <- aide_observed_efficacy_response(state)
+    ## For a utility target below the current dose, use the lowest
+    ## response-qualified dose in the closed interval from the target to the
+    ## current dose. Responses below the target cannot redirect allocation.
     response_qualified <- candidates[
-      candidates <= d & response_observed[candidates]
+      candidates >= provisional_obd &
+        candidates <= d &
+        response_observed[candidates]
     ]
     if (length(response_qualified)) {
-      next_dose <- max(response_qualified)
+      next_dose <- min(response_qualified)
     } else if (d %in% candidates) {
       next_dose <- d
     } else {
@@ -115,7 +120,32 @@ aide_two_stage_decision <- function(state, toxicity_recommendation, admissible, 
   transition <- FALSE
   if (active == "stage1" && stage1_n >= config$design$s1_Max && toxicity_recommendation$action == "stay") { active <- "stage2"; transition <- TRUE }
   if (toxicity_recommendation$stop) return(list(stop_trial = TRUE, stop_reason = "dose_1_overtoxicity", next_dose = NA_integer_, stage = active, stage_transition = transition))
-  if (active == "stage1") return(list(stop_trial = FALSE, stop_reason = NA_character_, next_dose = toxicity_recommendation$recommended_dose, candidate_doses = toxicity_recommendation$recommended_dose, stage = active, stage_transition = transition))
+  if (active == "stage1") {
+    ## Stage I remains toxicity-directed, but a dose declared futile cannot be
+    ## treated again.  This mirrors the non-TITE Stage-I admissible-dose rule:
+    ## retain the toxicity recommendation when admissible; otherwise use the
+    ## closest lower admissible dose on that recommendation path.
+    current <- state$current_dose
+    recommended <- as.integer(toxicity_recommendation$recommended_dose)
+    if (recommended %in% admissible$doses) {
+      return(list(stop_trial = FALSE, stop_reason = NA_character_, next_dose = recommended,
+                  candidate_doses = recommended, stage = active, stage_transition = transition))
+    }
+    path <- if (recommended > current) {
+      seq.int(current, min(recommended, length(state$eliminated)))
+    } else {
+      seq_len(max(1L, min(recommended, length(state$eliminated))))
+    }
+    candidates <- path[path %in% admissible$doses]
+    if (!length(candidates)) {
+      return(list(stop_trial = TRUE, stop_reason = "no_stage1_admissible_dose",
+                  next_dose = NA_integer_, candidate_doses = integer(0),
+                  stage = active, stage_transition = transition))
+    }
+    return(list(stop_trial = FALSE, stop_reason = NA_character_,
+                next_dose = max(candidates), candidate_doses = candidates,
+                stage = active, stage_transition = transition))
+  }
   candidates <- admissible$doses[admissible$doses <= admissible$mtd]
   if (!length(candidates)) return(list(stop_trial = TRUE, stop_reason = "no_stage2_candidate", next_dose = NA_integer_, stage = active, stage_transition = transition))
   utility <- aide_compute_utility(efficacy_fit$p_regular_mean, toxicity_fit$p_regular_mean, config$utility)
@@ -147,8 +177,14 @@ aide_two_stage_decision <- function(state, toxicity_recommendation, admissible, 
       }
     }
     probabilities <- aide_allocation_probabilities(utility, allocation_doses)
-    next_dose <- sample(allocation_doses, size = 1L, prob = probabilities)
+    ## Freeze the candidate set and its probabilities when the triggering
+    ## patient arrives. The event layer then randomizes each cohort position
+    ## independently from this fixed set; it does not randomize one dose for
+    ## the whole cohort. The MTD is retained as the Stage II reference dose
+    ## for the decision log, safety recommendation, and n_eval gate.
+    next_dose <- mtd_dose
     allocation_probabilities <- setNames(probabilities, paste0("D", allocation_doses))
+    individual_randomization <- length(allocation_doses) > 1L
   } else {
     response_doses <- candidates[response_observed[candidates]]
     next_dose <- if (length(response_doses)) {
@@ -157,13 +193,17 @@ aide_two_stage_decision <- function(state, toxicity_recommendation, admissible, 
       mtd_dose
     }
     allocation_probabilities <- setNames(1, paste0("D", next_dose))
+    allocation_doses <- next_dose
+    individual_randomization <- FALSE
   }
   list(stop_trial = FALSE, stop_reason = NA_character_, next_dose = next_dose,
        candidate_doses = candidates, utility = utility, stage = active,
        stage_transition = transition,
        provisional_obd = provisional_obd,
        stage2_allocation = config$monitoring$stage2_allocation,
-       allocation_probabilities = allocation_probabilities)
+       allocation_probabilities = allocation_probabilities,
+       allocation_doses = allocation_doses,
+       individual_randomization = individual_randomization)
 }
 
 aide_make_design_decision <- function(state, toxicity_fit, efficacy_fit, config, scenario) {
@@ -186,6 +226,8 @@ aide_make_design_decision <- function(state, toxicity_fit, efficacy_fit, config,
        provisional_OBD = raw$provisional_obd %||% NA_integer_,
        stage2_allocation = raw$stage2_allocation %||% "not_applicable",
        allocation_probabilities = raw$allocation_probabilities %||% numeric(0),
+       allocation_doses = raw$allocation_doses %||% next_dose,
+       individual_randomization = raw$individual_randomization %||% FALSE,
        toxicity_action = tox_rec$action, toxicity_recommended_dose = tox_rec$recommended_dose,
        toxicity_eliminated = state$eliminated, efficacy_futile = state$futile,
        futility = futility)

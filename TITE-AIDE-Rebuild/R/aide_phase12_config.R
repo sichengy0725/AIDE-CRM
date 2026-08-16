@@ -113,7 +113,13 @@ aide_phase12_validate_config <- function(config, scenario = NULL) {
   if (!is.null(config$toxicity$prior))
     stop("toxicity$prior is not a CRM prior. Use beta_prior_mean/beta_prior_sd for the CRM curve and carryover_prior for r or alpha.")
   if (length(config$toxicity$carryover_prior) != 2L || length(config$efficacy$prior) != 2L ||
-      any(c(config$toxicity$carryover_prior, config$efficacy$prior) <= 0)) stop("Carryover and efficacy priors must be positive beta parameters.")
+       any(c(config$toxicity$carryover_prior, config$efficacy$prior) <= 0)) stop("Carryover and efficacy priors must be positive beta parameters.")
+  if (!is.finite(config$efficacy$threshold) || config$efficacy$threshold <= 0 || config$efficacy$threshold >= 1 ||
+      !is.finite(config$efficacy$futility_cutoff) || config$efficacy$futility_cutoff <= 0 || config$efficacy$futility_cutoff >= 1 ||
+      !is.finite(config$efficacy$min_eff_n_for_futility) || config$efficacy$min_eff_n_for_futility < 0 ||
+      config$efficacy$min_eff_n_for_futility != as.integer(config$efficacy$min_eff_n_for_futility)) {
+    stop("Efficacy futility settings are invalid.")
+  }
   if (!is.null(config$toxicity$skeleton) &&
       (any(!is.finite(config$toxicity$skeleton)) || any(config$toxicity$skeleton <= 0 | config$toxicity$skeleton >= 1)))
     stop("toxicity$skeleton must contain probabilities strictly between 0 and 1.")

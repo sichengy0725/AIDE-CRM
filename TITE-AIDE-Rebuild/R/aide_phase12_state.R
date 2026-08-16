@@ -12,7 +12,11 @@ aide_phase12_initialize_state <- function(config, scenario, seed = NULL) {
     cohort = list(open = TRUE, cohort_id = 1L, opened_time = config$time$t0,
                   next_dose = config$design$start_dose, decision_action = "initial",
                   stage = if (config$design$allocation == "two_stage") "stage1" else "one_stage",
-                capacity = config$design$cohort_size, filled = 0L, decision_id = 0L, risk_context = NULL),
+                  capacity = config$design$cohort_size, filled = 0L, decision_id = 0L,
+                  allocation_doses = config$design$start_dose,
+                  allocation_probabilities = setNames(1, paste0("D", config$design$start_dose)),
+                  individual_randomization = FALSE, randomization_draws = 0L,
+                  risk_context = NULL),
     current_dose = config$design$start_dose,
     stage = list(active = if (config$design$allocation == "two_stage") "stage1" else "one_stage", transitioned = FALSE),
     eliminated = rep(FALSE, scenario$ndose), futile = rep(FALSE, scenario$ndose),
@@ -29,9 +33,15 @@ aide_phase12_initialize_state <- function(config, scenario, seed = NULL) {
 aide_phase12_validate_state <- function(state, config) {
   if (isTRUE(state$cohort$open) && state$cohort$filled >= state$cohort$capacity) stop("Open cohort cannot be full.")
   if (nrow(state$admin) && any(state$admin$dose != state$admin$decision_next_dose)) stop("Cohort dose mismatch.")
-  if (isTRUE(state$cohort$open) && nrow(state$admin)) {
+  if (isTRUE(state$cohort$open) && nrow(state$admin) &&
+      !isTRUE(state$cohort$individual_randomization)) {
     id <- state$admin$cohort_id == state$cohort$cohort_id
     if (any(state$admin$dose[id] != state$cohort$next_dose)) stop("Open cohort is not dose homogeneous.")
+  }
+  if (isTRUE(state$cohort$individual_randomization) && nrow(state$admin)) {
+    id <- state$admin$cohort_id == state$cohort$cohort_id
+    if (any(!state$admin$dose[id] %in% state$cohort$allocation_doses))
+      stop("Randomized cohort contains a dose outside its frozen candidate set.")
   }
   invisible(TRUE)
 }

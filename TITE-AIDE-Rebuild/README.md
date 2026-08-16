@@ -2,7 +2,7 @@
 
 This folder is an independent, modular reconstruction of the AIDE/IPDE Phase I-II TITE simulator specified in `Presentation 8-10-2026/AIDE_IPDE_Phase_I_II_TITE_Rebuild_Specification.pdf`.
 
-The implementation has one event clock for both allocation strategies. A closed cohort is re-opened only after an assignable new-patient or structurally eligible retreat event; every opened cohort has one frozen dose. The current `n_eval` rule gates both stay and escalation decisions; de-escalation is immediately permitted. A blocked new trigger is dropped before entering the queue; a blocked retreat trigger stays queued.
+The implementation has one event clock for both allocation strategies. A closed cohort is re-opened only after an assignable new-patient or structurally eligible retreat event. Every opened cohort has one frozen dose except a Stage II `top2_randomized` cohort, which freezes its candidate doses and probabilities at the triggering arrival and independently randomizes each cohort position. The current `n_eval` rule gates both stay and escalation decisions; de-escalation is immediately permitted. A blocked new trigger is dropped before entering the queue; a blocked retreat trigger stays queued.
 
 ## Layout
 
@@ -25,7 +25,7 @@ scenario <- aide_phase12_scenario(
 trial <- simulate_AIDE_phase_I_II_event(config, scenario, seed = 1)
 ```
 
-Toxicity uses the bundled JAGS skeleton TITE-CRM models: a random discount-`r` model or an additive previous-dose-`alpha` model. It uses the TITE likelihood `1 - w * theta` for pending non-DLTs. Efficacy uses one of the four bundled delayed-outcome JAGS models. `toxicity$beta_prior_mean` and `toxicity$beta_prior_sd` describe the CRM curve prior; `toxicity$carryover_prior` is the Beta prior for `r` or additive `alpha`. `toxicity$prior` is intentionally unsupported because it is not a CRM prior. Both `rjags` and `coda` must be available in the active R library; the rebuild has no non-JAGS fitting backend.
+Toxicity uses the bundled JAGS skeleton TITE-CRM models: a random discount-`r` model or an additive previous-dose-`alpha` model. It uses the TITE likelihood `1 - w * theta` for pending non-DLTs. Efficacy uses one of the four bundled delayed-outcome JAGS models for utility allocation. Its futility rule is separate: at each dose it uses only ascertained efficacy outcomes in the Beta(1,1) posterior `Beta(1 + y, 1 + n - y)`; pending efficacy outcomes do not contribute to `n`, `y`, or the futility probability. `toxicity$beta_prior_mean` and `toxicity$beta_prior_sd` describe the CRM curve prior; `toxicity$carryover_prior` is the Beta prior for `r` or additive `alpha`. `toxicity$prior` is intentionally unsupported because it is not a CRM prior. Both `rjags` and `coda` must be available in the active R library; the rebuild has no non-JAGS fitting backend.
 
 The result retains only posterior summaries and audit tables; neither posterior draws nor model diagnostics are stored.
 

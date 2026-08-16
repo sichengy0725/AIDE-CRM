@@ -57,20 +57,47 @@ aide_queue_retreat_opportunity <- function(state, admin_id, config) {
 }
 
 aide_queue_next_new <- function(state) { i <- which(state$queue$type == "new" & state$queue$status == "waiting"); if (!length(i)) integer(0) else i[order(state$queue$time[i], state$queue$seq[i])][1L] }
-aide_retreat_individual_risk_screen <- function(state, queue_index, config) {
-  if (!isTRUE(state$cohort$open) || is.null(state$cohort$risk_context)) return(list(allowed = TRUE, reason = "eligible"))
-  dose <- state$cohort$next_dose; risk <- state$cohort$risk_context
+
+aide_cohort_allocation <- function(state) {
+  doses <- as.integer(state$cohort$allocation_doses %||% state$cohort$next_dose)
+  doses <- unique(doses[is.finite(doses)])
+  probabilities <- as.numeric(state$cohort$allocation_probabilities %||% numeric(0))
+  if (length(probabilities) != length(doses) || any(!is.finite(probabilities)) ||
+      any(probabilities < 0) || sum(probabilities) <= 0) {
+    probabilities <- rep(1 / length(doses), length(doses))
+  } else {
+    probabilities <- probabilities / sum(probabilities)
+  }
+  list(doses = doses, probabilities = probabilities)
+}
+
+aide_retreat_individual_risk_screen <- function(state, queue_index, config,
+                                                 candidate_doses = NULL) {
+  if (is.null(candidate_doses)) candidate_doses <- aide_cohort_allocation(state)$doses
+  candidate_doses <- as.integer(candidate_doses)
+  if (!isTRUE(state$cohort$open) || is.null(state$cohort$risk_context)) {
+    return(list(allowed = length(candidate_doses) > 0L, reason = "eligible",
+                eligible_doses = candidate_doses))
+  }
+  risk <- state$cohort$risk_context
+  eligible <- candidate_doses
   if (isTRUE(config$recycle$apply_individual_toxicity_risk)) {
-    prob <- risk$prob_toxicity_ipde_overdose[dose]
-    if (!is.finite(prob) || prob > config$recycle$toxicity_ipde_overdose_cutoff)
-      return(list(allowed = FALSE, reason = "blocked_individual_toxicity_risk", toxicity_overdose_probability = prob))
+    prob <- risk$prob_toxicity_ipde_overdose[eligible]
+    eligible <- eligible[is.finite(prob) & prob <= config$recycle$toxicity_ipde_overdose_cutoff]
+    if (!length(eligible)) {
+      return(list(allowed = FALSE, reason = "blocked_individual_toxicity_risk",
+                  eligible_doses = integer(0), toxicity_overdose_probability = prob))
+    }
   }
   if (isTRUE(config$recycle$apply_individual_efficacy_benefit)) {
-    benefit <- risk$p_efficacy_ipde[dose] - risk$p_efficacy[dose]
-    if (!is.finite(benefit) || benefit <= config$recycle$efficacy_ipde_min_increment)
-      return(list(allowed = FALSE, reason = "blocked_individual_efficacy_benefit", efficacy_increment = benefit))
+    benefit <- risk$p_efficacy_ipde[eligible] - risk$p_efficacy[eligible]
+    eligible <- eligible[is.finite(benefit) & benefit > config$recycle$efficacy_ipde_min_increment]
+    if (!length(eligible)) {
+      return(list(allowed = FALSE, reason = "blocked_individual_efficacy_benefit",
+                  eligible_doses = integer(0), efficacy_increment = benefit))
+    }
   }
-  list(allowed = TRUE, reason = "eligible")
+  list(allowed = TRUE, reason = "eligible", eligible_doses = eligible)
 }
 
 aide_queue_next_retreat <- function(state, config) {
@@ -100,11 +127,33 @@ aide_select_assignment_opportunity <- function(state, config) {
   aide_queue_next_retreat(state, config)
 }
 
+aide_assignment_dose <- function(state, queue_index, config) {
+  allocation <- aide_cohort_allocation(state)
+  doses <- allocation$doses
+  probabilities <- allocation$probabilities
+  if (!length(doses)) stop("Open cohort has no allocation dose.")
+  if (state$queue$type[queue_index] == "retreat") {
+    risk <- aide_retreat_individual_risk_screen(state, queue_index, config, doses)
+    if (!risk$allowed) stop("Attempted to assign a retreat patient without an eligible cohort dose.")
+    keep <- match(risk$eligible_doses, doses)
+    doses <- risk$eligible_doses
+    probabilities <- probabilities[keep]
+    probabilities <- probabilities / sum(probabilities)
+  }
+  if (!isTRUE(state$cohort$individual_randomization)) return(doses[1L])
+  sample(doses, size = 1L, prob = probabilities)
+}
+
 aide_append_administration <- function(state, queue_index, config, scenario) {
   q <- state$queue[queue_index, , drop = FALSE]; is_retreat <- q$type == "retreat"
   previous <- NA_integer_; cycle <- 1L; arrival <- q$time
   if (is_retreat) { prev <- state$admin[match(q$source_admin_id, state$admin$admin_id), , drop = FALSE]; previous <- prev$dose; cycle <- prev$cycle + 1L; arrival <- prev$t_arrival }
-  dose <- state$cohort$next_dose
+  ## For Stage II top-two allocation, this draw is made for this individual
+  ## only. The candidate set and probabilities remain frozen for the cohort.
+  dose <- aide_assignment_dose(state, queue_index, config)
+  if (isTRUE(state$cohort$individual_randomization)) {
+    state$cohort$randomization_draws <- state$cohort$randomization_draws + 1L
+  }
   p_tox <- if (is_retreat) aide_phase12_ipde_probability(scenario$p_true, scenario$toxicity_ipde_dgm$alpha_true, dose) else scenario$p_true[dose]
   p_eff <- if (is_retreat) aide_phase12_ipde_probability(scenario$e_true, scenario$efficacy_ipde_dgm$alpha_true, dose) else scenario$e_true[dose]
   tox <- aide_draw_binary_event_time(p_tox, state$t_now, config$time$T_assess, config$time$dlt_dist)
@@ -147,8 +196,20 @@ aide_fill_open_cohort <- function(state, config, scenario) {
 
 aide_open_cohort <- function(state, decision) {
   state$counters$cohort <- state$counters$cohort + 1L
+  allocation_doses <- as.integer(decision$allocation_doses %||% decision$next_dose)
+  allocation_probabilities <- as.numeric(decision$allocation_probabilities %||% 1)
+  if (length(allocation_probabilities) != length(allocation_doses) ||
+      any(!is.finite(allocation_probabilities)) || any(allocation_probabilities < 0) ||
+      sum(allocation_probabilities) <= 0) {
+    allocation_probabilities <- rep(1 / length(allocation_doses), length(allocation_doses))
+  } else {
+    allocation_probabilities <- allocation_probabilities / sum(allocation_probabilities)
+  }
   state$cohort <- list(open = TRUE, cohort_id = state$counters$cohort, opened_time = state$t_now, next_dose = decision$next_dose,
-    decision_action = decision$action, stage = decision$stage, capacity = state$cohort$capacity, filled = 0L, decision_id = state$counters$decision)
+    decision_action = decision$action, stage = decision$stage, capacity = state$cohort$capacity, filled = 0L,
+    decision_id = state$counters$decision, allocation_doses = allocation_doses,
+    allocation_probabilities = allocation_probabilities,
+    individual_randomization = isTRUE(decision$individual_randomization), randomization_draws = 0L)
   state$cohort$risk_context <- list(p_efficacy = decision$p_efficacy, p_efficacy_ipde = decision$p_efficacy_ipde,
     prob_toxicity_ipde_overdose = decision$prob_toxicity_ipde_overdose)
   state$current_dose <- decision$next_dose; state$stage$active <- decision$stage; state$stage$transitioned <- state$stage$transitioned || isTRUE(decision$stage_transition)
