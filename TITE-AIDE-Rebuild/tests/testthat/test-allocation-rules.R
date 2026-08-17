@@ -151,6 +151,31 @@ stopifnot(aide_one_stage_decision(
   one_stage_fits$efficacy, one_stage_config
 )$next_dose == 4L)
 
+## One-stage downward allocation uses the safety bound h = min(d, MTD), not
+## the raw toxicity recommendation.  With d = MTD, a response-qualified dose
+## in A_down can be selected even when the toxicity model recommends a
+## de-escalation; no response in that interval leaves the cohort at d.
+toxicity_deescalate <- list(action = "de_escalate", recommended_dose = 3L, stop = FALSE)
+case <- make_allocation_state(one_stage_config, "one_stage", 4L, 1:4, 2L)
+admissible <- aide_build_admissible_set(
+  case$state, one_stage_fits$toxicity, one_stage_fits$efficacy,
+  one_stage_config, case$scenario
+)
+stopifnot(aide_one_stage_decision(
+  case$state, toxicity_deescalate, admissible, one_stage_fits$toxicity,
+  one_stage_fits$efficacy, one_stage_config
+)$next_dose == 2L)
+
+case <- make_allocation_state(one_stage_config, "one_stage", 4L, 1:4)
+admissible <- aide_build_admissible_set(
+  case$state, one_stage_fits$toxicity, one_stage_fits$efficacy,
+  one_stage_config, case$scenario
+)
+stopifnot(aide_one_stage_decision(
+  case$state, toxicity_deescalate, admissible, one_stage_fits$toxicity,
+  one_stage_fits$efficacy, one_stage_config
+)$next_dose == 4L)
+
 ## Upward movement remains no-skipping when an untried dose is the utility
 ## target.
 upward_fits <- make_fits(c(.1, .15, .2, .25, .3), c(.1, .2, .3, .4, .9))

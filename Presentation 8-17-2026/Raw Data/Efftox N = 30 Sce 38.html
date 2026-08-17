@@ -1,0 +1,391 @@
+
+<html>
+<head>
+<meta http-equiv="Content-Language" content="en-us"> 
+<style>         
+BODY, TH, TD, P 
+{	FONT-SIZE: 10pt; }
+H1 
+{   FONT-WEIGHT: 600; FONT-SIZE: 18pt; COLOR: #000000; FONT-FAMILY: Arial, Helvetica, Verdana, sans-serif } 
+H2 
+{   FONT-WEIGHT: 600; FONT-SIZE: 14pt; COLOR: #000000; FONT-FAMILY: Arial, Helvetica, Verdana, sans-serif } 
+H3  
+{   FONT-WEIGHT: 600; FONT-SIZE: 12pt; COLOR: #000000; FONT-FAMILY: Arial, Helvetica, Verdana, sans-serif } 
+table.center
+{
+margin-left: 130px;
+width: 500px;
+}
+</style>
+</head>
+<body>
+<H2 style="text-align:center;">
+ EffTox  version: 5.2.1<span style='font-size:x-small;'>&nbsp;&nbsp; (PID-49)</span>
+
+</H2> 
+<H3 style="text-align:center;">
+8/16/2026 5:14:55 PM -05:00
+<br> Simulation Name: My Simulation
+</H3> 
+<hr><br><H2 style="text-align:center;">Operating Characteristics (program output)</H2>
+<br><table class="center" border="1" cellpadding="3" cellspacing="0" > 
+<tr><td><b> Scenario </b></td><td> &nbsp;</td><td colspan="5" align="center"><b> Dose Level </b></td><td> &nbsp;</td></tr>
+<tr><td> &nbsp;</td><td> &nbsp;</td><td align="center">1</td><td align="center">2</td><td align="center">3</td><td align="center">4</td><td align="center">5</td><td align="center"> None </td></tr>
+<tr><td colspan = "8"><b> 1</b></tr>
+<tr>   
+<td>&nbsp;</td><td><b> True pT, pE </b></td>
+  <td align="center">.05, .05</td>
+  <td align="center">.10, .08</td>
+  <td align="center">.12, .12</td>
+  <td align="center">.15, .15</td>
+  <td align="center">.30, .50</td>
+<td align="center"> - </td>
+</tr>   
+<tr><td>&nbsp;</td><td><b>Trade-off Value</b></td>
+  <td align="center">-0.98</td>
+  <td align="center">-1.01</td>
+  <td align="center">-0.96</td>
+  <td align="center">-0.95</td>
+  <td align="center">-0.48</td>
+<td align="center"> - </td></tr>   
+<td>&nbsp;</td><td><b> % selected </b></td>
+  <td align="center">1</td>
+  <td align="center">2</td>
+  <td align="center">8</td>
+  <td align="center">15</td>
+  <td align="center">73</td>
+  <td align="center">2</td>
+<tr>   
+<td>&nbsp;</td><td><b> # Patients Treated </b></td>
+  <td align="center">3.4</td>
+  <td align="center">3.3</td>
+  <td align="center">4.5</td>
+  <td align="center">5.2</td>
+  <td align="center">13.3</td>
+<td align="center"> - </td></tr>   
+</table> 
+<br><br><hr><br>
+
+<H2 style="text-align:center;">Simulation Parameters (program input)</H2>
+<b>Doses</b> 
+
+<table  border="1" cellpadding="3" cellspacing="0"> 
+	<tr>                                                    
+		<td><b>Dose #</b></td>
+		<td><b>Value in mcL/kg</b></td>
+	</tr>
+<tr>   
+  <td align="right">1</td>
+  <td align="right">15</td>
+</tr>   
+<tr>   
+  <td align="right">2</td>
+  <td align="right">20</td>
+</tr>   
+<tr>   
+  <td align="right">3</td>
+  <td align="right">30</td>
+</tr>   
+<tr>   
+  <td align="right">4</td>
+  <td align="right">35</td>
+</tr>   
+<tr>   
+  <td align="right">5</td>
+  <td align="right">45</td>
+</tr>   
+</table> 
+ <br><b>Trial and Numerical Specifications</b> 
+
+<table border="1" cellpadding="3" cellspacing="0"> 
+	<tr>                                                    
+		<td><b>Parameter</b></td>
+		<td><b>Value</b></td>
+	</tr>
+<tr>   
+		<td><b>Starting dose</b></td>
+  <td align="right">15</td>
+</tr>   
+<tr>   
+		<td><b>Max sample size</b></td>
+  <td align="right">30</td>
+</tr>   
+<tr>   
+		<td><b>Cohort size</b></td>
+  <td align="right">3</td>
+</tr>   
+<tr>   
+		<td><b>Number of Sim Repetitions</b></td>
+  <td align="right">1000</td>
+</tr>   
+<tr>   
+		<td><b>Seed</b></td>
+  <td align="right">1000</td>
+</tr>   
+</table> 
+ <br><b>Probability of Toxicity and Efficacy Limits for Dose Acceptability Rules</b> 
+
+<table border="1" cellpadding="3" cellspacing="0"> 
+	<tr>                                                    
+		<td><b>Parameter</b></td>
+		<td><b>Value</b></td>
+	</tr>
+<tr>   
+		<td><b>Prob(tox) upper limit (&pi;<sub>T</sub>*)</b></td>
+  <td align="right">0.30000</td>
+</tr>   
+<tr>   
+		<td><b>Lower prob threshold for prob of toxicity (<em>p</em><sub>T,L</sub>)</b></td>
+  <td align="right">0.05000</td>
+</tr>   
+<tr>   
+		<td><b>Prob(eff) lower limit (&pi;<sub>E</sub>*)</b></td>
+  <td align="right">0.20000</td>
+</tr>   
+<tr>   
+		<td><b>Lower prob threshold for prob of efficacy (<em>p</em><sub>E,L</sub>)</b></td>
+  <td align="right">0.15000</td>
+</tr>   
+</table> 
+<br><b>Trade-off Function Elicited Points</b>
+<table border="1" cellpadding="3" cellspacing="0"> 
+	<tr>                                                    
+		<td></td>
+		<td><b>&pi;<sub>E</sub></b></td>
+		<td><b>&pi;<sub>T</sub></b></td>
+	</tr>
+<tr>   
+		<td><b>(&pi;<sub>1,E</sub>*, 0)</b></td>
+  <td align="right">0.50000</td>
+  <td align="right">0.00000</td>
+</tr>   
+<tr>   
+		<td><b>(1, &pi;<sub>2,T</sub>*)</b></td>
+  <td align="right">1.00000</td>
+  <td align="right">0.65000</td>
+</tr>   
+<tr>   
+		<td><b>(&pi;<sub>3,E</sub>, &pi;<sub>3,T</sub>)</b></td>
+  <td align="right">0.70000</td>
+  <td align="right">0.25000</td>
+</tr>   
+</table> 
+<br><b>Elicited Means</b><br>
+<table  border="1" cellpadding="3" cellspacing="0"> 
+	<tr>                                                    
+		<td><b>Dose</b></td>
+		<td><b>Toxicity</b></td>
+		<td><b>Efficacy</b></td>
+	</tr>
+<tr>   
+  <td align="right">1</td>
+  <td align="right">0.0200</td>
+  <td align="right">0.2000</td>
+</tr>   
+<tr>   
+  <td align="right">2</td>
+  <td align="right">0.0400</td>
+  <td align="right">0.4000</td>
+</tr>   
+<tr>   
+  <td align="right">3</td>
+  <td align="right">0.0600</td>
+  <td align="right">0.6000</td>
+</tr>   
+<tr>   
+  <td align="right">4</td>
+  <td align="right">0.0800</td>
+  <td align="right">0.8000</td>
+</tr>   
+<tr>   
+  <td align="right">5</td>
+  <td align="right">0.1000</td>
+  <td align="right">0.9000</td>
+</tr>   
+</table> 
+ <br><b>Effective Sample Size</b> 
+
+<table border="1" cellpadding="3" cellspacing="0"> 
+	<tr>                                                    
+		<td><b>Parameter</b></td>
+		<td><b>Value</b></td>
+	</tr>
+<tr>   
+		<td><b>Target</b></td>
+  <td align="right">0.90</td>
+</tr>   
+<tr>   
+		<td><b>Computed Toxicity</b></td>
+  <td align="right">0.90</td>
+</tr>   
+<tr>   
+		<td><b>Computed Efficacy</b></td>
+  <td align="right">0.90</td>
+</tr>   
+<tr>   
+		<td><b>Computed Mean</b></td>
+  <td align="right">0.90</td>
+</tr>   
+</table> 
+<br><b>Prior HyperParameters</b>
+<table border="1" cellpadding="3" cellspacing="0"> 
+	<tr>                                                    
+		<td></td>
+		<td><b>mean</b></td>
+		<td><b>std deviation</b></td>
+	</tr>
+<tr>   
+		<td><b>&mu;<sub>T</sub></b></td>
+  <td align="right">-7.9593</td>
+  <td align="right">3.5487</td>
+</tr>   
+<tr>   
+		<td><b>&beta;<sub>T</sub></b></td>
+  <td align="right">1.5482</td>
+  <td align="right">3.5018</td>
+</tr>   
+<tr>   
+		<td><b>&mu;<sub>E</sub></b></td>
+  <td align="right">0.7367</td>
+  <td align="right">2.5423</td>
+</tr>   
+<tr>   
+		<td><b>&beta;<sub>E,1</sub></b></td>
+  <td align="right">3.4181</td>
+  <td align="right">2.4406</td>
+</tr>   
+<tr>   
+		<td><b>&beta;<sub>E,2</sub></b></td>
+  <td align="right">0.0000</td>
+  <td align="right">0.2000</td>
+</tr>   
+<tr>   
+		<td><b>&psi;</b></td>
+  <td align="right">0.0000</td>
+  <td align="right">1.0000</td>
+</tr>   
+</table> 
+<br><b>'True' Probabilities (probabilities are independent)</b><br>
+<b>Scenario 1</b>
+<table  border="1" cellpadding="3" cellspacing="0"> 
+	<tr>                                                    
+		<td><b>Dose</b></td>
+		<td><b>Toxicity</b></td>
+		<td><b>Efficacy</b></td>
+	</tr>
+<tr>   
+  <td align="right">1</td>
+  <td align="right">0.0500</td>
+  <td align="right">0.0500</td>
+</tr>   
+<tr>   
+  <td align="right">2</td>
+  <td align="right">0.1000</td>
+  <td align="right">0.0800</td>
+</tr>   
+<tr>   
+  <td align="right">3</td>
+  <td align="right">0.1200</td>
+  <td align="right">0.1200</td>
+</tr>   
+<tr>   
+  <td align="right">4</td>
+  <td align="right">0.1500</td>
+  <td align="right">0.1500</td>
+</tr>   
+<tr>   
+  <td align="right">5</td>
+  <td align="right">0.3000</td>
+  <td align="right">0.5000</td>
+</tr>   
+</table> 
+<br><br><hr><br><H2 style="text-align:center;">Diagnostic Details</H2>
+ <br>
+
+<table  border="1" cellpadding="3" cellspacing="0"> 
+	<tr>                                                    
+		<td><b>Scenario</b></td>
+		<td><b>R<sub>select</sub></b></td>
+	</tr>
+<tr>   
+  <td align="right">1</td>
+  <td align="right">0.772</td>
+</tr>   
+</table> 
+<br><b>Prior Probabilities (hyperparameter diagnostic)</b>
+<table  border="1" cellpadding="3" cellspacing="0"> 
+	<tr>                                                    
+		<td><b>Dose</b></td>
+		<td><b>Pr[&pi;<sub>T</sub><&pi;<sub>T</sub>*|<b><em>D</em/</b>]</b></td>
+		<td><b>Pr[&pi;<sub>E</sub>>&pi;<sub>E</sub>*|<b><em>D</em/</b>]</b></td>
+		<td><b>&pi;<sub>T</sub> mean</b></td>
+		<td><b>&pi;<sub>E</sub> mean</b></td>
+		<td><b>&eta;<sub>T</sub> mean</b></td>
+		<td><b>&eta;<sub>T</sub> std</b></td>
+		<td><b>&eta;<sub>E</sub> mean</b></td>
+		<td><b>&eta;<sub>E</sub> std</b></td>
+		<td><b>trade-off value</b></td>
+	</tr>
+<tr>   
+  <td align="right">1</td>
+  <td align="right">0.9785</td>
+  <td align="right">0.5150</td>
+  <td align="right">0.0230</td>
+  <td align="right">0.3594</td>
+  <td align="right">-8.8655</td>
+  <td align="right">4.0982</td>
+  <td align="right">-1.2641</td>
+  <td align="right">2.9170</td>
+  <td align="right">-0.3204</td>
+</tr>   
+<tr>   
+  <td align="right">2</td>
+  <td align="right">0.9740</td>
+  <td align="right">0.6445</td>
+  <td align="right">0.0264</td>
+  <td align="right">0.4656</td>
+  <td align="right">-8.4201</td>
+  <td align="right">3.6986</td>
+  <td align="right">-0.2808</td>
+  <td align="right">2.6441</td>
+  <td align="right">-0.1136</td>
+</tr>   
+<tr>   
+  <td align="right">3</td>
+  <td align="right">0.9600</td>
+  <td align="right">0.8390</td>
+  <td align="right">0.0379</td>
+  <td align="right">0.6398</td>
+  <td align="right">-7.7924</td>
+  <td align="right">3.5687</td>
+  <td align="right">1.1052</td>
+  <td align="right">2.5559</td>
+  <td align="right">0.2165</td>
+</tr>   
+<tr>   
+  <td align="right">4</td>
+  <td align="right">0.9485</td>
+  <td align="right">0.8815</td>
+  <td align="right">0.0455</td>
+  <td align="right">0.6997</td>
+  <td align="right">-7.5537</td>
+  <td align="right">3.6653</td>
+  <td align="right">1.6321</td>
+  <td align="right">2.6215</td>
+  <td align="right">0.3241</td>
+</tr>   
+<tr>   
+  <td align="right">5</td>
+  <td align="right">0.9275</td>
+  <td align="right">0.9120</td>
+  <td align="right">0.0646</td>
+  <td align="right">0.7757</td>
+  <td align="right">-7.1647</td>
+  <td align="right">3.9779</td>
+  <td align="right">2.4911</td>
+  <td align="right">2.8347</td>
+  <td align="right">0.4459</td>
+</tr>   
+</table> 
+</body>
+</html>

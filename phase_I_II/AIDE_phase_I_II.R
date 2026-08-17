@@ -1880,40 +1880,42 @@ simulate_AIDE_phase_I_II <- function(
       return(list(dose = current_dose, action = "utility_target_stay"))
     }
 
+    ## The one-stage downward interval is bounded above by safety, rather
+    ## than always by the current dose.  This is equivalent to the current
+    ## admissible set when it is defined at or below the model-based MTD, but
+    ## keeping h explicit makes the one-stage rule match the design
+    ## specification and preserves the intended fallback below a reduced MTD.
+    h <- min(current_dose, allocation_state$MTD)
+    A_down <- admissible[
+      admissible >= target_dose &
+        admissible <= h
+    ]
     ## A utility target below the current dose does not automatically cause a
     ## de-escalation. The revised IPDE design assigns the lowest admissible
-    ## observed-response dose between the utility target and current dose.
-    response_doses <- admissible[
-      admissible >= target_dose &
-        admissible <= current_dose &
-        observed_efficacy_response()[admissible]
-    ]
+    ## observed-response dose in A_down.
+    response_doses <- A_down[observed_efficacy_response()[A_down]]
     if (length(response_doses)) {
       return(list(
         dose = min(response_doses),
         action = "response_informed_downward_allocation"
       ))
     }
-    if (current_dose %in% admissible) {
-      return(list(
-        dose = current_dose,
-        action = "no_response_qualified_downward_destination_stay"
-      ))
-    }
-
-    ## A current dose that is no longer allocation-admissible cannot be held.
-    ## Safety and the global elimination rules therefore select the highest
-    ## admissible dose below it.
-    lower_admissible <- admissible[admissible < current_dose]
-    if (!length(lower_admissible)) {
+    ## With no observed response in the interval, stay when the current dose
+    ## is within the safety bound; otherwise de-escalate to the highest
+    ## admissible dose at or below the current MTD.
+    if (!length(A_down)) {
       return(list(
         dose = 99L,
         action = "no_safe_lower_one_stage_dose"
       ))
     }
     list(
-      dose = max(lower_admissible),
-      action = "safety_override_lower_admissible_dose"
+      dose = max(A_down),
+      action = if (current_dose %in% A_down) {
+        "no_response_qualified_downward_destination_stay"
+      } else {
+        "safety_override_lower_admissible_dose"
+      }
     )
   }
 

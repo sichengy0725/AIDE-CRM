@@ -62,18 +62,6 @@ aide_one_stage_decision <- function(state, toxicity_recommendation, admissible, 
   utility <- aide_compute_utility(efficacy_fit$p_regular_mean, toxicity_fit$p_regular_mean, config$utility)
   provisional_obd <- aide_select_lowest_tied(utility, candidates)
 
-  ## Safety takes precedence over the utility rule. When the current dose is
-  ## no longer safe, move to the highest globally admissible lower dose.
-  if (toxicity_recommendation$action == "de_escalate") {
-    lower <- candidates[candidates < d]
-    if (!length(lower)) {
-      return(list(stop_trial = TRUE, stop_reason = "no_safe_lower_one_stage_dose", next_dose = NA_integer_))
-    }
-    return(list(stop_trial = FALSE, stop_reason = NA_character_, next_dose = max(lower),
-                candidate_doses = candidates, utility = utility,
-                provisional_obd = provisional_obd))
-  }
-
   if (provisional_obd > d) {
     highest_tried <- if (nrow(state$admin)) max(state$admin$dose) else d
     if (provisional_obd <= highest_tried) {
@@ -89,24 +77,22 @@ aide_one_stage_decision <- function(state, toxicity_recommendation, admissible, 
     next_dose <- d
   } else {
     response_observed <- aide_observed_efficacy_response(state)
-    ## For a utility target below the current dose, use the lowest
-    ## response-qualified dose in the closed interval from the target to the
-    ## current dose. Responses below the target cannot redirect allocation.
-    response_qualified <- candidates[
-      candidates >= provisional_obd &
-        candidates <= d &
-        response_observed[candidates]
-    ]
+    ## For a utility target below the current dose, use the unified
+    ## response-informed interval A_down = {j_U, ..., h}, where h is the
+    ## safety boundary min(d, MTD).  Responses below j_U cannot redirect
+    ## allocation.  Do not short-circuit this rule merely because the
+    ## toxicity recommendation is a de-escalation: the MTD already supplies
+    ## the safety boundary for the one-stage allocation decision.
+    h <- min(d, admissible$mtd)
+    A_down <- candidates[candidates >= provisional_obd & candidates <= h]
+    response_qualified <- A_down[response_observed[A_down]]
     if (length(response_qualified)) {
       next_dose <- min(response_qualified)
-    } else if (d %in% candidates) {
-      next_dose <- d
     } else {
-      lower <- candidates[candidates < d]
-      if (!length(lower)) {
+      if (!length(A_down)) {
         return(list(stop_trial = TRUE, stop_reason = "no_safe_lower_one_stage_dose", next_dose = NA_integer_))
       }
-      next_dose <- max(lower)
+      next_dose <- max(A_down)
     }
   }
   list(stop_trial = FALSE, stop_reason = NA_character_, next_dose = next_dose,
