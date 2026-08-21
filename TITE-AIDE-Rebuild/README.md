@@ -2,7 +2,7 @@
 
 This folder is an independent, modular reconstruction of the AIDE/IPDE Phase I-II TITE simulator specified in `Presentation 8-10-2026/AIDE_IPDE_Phase_I_II_TITE_Rebuild_Specification.pdf`.
 
-The implementation has one event clock for both allocation strategies. A closed cohort is re-opened only after an assignable new-patient or structurally eligible retreat event. Every opened cohort has one frozen dose except a Stage II `top2_randomized` cohort, which freezes its candidate doses and probabilities at the triggering arrival and independently randomizes each cohort position. The current `n_eval` rule gates both stay and escalation decisions; de-escalation is immediately permitted. A blocked new trigger is dropped before entering the queue; a blocked retreat trigger stays queued.
+The implementation has one event clock for both allocation strategies. A closed cohort is considered only after an assignable new-patient or structurally eligible retreat event, and every opened cohort has one model-assigned regular dose. When no cohort is open, the `n_eval` gate is checked before model fitting: if too few patients at the current dose have fully evaluated DLT outcomes, no decision is made and every waiting new-patient or retreat event remains queued. After Stage I, the two-stage design uses the same response-floor, MTD-fallback, no-skipping rule as the one-stage design; it does not randomize among a separate Stage II candidate set.
 
 ## Layout
 

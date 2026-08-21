@@ -1,22 +1,54 @@
+aide_phase12_no_obd <- 99L
+
+aide_response_qualified_obd_candidates <- function(tried_doses, eliminated,
+                                                    futile, mtd,
+                                                    response_observed) {
+  tried_doses <- sort(unique(as.integer(tried_doses)))
+  ndose <- length(eliminated)
+  if (length(futile) != ndose || length(response_observed) != ndose ||
+      length(mtd) != 1L || is.na(mtd) || mtd < 1L || mtd > ndose) {
+    return(integer(0))
+  }
+  tried_doses <- tried_doses[tried_doses >= 1L & tried_doses <= ndose]
+  tried_doses[
+    !eliminated[tried_doses] & !futile[tried_doses] &
+      tried_doses <= mtd & response_observed[tried_doses]
+  ]
+}
+
 aide_final_analysis <- function(state, config, scenario) {
-  if (!nrow(state$admin)) return(list(MTD = NA_integer_, OBD = NA_integer_, no_selection_reason = "no_administrations",
+  if (!nrow(state$admin)) return(list(MTD = NA_integer_, OBD = aide_phase12_no_obd, no_selection_reason = "no_administrations",
                                        elimination = state$eliminated, futility = state$futile, utilities = rep(NA_real_, scenario$ndose)))
   t_final <- max(state$admin$assessment_end)
   interim <- aide_build_interim_data(state, t_final, config)
   tox <- aide_fit_toxicity(interim$toxicity, config, scenario$ndose)
   eff <- aide_fit_efficacy(interim$efficacy, config, scenario$ndose)
   eliminated <- state$eliminated | tox$eliminated; futile <- state$futile | eff$futile
-  tried <- sort(unique(state$admin$dose)); tox_candidates <- tried[!eliminated[tried]]
-  if (!length(tox_candidates)) return(list(MTD = NA_integer_, OBD = NA_integer_, no_selection_reason = "no_safe_tried_dose",
+  tried <- sort(unique(state$admin$dose)); tox_candidates <- which(!eliminated)
+  if (!length(tox_candidates)) return(list(MTD = NA_integer_, OBD = aide_phase12_no_obd, no_selection_reason = "no_safe_dose",
     elimination = eliminated, futility = futile, utilities = aide_compute_utility(eff$p_regular_mean, tox$p_regular_mean, config$utility),
     toxicity = tox, efficacy = eff))
   MTD <- tox_candidates[which.min(abs(tox$p_regular_mean[tox_candidates] - config$toxicity$target))]
   utilities <- aide_compute_utility(eff$p_regular_mean, tox$p_regular_mean, config$utility)
-  obd_candidates <- tox_candidates[!futile[tox_candidates] & tox_candidates <= MTD]
-  OBD <- if (length(obd_candidates)) aide_select_lowest_tied(utilities, obd_candidates) else NA_integer_
-  list(MTD = MTD, OBD = OBD, no_selection_reason = if (is.na(OBD)) "all_safe_doses_futile" else NA_character_,
+  response_observed <- tabulate(
+    as.integer(state$admin$dose[state$admin$eff_final == 1L]),
+    nbins = scenario$ndose
+  ) > 0L
+  ## The final OBD must have been tried, demonstrated an observed response,
+  ## remain non-futile, and lie at or below the final toxicity-model MTD.
+  obd_candidates <- aide_response_qualified_obd_candidates(
+    tried, eliminated, futile, MTD, response_observed
+  )
+  OBD <- if (length(obd_candidates)) {
+    aide_select_lowest_tied(utilities, obd_candidates)
+  } else {
+    aide_phase12_no_obd
+  }
+  list(MTD = MTD, OBD = OBD,
+       no_selection_reason = if (OBD == aide_phase12_no_obd) "no_response_qualified_obd" else NA_character_,
        elimination = eliminated, futility = futile, utilities = utilities,
-       toxicity = tox, efficacy = eff, final_time = t_final)
+       toxicity = tox, efficacy = eff, response_observed = response_observed,
+       final_time = t_final)
 }
 
 aide_summarize_trial <- function(state, config, scenario) {

@@ -28,24 +28,13 @@ block_id_expected <- 1L
 ## list synchronized if you run a subset of scenarios.
 scenario_id_list <- 1:38
 
-## For two-stage allocation, N_s1 is the cumulative Stage I administration
-## threshold. Stage I ends only after N_s1 and a stay decision; Stage II ends
-## when a dose reaches N_s2. Nmax remains the total administration limit.
-## One-stage does not use either threshold.
-two_stage_top2_sizes <- data.frame(
+## Stage II is not a separate allocation mode: after the Stage I threshold
+## and a stay decision, it uses the one-stage rule through Nmax.
+two_stage_sizes <- data.frame(
   allocation = "two_stage",
   Nmax = c(30L),
   N_s1 = c(6L),
   N_s2 = c(30L),
-  stage2_allocation = "top2_randomized",
-  stringsAsFactors = FALSE
-)
-two_stage_highest_sizes <- data.frame(
-  allocation = "two_stage",
-  Nmax = c(30L),
-  N_s1 = c(6L),
-  N_s2 = c(30L),
-  stage2_allocation = "highest_utility",
   stringsAsFactors = FALSE
 )
 one_stage_sizes <- data.frame(
@@ -53,10 +42,9 @@ one_stage_sizes <- data.frame(
   Nmax = c(30L),
   N_s1 = c(30L),
   N_s2 = c(30L),
-  stage2_allocation = "highest_utility",
   stringsAsFactors = FALSE
 )
-design_size_grid <- rbind(two_stage_top2_sizes, two_stage_highest_sizes, one_stage_sizes)
+design_size_grid <- rbind(two_stage_sizes, one_stage_sizes)
 
 ## Keep this paired model grid synchronized with the OC runner.
 model_grid <- data.frame(
@@ -236,8 +224,6 @@ make_phase12_config_tag <- function(task) {
     "-a", allocation_tag,
     "-N", fmt_short(task$Nmax),
     "-s1", fmt_short(task$N_s1),
-    "-s2", fmt_short(task$N_s2),
-    "-s2a", task$stage2_allocation,
     "-u", task$utility_type,
     "-l", fmt_short(task$lambda_T),
     "-en", enrollment_tag,
@@ -463,7 +449,7 @@ make_metadata <- function(result, task_id) {
     )),
     Utility_Type = as.integer(task_value(task, "utility_type")),
     Lambda_T = as.numeric(task_value(task, "lambda_T")),
-    Stage2_Allocation = as.character(task_value(task, "stage2_allocation")),
+    Stage2_Allocation = "one_stage",
     Enrollment_Scheme = as.character(task_value(task, "enrollment_scheme")),
     Arrival_Rate = as.numeric(task_value(task, "arrival_rate")),
     T_assess = as.numeric(task_value(runner, "T_assess", 28)),
@@ -496,6 +482,8 @@ summarize_task <- function(results, task_id) {
 
   mtd <- extract_trial_vector(results, "MTD_by_trial", required = TRUE)
   obd <- extract_trial_vector(results, "OBD_by_trial", required = TRUE)
+  ## Normalize legacy result files that encoded no OBD as NA.
+  obd[is.na(obd)] <- 99L
   design_early_stop <- extract_trial_vector(
     results, "early_stop_by_trial", "early_stop_percent", mean_multiplier = 0.01
   )
@@ -542,7 +530,7 @@ summarize_task <- function(results, task_id) {
   if (is.nan(early_stopping)) early_stopping <- NA_real_
   design_early_stopping <- 100 * mean(design_early_stop, na.rm = TRUE)
   if (is.nan(design_early_stopping)) design_early_stopping <- NA_real_
-  no_obd <- 100 * mean(is.na(obd) | obd == 99L)
+  no_obd <- 100 * mean(obd == 99L)
 
   metadata <- make_metadata(first, task_id)
   dose_summary <- metadata[rep(1L, ndose), , drop = FALSE]
@@ -656,7 +644,7 @@ for (task_row in seq_len(nrow(expected_tasks))) {
   cat("Nmax:", task$Nmax, "\n")
   cat("N_s1:", task$N_s1, "\n")
   if ("N_s2" %in% names(task)) cat("N_s2:", task$N_s2, "\n")
-  cat("Stage II allocation:", task$stage2_allocation, "\n")
+  cat("Stage II allocation: one_stage\n")
   cat("CRM prior:", task$crm_prior_id, "\n")
   cat("Efficacy prior:", task$efficacy_prior_id, "\n")
   cat("Utility type:", task$utility_type, "\n")

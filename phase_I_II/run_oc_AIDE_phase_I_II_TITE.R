@@ -75,8 +75,7 @@ calculate_true_obd <- function(p_true, e_true, true_mtd, utility_type,
 make_phase12_tite_config_tag <- function(task) {
   paste0(
     "P12TITE-a", if (task$allocation == "two_stage") "2s" else "1s",
-    "-N", task$Nmax, "-s1", task$N_s1, "-s2", task$N_s2,
-    "-s2a", task$stage2_allocation,
+    "-N", task$Nmax, "-s1", task$N_s1,
     "-u", task$utility_type, "-l", fmt_short(task$lambda_T),
     "-cm", task$carryover_model, "-tm", task$crm_r_model,
     "-em", task$efficacy_model,
@@ -103,23 +102,17 @@ ntrial.total <- 1L
 seed_base <- 1L
 scenario_id_list <- 1:38
 
-## The Phase I/II grid contains three designs: one-stage highest utility,
-## two-stage highest utility, and two-stage randomization among the top two
-## utility doses.  Include stage2_allocation in the output tag so the two
-## two-stage designs never share result files.
-two_stage_top2_sizes <- data.frame(
+## Stage II is not a separate allocation mode: the two-stage design simply
+## transitions to the same one-stage rule used by the one-stage design.
+two_stage_sizes <- data.frame(
   allocation = "two_stage", Nmax = 30L, N_s1 = 6L, N_s2 = 30L,
-  stage2_allocation = "top2_randomized", stringsAsFactors = FALSE
-)
-two_stage_highest_sizes <- data.frame(
-  allocation = "two_stage", Nmax = 30L, N_s1 = 6L, N_s2 = 30L,
-  stage2_allocation = "highest_utility", stringsAsFactors = FALSE
+  stringsAsFactors = FALSE
 )
 one_stage_sizes <- data.frame(
   allocation = "one_stage", Nmax = 30L, N_s1 = 30L, N_s2 = 30L,
-  stage2_allocation = "highest_utility", stringsAsFactors = FALSE
+  stringsAsFactors = FALSE
 )
-design_size_grid <- rbind(two_stage_top2_sizes, two_stage_highest_sizes, one_stage_sizes)
+design_size_grid <- rbind(two_stage_sizes, one_stage_sizes)
 
 model_grid <- data.frame(
   model_id = "additive_shared",
@@ -221,7 +214,6 @@ for (setting_row in seq_len(nrow(setting_grid))) {
       p_true = p_true, e_true = e_true,
       allocation = as.character(setting$allocation), Nmax = as.integer(setting$Nmax),
       N_s1 = as.integer(setting$N_s1), N_s2 = as.integer(setting$N_s2),
-      stage2_allocation = as.character(setting$stage2_allocation),
       model_id = as.character(setting$model_id),
       carryover_model = as.character(setting$carryover_model),
       crm_r_model = as.character(setting$crm_r_model),
@@ -265,7 +257,7 @@ run_one_phase12_tite_task <- function(task) {
     allocation = task$allocation, Nmax = task$Nmax, N_s1 = task$N_s1,
     N_s2 = task$N_s2, C = task$C, cycle_max = task$cycle_max,
     n_eval = task$n_eval, m_U = task$m_U,
-    stage2_allocation = task$stage2_allocation, enrollment_scheme = "continuous",
+    enrollment_scheme = "continuous",
     arrival_rate = task$arrival_rate, T_assess = task$T_assess,
     dlt_dist = task$dlt_dist, efficacy_dist = task$efficacy_dist,
     target = task$target, cutoff = task$toxicity_elimination_cutoff,

@@ -14,6 +14,8 @@ aide_phase12_merge <- function(x, defaults) modifyList(defaults, x %||% list())
 
 aide_phase12_config <- function(
     allocation = c("one_stage", "two_stage"), cohort_size = 3L, Nmax = 30L,
+    ## N_s2 is retained for compatibility only.  Stage II has no per-dose
+    ## cap in the revised design.
     s1_Max = 15L, N_s2 = Nmax, n_eval = cohort_size, m_U = 6L,
     cycle_max = 2L, start_dose = 1L,
     time = list(arrival_rate = .2, t0 = 0, T_assess = 28,
@@ -28,7 +30,7 @@ aide_phase12_config <- function(
                     futility_cutoff = .90, min_eff_n_for_futility = 3L,
                     n_chains = 3L, n_adapt = 1000L, n_burnin = 1000L,
                     n_iter = 4000L, thin = 2L),
-    monitoring = list(stage2_allocation = "highest_utility"),
+    monitoring = list(),
     utility = list(type = 1L, lambda_T = 1, scores = c(0, 1, -1, 0),
                    tie_break = "lower_dose"),
     recycle = list(priority = "new_first", apply_individual_toxicity_risk = FALSE,
@@ -58,9 +60,7 @@ aide_phase12_config <- function(
                                                  n_chains = 3L, n_adapt = 1000L, n_burnin = 1000L,
                                                  n_iter = 4000L, thin = 2L,
                                                  backend = "jags")),
-    monitoring = aide_phase12_merge(monitoring, list(
-      stage2_allocation = "highest_utility"
-    )),
+    monitoring = list(stage2_allocation = "one_stage"),
     utility = aide_phase12_merge(utility, list(type = 1L, lambda_T = 1,
                                                scores = c(0, 1, -1, 0),
                                                tie_break = "lower_dose")),
@@ -99,8 +99,9 @@ aide_phase12_validate_config <- function(config, scenario = NULL) {
   if (!d$allocation %in% c("one_stage", "two_stage") ||
       any(!is.finite(numeric_design)) || any(unlist(d[c("cohort_size", "Nmax", "n_eval", "cycle_max", "start_dose")]) < 1))
     stop("Invalid design configuration.")
-  if (d$s1_Max < 1L || d$s1_Max > d$Nmax || d$N_s2 < 1L || d$N_s2 > d$Nmax)
-    stop("s1_Max and N_s2 must be positive administration thresholds no greater than Nmax.")
+  if (d$N_s2 < 1L ||
+      (d$allocation == "two_stage" && (d$s1_Max < 1L || d$s1_Max > d$Nmax)))
+    stop("For two-stage designs, s1_Max must be no greater than Nmax; N_s2 must be positive when supplied for compatibility.")
   if (!is.finite(config$time$T_assess) || config$time$T_assess <= 0 ||
       !is.finite(config$time$arrival_rate) || config$time$arrival_rate <= 0)
     stop("time requires one positive common T_assess and positive arrival_rate.")
@@ -123,8 +124,8 @@ aide_phase12_validate_config <- function(config, scenario = NULL) {
   if (!is.null(config$toxicity$skeleton) &&
       (any(!is.finite(config$toxicity$skeleton)) || any(config$toxicity$skeleton <= 0 | config$toxicity$skeleton >= 1)))
     stop("toxicity$skeleton must contain probabilities strictly between 0 and 1.")
-  if (!config$monitoring$stage2_allocation %in% c("highest_utility", "top2_randomized"))
-    stop("monitoring$stage2_allocation must be 'highest_utility' or 'top2_randomized'.")
+  if (!identical(config$monitoring$stage2_allocation, "one_stage"))
+    stop("Stage II allocation is fixed to the one-stage rule.")
   if (!is.finite(config$toxicity$beta_prior_mean) || !is.finite(config$toxicity$beta_prior_sd) ||
       config$toxicity$beta_prior_sd <= 0 || any(as.integer(unlist(config$toxicity[c("n_chains", "n_adapt", "n_burnin", "n_iter", "thin")])) < c(1L, 0L, 0L, 1L, 1L)))
     stop("The CRM beta prior or JAGS MCMC controls are invalid.")

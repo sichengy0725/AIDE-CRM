@@ -35,6 +35,31 @@ stopifnot(
     "previous_dose_additive", "dose_specific_previous_dose_additive"
   ) %in% eval(phase12_formals$efficacy_model))
 )
+
+## The common one-stage rule first uses the lowest response-producing dose as
+## the candidate-interval floor, and otherwise uses the MTD as its target.
+## No-skipping is evaluated from the current dose rather than the highest dose
+## ever tried.
+response_rule <- aide_phase12_one_stage_allocation(
+  current_dose = 4L,
+  mtd = 4L,
+  admissible_doses = 1:4,
+  utility = c(.95, .40, .80, .70),
+  response_observed = c(FALSE, TRUE, FALSE, FALSE),
+  tried_doses = 1:4
+)
+stopifnot(response_rule$target == 3L, response_rule$dose == 3L,
+          response_rule$response_floor == 2L)
+no_response_rule <- aide_phase12_one_stage_allocation(
+  current_dose = 2L,
+  mtd = 4L,
+  admissible_doses = 1:4,
+  utility = c(.20, .40, .90, .80),
+  response_observed = rep(FALSE, 4L),
+  tried_doses = c(1L, 2L, 4L)
+)
+stopifnot(no_response_rule$target == 4L, no_response_rule$dose == 3L,
+          identical(no_response_rule$action, "no_skip_untried_dose"))
 carryover_map <- lapply(
   c(
     "discount_shared", "discount_dose_specific",
@@ -426,10 +451,6 @@ if (isTRUE(two_stage$stage1$threshold_reached)) {
   )
 }
 assert_true(
-  max(stage1_counts + stage2_counts) <= common_args$N_s2,
-  "Two-stage design enrolled more than N_s2 administrations at a dose."
-)
-assert_true(
   all(c("t_eff", "t_tox", "t_eval") %in% names(two_stage$admin)) &&
     all(two_stage$admin$t_eval == two_stage$admin$t_start +
           pmax(two_stage$admin$t_tox, two_stage$admin$t_eff)),
@@ -454,9 +475,8 @@ assert_true(
   "One-stage design recorded an incorrect administration stage."
 )
 assert_true(
-  all(abs(one_stage$decision_log$allocated_dose -
-            one_stage$decision_log$current_dose) <= 1L),
-  "One-stage allocation left the required local candidate set."
+  all(one_stage$decision_log$allocated_dose %in% seq_along(one_stage$final$tried_dose)),
+  "One-stage allocation returned an invalid dose."
 )
 
 ## Under continuous accrual, new patients accumulate in the waiting queue

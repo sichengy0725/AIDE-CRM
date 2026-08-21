@@ -9,24 +9,32 @@ from reportlab.pdfgen import canvas
 
 ROOT = Path(__file__).resolve().parents[2]
 PRESENTATION = ROOT / "Presentation 8-17-2026"
+RAW_DATA = PRESENTATION / "Raw Data"
 OUTPUT_DIR = PRESENTATION / "Table and Plots" / "TITE"
 OUTPUT_PDF = OUTPUT_DIR / "phase12_tite_vs_nontite_3designs_N30_fut0p85_scenarios_1_16_20_24_27_38_tables.pdf"
-TITE_FILE = PRESENTATION / "TITE_AIDE_phase_I_II_IDX_1001_to_2000_dose_summary.csv"
-NON_TITE_FILE = PRESENTATION / (
+TITE_FILE = RAW_DATA / "TITE_AIDE_phase_I_II_IDX_1001_to_2000_dose_summary.csv"
+TITE_ONE_STAGE_REPLACEMENT_FILE = RAW_DATA / "TITE_AIDE_phase_I_II_IDX_1001_to_2000_newdesign_dose_summary.csv"
+NON_TITE_FILE = RAW_DATA / (
     "AIDE_phase_I_II_modelsadditive_newdesign_shared_N30_ncycle2_"
     "rp0p15x0p85_rate56d_ep0p5x0p5_cp0p15x0p85_eth0p2_fut0p85_"
     "ap0p15x0p85_IDX_0001_to_1000_dose_summary.csv"
 )
+NON_TITE_ONE_STAGE_REPLACEMENT_FILE = RAW_DATA / (
+    "AIDE_phase_I_II_modelsadditive_shared_N30_ncycle2_"
+    "rp0p15x0p85_rate56d_ep0p5x0p5_cp0p15x0p85_eth0p2_fut0p85_"
+    "ap0p15x0p85_IDX_0001_to_1000_newdesign_dose_summary.csv"
+)
 
 SCENARIOS = [1, 16, 20, 24, 27, 38]
 DOSES = [1, 2, 3, 4, 5]
+ONE_STAGE_REPLACEMENT_TASKS = {scenario: index for index, scenario in enumerate(SCENARIOS, start=1)}
 DESIGNS = [
     {
         "key": "one_stage",
         "short": "one-stage",
         "allocation": "one_stage",
         "stage2": "highest_utility",
-        "tite_tasks": {1: 31, 16: 32, 20: 33, 24: 34, 27: 35, 38: 36},
+        "tite_tasks": {1: 13, 16: 14, 20: 15, 24: 16, 27: 17, 38: 18},
         "non_tite_tasks": {1: 13, 16: 14, 20: 15, 24: 16, 27: 17, 38: 18},
     },
     {
@@ -34,7 +42,7 @@ DESIGNS = [
         "short": "2-stage highest utility",
         "allocation": "two_stage",
         "stage2": "highest_utility",
-        "tite_tasks": {1: 25, 16: 26, 20: 27, 24: 28, 27: 29, 38: 30},
+        "tite_tasks": {1: 7, 16: 8, 20: 9, 24: 10, 27: 11, 38: 12},
         "non_tite_tasks": {1: 7, 16: 8, 20: 9, 24: 10, 27: 11, 38: 12},
     },
     {
@@ -42,7 +50,7 @@ DESIGNS = [
         "short": "2-stage top-2 randomized",
         "allocation": "two_stage",
         "stage2": "top2_randomized",
-        "tite_tasks": {1: 19, 16: 20, 20: 21, 24: 22, 27: 23, 38: 24},
+        "tite_tasks": {1: 1, 16: 2, 20: 3, 24: 4, 27: 5, 38: 6},
         "non_tite_tasks": {1: 1, 16: 2, 20: 3, 24: 4, 27: 5, 38: 6},
     },
 ]
@@ -59,6 +67,11 @@ TITE_FILL = HexColor("#E5F1FB")
 NON_TITE_FILL = HexColor("#E6F3F1")
 GRID = HexColor("#C9CDD1")
 MUTED = HexColor("#4D5965")
+NON_TITE_LABEL = "New non-TITE"
+SUBTITLE = "TITE versus new non-TITE: one-stage, two-stage highest utility, and two-stage top-2 randomized"
+SOURCE_NOTE = "Sources: updated TITE and new non-TITE one-stage newdesign summaries; existing two-stage summaries."
+SIMULATION_NOTE = "Non-TITE rows represent 1,000 simulations; TITE rows use their available 996-1,000 trials."
+DURATION_NOTE = "TITE No OBD % = 100 - sum of dose OBD selections. Duration is mean calendar days to complete the trial."
 
 
 def fmt(value, digits=1):
@@ -103,9 +116,10 @@ def non_tite_filter(data):
     )
 
 
-def select_rows(data, design, version):
+def select_rows(data, design, version, task_map=None):
     n_stage1 = 30 if design["key"] == "one_stage" else 6
-    task_map = design["tite_tasks"] if version == "TITE" else design["non_tite_tasks"]
+    if task_map is None:
+        task_map = design["tite_tasks"] if version == "TITE" else design["non_tite_tasks"]
     base = (
         data["Scenario"].isin(SCENARIOS)
         & (data["Task_ID"] == data["Scenario"].map(task_map))
@@ -142,16 +156,24 @@ def normalise(data, version, design, scenario):
 
 def build_summary():
     tite = pd.read_csv(TITE_FILE)
+    tite_one_stage = pd.read_csv(TITE_ONE_STAGE_REPLACEMENT_FILE)
     non_tite = pd.read_csv(NON_TITE_FILE)
+    non_tite_one_stage = pd.read_csv(NON_TITE_ONE_STAGE_REPLACEMENT_FILE)
     require_columns(tite, {"Task_ID", "Scenario", "Allocation", "N_s1", "N_s2", "Model_ID", "Utility_Type", "Lambda_T", "n_eval", "Cycle_Max", "Arrival_Rate", "Dose", "True_DLT_rate", "True_Efficacy_rate", "OBD_Selection_pct", "Pts_Treated", "Duration", "ntrial"}, TITE_FILE.name)
+    require_columns(tite_one_stage, {"Task_ID", "Scenario", "Allocation", "N_s1", "N_s2", "Model_ID", "Utility_Type", "Lambda_T", "n_eval", "Cycle_Max", "Arrival_Rate", "Dose", "True_DLT_rate", "True_Efficacy_rate", "OBD_Selection_pct", "Pts_Treated", "Duration", "ntrial"}, TITE_ONE_STAGE_REPLACEMENT_FILE.name)
     require_columns(non_tite, {"Task_ID", "Scenario", "Allocation", "Stage2_Allocation", "N_s1", "N_s2", "Model_ID", "Utility_Type", "Toxicity_IPDE_Alpha", "Efficacy_IPDE_Alpha", "Efficacy_Threshold", "Futility_Cutoff", "Min_Eff_N_for_Futility", "Cycle_Max", "Dose", "True_DLT_rate", "True_Efficacy_rate", "OBD_Selection_pct", "Pts_Treated", "No_OBD_Selection_pct", "Duration", "n_valid"}, NON_TITE_FILE.name)
+    require_columns(non_tite_one_stage, {"Task_ID", "Scenario", "Allocation", "Stage2_Allocation", "N_s1", "N_s2", "Model_ID", "Utility_Type", "Toxicity_IPDE_Alpha", "Efficacy_IPDE_Alpha", "Efficacy_Threshold", "Futility_Cutoff", "Min_Eff_N_for_Futility", "Cycle_Max", "Dose", "True_DLT_rate", "True_Efficacy_rate", "OBD_Selection_pct", "Pts_Treated", "No_OBD_Selection_pct", "Duration", "n_valid"}, NON_TITE_ONE_STAGE_REPLACEMENT_FILE.name)
     summary = []
     for design in DESIGNS:
-        selected_tite = select_rows(tite, design, "TITE")
-        selected_non_tite = select_rows(non_tite, design, "New non-TITE")
+        if design["key"] == "one_stage":
+            selected_tite = select_rows(tite_one_stage, design, "TITE", ONE_STAGE_REPLACEMENT_TASKS)
+            selected_non_tite = select_rows(non_tite_one_stage, design, NON_TITE_LABEL, ONE_STAGE_REPLACEMENT_TASKS)
+        else:
+            selected_tite = select_rows(tite, design, "TITE")
+            selected_non_tite = select_rows(non_tite, design, NON_TITE_LABEL)
         for scenario in SCENARIOS:
             summary.append(normalise(selected_tite, "TITE", design, scenario))
-            summary.append(normalise(selected_non_tite, "New non-TITE", design, scenario))
+            summary.append(normalise(selected_non_tite, NON_TITE_LABEL, design, scenario))
     for scenario in SCENARIOS:
         records = [row for row in summary if row["Scenario"] == scenario]
         if any(row["DLT"] != records[0]["DLT"] or row["Efficacy"] != records[0]["Efficacy"] for row in records[1:]):
@@ -219,26 +241,26 @@ def scenario_records(summary, scenario, design):
 
 
 def draw_scenario(pdf, y_top, scenario, summary):
-    first = scenario_records(summary, scenario, DESIGNS[0])["New non-TITE"]
+    first = scenario_records(summary, scenario, DESIGNS[0])[NON_TITE_LABEL]
     y = draw_row(pdf, y_top, 15, f"Scenario {scenario}", [""] * 6, fill=SECTION, bold=True)
     y = draw_row(pdf, y, 10.5, "DLT rate", [fmt(value, 2) for value in first["DLT"]] + [""])
     y = draw_row(pdf, y, 10.5, "Efficacy rate", [fmt(value, 2) for value in first["Efficacy"]] + [""])
     y = draw_row(pdf, y, 12, "OBD selection (%)", [""] * 6, fill=SECTION, bold=True)
     for design in DESIGNS:
         records = scenario_records(summary, scenario, design)
-        for version, fill, bold in [("TITE", TITE_FILL, False), ("New non-TITE", NON_TITE_FILL, True)]:
+        for version, fill, bold in [("TITE", TITE_FILL, False), (NON_TITE_LABEL, NON_TITE_FILL, True)]:
             row = records[version]
             y = draw_row(pdf, y, 10.5, row["Method"], [fmt(value) for value in row["Selection"]] + [fmt(row["No_OBD"])], fill=fill, bold=bold)
     y = draw_row(pdf, y, 12, "Mean administrations by dose", [""] * 6, fill=SECTION, bold=True)
     for design in DESIGNS:
         records = scenario_records(summary, scenario, design)
-        for version, fill, bold in [("TITE", TITE_FILL, False), ("New non-TITE", NON_TITE_FILL, True)]:
+        for version, fill, bold in [("TITE", TITE_FILL, False), (NON_TITE_LABEL, NON_TITE_FILL, True)]:
             row = records[version]
             y = draw_row(pdf, y, 10.5, row["Method"], [fmt(value) for value in row["Administrations"]] + [""], fill=fill, bold=bold)
     y = draw_duration_header(pdf, y)
     for design in DESIGNS:
         records = scenario_records(summary, scenario, design)
-        for version, fill, bold in [("TITE", TITE_FILL, False), ("New non-TITE", NON_TITE_FILL, True)]:
+        for version, fill, bold in [("TITE", TITE_FILL, False), (NON_TITE_LABEL, NON_TITE_FILL, True)]:
             row = records[version]
             y = draw_duration_row(pdf, y, row["Method"], row["Duration"], fill, bold)
     return y
@@ -246,16 +268,16 @@ def draw_scenario(pdf, y_top, scenario, summary):
 
 def draw_page(pdf, scenario, summary, page_number):
     draw_text(pdf, "Phase I/II Operating Characteristics", PAGE_WIDTH / 2, 576, size=20, bold=True, align="center")
-    draw_text(pdf, "TITE versus new non-TITE: one-stage, two-stage highest utility, and two-stage top-2 randomized", PAGE_WIDTH / 2, 556, size=10.2, color=MUTED, align="center")
+    draw_text(pdf, SUBTITLE, PAGE_WIDTH / 2, 556, size=10.2, color=MUTED, align="center")
     pdf.setStrokeColor(NAVY)
     pdf.setLineWidth(0.8)
     pdf.line(LEFT, 545, RIGHT, 545)
     for index, header in enumerate(["Dose 1", "Dose 2", "Dose 3", "Dose 4", "Dose 5", "No OBD %"]):
         draw_text(pdf, header, LEFT + LABEL_WIDTH + VALUE_WIDTH * (index + 0.5), 531, size=8.8, bold=True, align="center")
     draw_scenario(pdf, 518, scenario, summary)
-    draw_text(pdf, "Sources: TITE_AIDE_phase_I_II_IDX_1001_to_2000 and AIDE_phase_I_II_modelsadditive_newdesign_shared summaries.", LEFT, 27, size=6.2, color=MUTED)
-    draw_text(pdf, "Non-TITE rows represent 1,000 simulations; TITE rows use their available 996-1,000 trials.", LEFT, 21, size=6.1, color=MUTED)
-    draw_text(pdf, "TITE No OBD % = 100 - sum of dose OBD selections. Duration is mean calendar days to complete the trial.", LEFT, 15, size=6.1, color=MUTED)
+    draw_text(pdf, SOURCE_NOTE, LEFT, 27, size=6.2, color=MUTED)
+    draw_text(pdf, SIMULATION_NOTE, LEFT, 21, size=6.1, color=MUTED)
+    draw_text(pdf, DURATION_NOTE, LEFT, 15, size=6.1, color=MUTED)
     draw_text(pdf, f"Page {page_number} of {len(SCENARIOS)}", RIGHT, 15, size=6.2, color=MUTED, align="right")
 
 

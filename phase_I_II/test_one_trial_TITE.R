@@ -24,7 +24,6 @@ fit <- simulate_AIDE_phase_I_II_TITE(
   cycle_max = 1L,
   n_eval = 3L,
   m_U = 6L,
-  stage2_allocation = "top2_randomized",
   enrollment_scheme = "continuous",
   arrival_rate = 1 / 28,
   T_assess = 28,

@@ -11,21 +11,26 @@ if (requireNamespace("rjags", quietly = TRUE) && requireNamespace("coda", quietl
   stopifnot(nrow(trial$admin) > 0L, all(trial$admin$dose == trial$admin$decision_next_dose))
 }
 
-# A proposed escalation with no evaluated administrations blocks a new trigger.
+# With no open cohort, a model-based decision is unavailable until the
+# required number of fully evaluated DLT outcomes is present. The triggering
+# new patient remains eligible to wait; it is not dropped.
 state <- aide_phase12_initialize_state(cfg, sce, seed = 2L)
 state$cohort$open <- FALSE
 decision <- list(action = "escalate")
 gate <- aide_apply_escalation_gate(state, decision, cfg, "new")
-stopifnot(gate$blocked, gate$new_patient_dropped, gate$trigger_disposition == "new_dropped_n_eval")
+stopifnot(gate$blocked, !gate$new_patient_dropped,
+          gate$trigger_disposition == "decision_unavailable_n_eval")
 
-# The corresponding retreat trigger is retained rather than dropped.
+# A retreat trigger is also retained, and the gate applies before every
+# proposed model decision, including de-escalation.
 state <- aide_queue_add(state, 0, 1, "retreat", 99L, 1L)
 gate <- aide_apply_escalation_gate(state, decision, cfg, "retreat", 1L)
-stopifnot(gate$blocked, gate$retreat_opportunity_retained, gate$trigger_disposition == "retreat_retained_n_eval")
+stopifnot(gate$blocked, gate$retreat_opportunity_retained,
+          gate$trigger_disposition == "decision_unavailable_n_eval")
 
-# Stay is now gated by n_eval; de-escalation remains immediately permissible.
+# The same closed-cohort gate applies to stay and de-escalation decisions.
 stopifnot(aide_apply_escalation_gate(state, list(action = "stay"), cfg, "new")$blocked)
-stopifnot(!aide_apply_escalation_gate(state, list(action = "de_escalate"), cfg, "new")$blocked)
+stopifnot(aide_apply_escalation_gate(state, list(action = "de_escalate"), cfg, "new")$blocked)
 
 # Optional individual-risk recycle screens use the open cohort's frozen dose.
 risk_cfg <- aide_phase12_config(recycle = list(

@@ -9,21 +9,28 @@ from reportlab.pdfgen import canvas
 
 ROOT = Path(__file__).resolve().parents[2]
 SOURCE_DIR = ROOT / "Presentation 8-17-2026"
+RAW_DIR = SOURCE_DIR / "Raw Data"
 OUTPUT = (
     SOURCE_DIR
     / "Table and Plots"
+    / "New Design"
     / "phase12_old_vs_new_design_N30_fut0p85_scenarios_1_16_20_24_27_38_tables.pdf"
 )
 
-OLD_FILE = next(
-    SOURCE_DIR.glob(
-        "AIDE_phase_I_II_modelsadditive_shared_N30_ncycle2_*IDX_0001_to_1000_dose_summary.csv"
-    )
+OLD_FILE = RAW_DIR / (
+    "AIDE_phase_I_II_modelsadditive_shared_N30_ncycle2_"
+    "rp0p15x0p85_rate56d_ep0p5x0p5_cp0p15x0p85_eth0p2_fut0p85_"
+    "ap0p15x0p85_IDX_0001_to_1000_dose_summary.csv"
 )
-NEW_FILE = next(
-    SOURCE_DIR.glob(
-        "AIDE_phase_I_II_modelsadditive_newdesign_shared_N30_ncycle2_*IDX_0001_to_1000_dose_summary.csv"
-    )
+NEW_FILE = RAW_DIR / (
+    "AIDE_phase_I_II_modelsadditive_newdesign_shared_N30_ncycle2_"
+    "rp0p15x0p85_rate56d_ep0p5x0p5_cp0p15x0p85_eth0p2_fut0p85_"
+    "ap0p15x0p85_IDX_0001_to_1000_dose_summary.csv"
+)
+LATEST_ONE_STAGE_NEW_FILE = RAW_DIR / (
+    "AIDE_phase_I_II_modelsadditive_shared_N30_ncycle2_"
+    "rp0p15x0p85_rate56d_ep0p5x0p5_cp0p15x0p85_eth0p2_fut0p85_"
+    "ap0p15x0p85_IDX_0001_to_1000_newdesign_dose_summary.csv"
 )
 
 SCENARIOS = [1, 16, 20, 24, 27, 38]
@@ -63,7 +70,7 @@ def utility3(toxicity, efficacy):
     )
 
 
-def read_summary(path, design_label):
+def read_summary(path, design_label, methods):
     data = pd.read_csv(path)
     required = {
         "Scenario",
@@ -99,13 +106,13 @@ def read_summary(path, design_label):
     ].copy()
     selected["Design"] = design_label
 
-    expected_rows = len(SCENARIOS) * len(METHODS) * 5
+    expected_rows = len(SCENARIOS) * len(methods) * 5
     if len(selected) != expected_rows:
         raise ValueError(
             f"{path.name} produced {len(selected)} selected rows; expected {expected_rows}."
         )
     observed = set(zip(selected["Allocation"], selected["Stage2_Allocation"]))
-    expected = {(allocation, stage2) for allocation, stage2, _ in METHODS}
+    expected = {(allocation, stage2) for allocation, stage2, _ in methods}
     if observed != expected:
         raise ValueError(f"{path.name} has unexpected allocation settings: {observed}")
     counts = selected.groupby(["Scenario", "Allocation", "Stage2_Allocation"]).size()
@@ -239,8 +246,18 @@ def draw_page(c, scenarios, old, new, page_number, page_count):
 
 
 def main():
-    old = read_summary(OLD_FILE, "Old")
-    new = read_summary(NEW_FILE, "New")
+    old = read_summary(OLD_FILE, "Old", METHODS)
+    new = read_summary(NEW_FILE, "New", METHODS)
+    latest_one_stage_new = read_summary(
+        LATEST_ONE_STAGE_NEW_FILE, "New", METHODS[:1]
+    )
+    new = pd.concat(
+        [
+            new.loc[new["Allocation"] != "one_stage"],
+            latest_one_stage_new,
+        ],
+        ignore_index=True,
+    )
     validate_truth(old, new)
     OUTPUT.parent.mkdir(parents=True, exist_ok=True)
 

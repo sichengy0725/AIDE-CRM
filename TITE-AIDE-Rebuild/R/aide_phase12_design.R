@@ -50,54 +50,67 @@ aide_action_from_next <- function(next_dose, current_dose) {
   if (is.na(next_dose)) "stop" else if (next_dose > current_dose) "escalate" else if (next_dose < current_dose) "de_escalate" else "stay"
 }
 
-aide_one_stage_decision <- function(state, toxicity_recommendation, admissible, toxicity_fit, efficacy_fit, config) {
+aide_one_stage_rule <- function(state, admissible, toxicity_fit, efficacy_fit, config) {
   d <- state$current_dose
+  candidates <- admissible$doses[admissible$doses <= admissible$mtd]
+  if (!length(candidates)) {
+    return(list(stop_trial = TRUE, stop_reason = "no_admissible_dose",
+                next_dose = NA_integer_))
+  }
+  utility <- aide_compute_utility(
+    efficacy_fit$p_regular_mean, toxicity_fit$p_regular_mean, config$utility
+  )
+  response_observed <- aide_observed_efficacy_response(state)
+  response_doses <- candidates[response_observed[candidates]]
+  if (length(response_doses)) {
+    response_floor <- min(response_doses)
+    response_candidates <- candidates[candidates >= response_floor]
+    target <- aide_select_lowest_tied(utility, response_candidates)
+    target_action <- "response_floor_utility_target"
+  } else {
+    response_floor <- NA_integer_
+    response_candidates <- candidates
+    ## The MTD is the no-response target. If a standing elimination removes
+    ## it, retain the highest remaining admissible dose below the MTD ceiling.
+    target <- if (admissible$mtd %in% candidates) {
+      admissible$mtd
+    } else {
+      max(candidates)
+    }
+    target_action <- "mtd_no_response_fallback"
+  }
+
+  if (target <= d) {
+    next_dose <- target
+    action <- target_action
+  } else {
+    ## Inspect every dose on the upward path.  Using the highest tried dose
+    ## here would incorrectly allow a previously tried high dose to bypass an
+    ## intervening dose that has never been tried.
+    path <- seq.int(d + 1L, target)
+    tried <- unique(as.integer(state$admin$dose))
+    first_untried <- path[path %in% admissible$doses & !(path %in% tried)]
+    next_dose <- if (length(first_untried)) min(first_untried) else target
+    action <- if (next_dose == target) target_action else "no_skip_untried_dose"
+  }
+  list(
+    stop_trial = FALSE,
+    stop_reason = NA_character_,
+    next_dose = next_dose,
+    target_dose = target,
+    candidate_doses = response_candidates,
+    utility = utility,
+    provisional_obd = target,
+    response_floor = response_floor,
+    allocation_action = action
+  )
+}
+
+aide_one_stage_decision <- function(state, toxicity_recommendation, admissible, toxicity_fit, efficacy_fit, config) {
   if (toxicity_recommendation$stop) {
     return(list(stop_trial = TRUE, stop_reason = "dose_1_overtoxicity", next_dose = NA_integer_))
   }
-  candidates <- admissible$doses[admissible$doses <= admissible$mtd]
-  if (!length(candidates)) {
-    return(list(stop_trial = TRUE, stop_reason = "no_admissible_dose", next_dose = NA_integer_))
-  }
-  utility <- aide_compute_utility(efficacy_fit$p_regular_mean, toxicity_fit$p_regular_mean, config$utility)
-  provisional_obd <- aide_select_lowest_tied(utility, candidates)
-
-  if (provisional_obd > d) {
-    highest_tried <- if (nrow(state$admin)) max(state$admin$dose) else d
-    if (provisional_obd <= highest_tried) {
-      next_dose <- provisional_obd
-    } else {
-      upward <- candidates[candidates > highest_tried & candidates <= provisional_obd]
-      if (!length(upward)) {
-        return(list(stop_trial = TRUE, stop_reason = "no_admissible_no_skip_escalation", next_dose = NA_integer_))
-      }
-      next_dose <- min(upward)
-    }
-  } else if (provisional_obd == d) {
-    next_dose <- d
-  } else {
-    response_observed <- aide_observed_efficacy_response(state)
-    ## For a utility target below the current dose, use the unified
-    ## response-informed interval A_down = {j_U, ..., h}, where h is the
-    ## safety boundary min(d, MTD).  Responses below j_U cannot redirect
-    ## allocation.  Do not short-circuit this rule merely because the
-    ## toxicity recommendation is a de-escalation: the MTD already supplies
-    ## the safety boundary for the one-stage allocation decision.
-    h <- min(d, admissible$mtd)
-    A_down <- candidates[candidates >= provisional_obd & candidates <= h]
-    response_qualified <- A_down[response_observed[A_down]]
-    if (length(response_qualified)) {
-      next_dose <- min(response_qualified)
-    } else {
-      if (!length(A_down)) {
-        return(list(stop_trial = TRUE, stop_reason = "no_safe_lower_one_stage_dose", next_dose = NA_integer_))
-      }
-      next_dose <- max(A_down)
-    }
-  }
-  list(stop_trial = FALSE, stop_reason = NA_character_, next_dose = next_dose,
-       candidate_doses = candidates, utility = utility,
-       provisional_obd = provisional_obd)
+  aide_one_stage_rule(state, admissible, toxicity_fit, efficacy_fit, config)
 }
 
 aide_two_stage_decision <- function(state, toxicity_recommendation, admissible, toxicity_fit, efficacy_fit, config) {
@@ -132,64 +145,28 @@ aide_two_stage_decision <- function(state, toxicity_recommendation, admissible, 
                 next_dose = max(candidates), candidate_doses = candidates,
                 stage = active, stage_transition = transition))
   }
-  candidates <- admissible$doses[admissible$doses <= admissible$mtd]
-  if (!length(candidates)) return(list(stop_trial = TRUE, stop_reason = "no_stage2_candidate", next_dose = NA_integer_, stage = active, stage_transition = transition))
-  utility <- aide_compute_utility(efficacy_fit$p_regular_mean, toxicity_fit$p_regular_mean, config$utility)
-  ranked <- candidates[order(-utility[candidates], candidates)]
-  provisional_obd <- aide_select_lowest_tied(utility, candidates)
-  response_observed <- aide_observed_efficacy_response(state)
-  mtd_dose <- if (admissible$mtd %in% candidates) admissible$mtd else max(candidates)
-  if (identical(config$monitoring$stage2_allocation, "top2_randomized")) {
-    top_two <- ranked[seq_len(min(2L, length(ranked)))]
-    if (length(top_two) == 1L) {
-      allocation_doses <- top_two
-    } else {
-      responders_in_top_two <- top_two[response_observed[top_two]]
-      allocation_doses <- if (length(responders_in_top_two) == 2L) {
-        top_two
-      } else if (length(responders_in_top_two) == 1L) {
-        c(responders_in_top_two, mtd_dose)
-      } else {
-        lower_than_mtd <- candidates[candidates < mtd_dose]
-        c(mtd_dose, if (length(lower_than_mtd)) max(lower_than_mtd) else mtd_dose)
-      }
-      allocation_doses <- unique(allocation_doses)
-      if (length(allocation_doses) == 1L && length(candidates) > 1L) {
-        alternatives <- candidates[
-          candidates < mtd_dose & !(candidates %in% allocation_doses)
-        ]
-        if (!length(alternatives)) alternatives <- setdiff(candidates, allocation_doses)
-        if (length(alternatives)) allocation_doses <- c(allocation_doses, max(alternatives))
-      }
-    }
-    probabilities <- aide_allocation_probabilities(utility, allocation_doses)
-    ## Freeze the candidate set and its probabilities when the triggering
-    ## patient arrives. The event layer then randomizes each cohort position
-    ## independently from this fixed set; it does not randomize one dose for
-    ## the whole cohort. The MTD is retained as the Stage II reference dose
-    ## for the decision log, safety recommendation, and n_eval gate.
-    next_dose <- mtd_dose
-    allocation_probabilities <- setNames(probabilities, paste0("D", allocation_doses))
-    individual_randomization <- length(allocation_doses) > 1L
+
+  ## Stage II is deliberately not a separate allocation design.  After the
+  ## toxicity-driven Stage I transition, it uses the one-stage rule above,
+  ## including the response floor, MTD fallback, and path-based no-skipping
+  ## constraint.  Top-two randomization and Stage-II-specific utility modes
+  ## are not part of this design.
+  stage2 <- aide_one_stage_decision(
+    state, toxicity_recommendation, admissible, toxicity_fit, efficacy_fit,
+    config
+  )
+  stage2$stage <- active
+  stage2$stage_transition <- transition
+  stage2$stage2_allocation <- "one_stage"
+  stage2$allocation_doses <- stage2$next_dose
+  stage2$allocation_probabilities <- if (is.na(stage2$next_dose)) {
+    numeric(0)
   } else {
-    response_doses <- candidates[response_observed[candidates]]
-    next_dose <- if (length(response_doses)) {
-      aide_select_lowest_tied(utility, response_doses)
-    } else {
-      mtd_dose
-    }
-    allocation_probabilities <- setNames(1, paste0("D", next_dose))
-    allocation_doses <- next_dose
-    individual_randomization <- FALSE
+    setNames(1, paste0("D", stage2$next_dose))
   }
-  list(stop_trial = FALSE, stop_reason = NA_character_, next_dose = next_dose,
-       candidate_doses = candidates, utility = utility, stage = active,
-       stage_transition = transition,
-       provisional_obd = provisional_obd,
-       stage2_allocation = config$monitoring$stage2_allocation,
-       allocation_probabilities = allocation_probabilities,
-       allocation_doses = allocation_doses,
-       individual_randomization = individual_randomization)
+  stage2$individual_randomization <- FALSE
+  return(stage2)
+
 }
 
 aide_make_design_decision <- function(state, toxicity_fit, efficacy_fit, config, scenario) {
@@ -221,18 +198,14 @@ aide_make_design_decision <- function(state, toxicity_fit, efficacy_fit, config,
 
 aide_apply_n_eval_gate <- function(state, decision, config, trigger_type, trigger_queue_id = NA_integer_) {
   out <- aide_count_evaluated_current_dose(state$admin, state$current_dose, state$t_now, config$time$T_assess)
-  # Latest design override: n_eval gates both a stay and an escalation.
-  # De-escalation remains immediately permissible regardless of n_eval.
-  blocked <- decision$action %in% c("stay", "escalate") && out$n < config$design$n_eval
-  disposition <- "allowed"; new_dropped <- FALSE; retreat_retained <- FALSE
-  if (blocked && trigger_type == "new") { disposition <- "new_dropped_n_eval"; new_dropped <- TRUE }
-  if (blocked && trigger_type == "retreat") {
-    disposition <- "retreat_retained_n_eval"; retreat_retained <- TRUE
-    if (!is.na(trigger_queue_id)) { i <- match(trigger_queue_id, state$queue$queue_id); if (!is.na(i)) { state$queue$status[i] <- "waiting"; state$queue$last_reason[i] <- disposition } }
-  }
+  ## With no open cohort, the revised event clock checks this condition before
+  ## fitting either model.  It gates the decision itself (not merely upward
+  ## movement), and all waiting events remain in the queue when it is unmet.
+  blocked <- out$n < config$design$n_eval
+  disposition <- if (blocked) "decision_unavailable_n_eval" else "allowed"
   list(state = state, allowed = !blocked, blocked = blocked, n_eval_observed = out$n,
        qualifying_admin_ids = out$qualifying_admin_ids, trigger_disposition = disposition,
-       new_patient_dropped = new_dropped, retreat_opportunity_retained = retreat_retained)
+       new_patient_dropped = FALSE, retreat_opportunity_retained = blocked && trigger_type == "retreat")
 }
 
 # Compatibility alias retained for callers of the prior rebuild draft.

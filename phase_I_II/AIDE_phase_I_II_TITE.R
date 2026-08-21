@@ -12,13 +12,11 @@
 ##     ascertained efficacy outcomes in a standalone Beta(1,1) rule;
 ##   * a closed cohort reopens only for a new arrival or eligible retreat;
 ##   * new arrivals have priority over recycled patients;
-##   * n_eval blocks stay/escalate, but not de-escalation; and
-##   * every opened cohort has one frozen dose, except Stage II top-two
-##     cohorts, which freeze their candidate set and randomize each position.
-## Updated allocation rules: Stage II uses observed efficacy responses to
-## construct its utility allocation, and one-stage downward movement selects
-## the lowest response-qualified destination between the utility target and
-## current dose unless safety requires otherwise.
+##   * a closed cohort requires the prescribed number of fully evaluated DLT
+##     outcomes before a new model-based decision; and
+##   * every opened cohort has one model-assigned regular dose.
+## Stage II reuses the one-stage response-floor, MTD-fallback, and no-skipping
+## allocation rule; it has no separate top-two or highest-utility mode.
 ## ============================================================
 
 `%||%` <- function(x, y) if (is.null(x)) y else x
@@ -218,11 +216,9 @@ simulate_AIDE_phase_I_II_TITE <- function(
   allocation <- match.arg(allocation)
   dlt_dist <- match.arg(dlt_dist)
   efficacy_dist <- match.arg(efficacy_dist, c("uniform", "front_loaded"))
-  if (is.null(stage2_allocation)) {
-    stage2_allocation <- if (allocation == "two_stage") "top2_randomized" else "highest_utility"
+  if (!is.null(stage2_allocation)) {
+    warning("stage2_allocation is ignored: Stage II uses the one-stage allocation rule.")
   }
-  stage2_allocation <- match.arg(stage2_allocation,
-                                 c("highest_utility", "top2_randomized"))
   if (!identical(enrollment_scheme, "continuous")) {
     stop("The TITE rebuild implements continuous new-patient-first enrollment only.")
   }
@@ -262,7 +258,6 @@ simulate_AIDE_phase_I_II_TITE <- function(
     ),
     utility = list(type = as.integer(utility_type), lambda_T = lambda_T,
                    scores = utility_scores),
-    monitoring = list(stage2_allocation = stage2_allocation),
     recycle = list(
       priority = "new_first",
       apply_individual_toxicity_risk = isTRUE(apply_ipde_toxicity_rule),
@@ -294,7 +289,10 @@ get_oc_sim_AIDE_phase_I_II_TITE <- function(p_true, e_true, ntrial = 1000L,
                                   seed = seed + i - 1L, ...)
   })
   mtd <- vapply(trials, function(x) x$final$MTD, integer(1))
-  obd <- vapply(trials, function(x) x$final$OBD, integer(1))
+  obd <- vapply(trials, function(x) x$final$OBD %||% aide_phase12_no_obd, integer(1))
+  ## Keep OC output compatible with the standard sentinel when reading a
+  ## legacy final object that used NA for no OBD.
+  obd[is.na(obd)] <- aide_phase12_no_obd
   stopped <- vapply(trials, function(x) x$final$earlystop, integer(1))
   dose_counts <- function(x, type = NULL) {
     dat <- x$admin
@@ -329,6 +327,7 @@ get_oc_sim_AIDE_phase_I_II_TITE <- function(p_true, e_true, ntrial = 1000L,
     r_hat_by_trial = matrix(rep(carry, ndose), ncol = ndose),
     MTD_selection_percent = 100 * tabulate(mtd[!is.na(mtd) & mtd >= 1L & mtd <= ndose], nbins = ndose) / ntrial,
     OBD_selection_percent = 100 * tabulate(obd[!is.na(obd) & obd >= 1L & obd <= ndose], nbins = ndose) / ntrial,
+    No_OBD_selection_percent = 100 * mean(obd == aide_phase12_no_obd),
     early_stop_percent = 100 * mean(stopped),
     mean_administrations = mean(administrations),
     mean_administrations_by_dose = colMeans(do.call(rbind, lapply(trials, dose_counts))),

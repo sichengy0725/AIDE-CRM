@@ -28,19 +28,15 @@ jobs_expected <- 1:1000
 ntrial_per_job <- 1L
 scenario_id_list <- 1:38
 
-two_stage_top2_sizes <- data.frame(
+two_stage_sizes <- data.frame(
   allocation = "two_stage", Nmax = 30L, N_s1 = 6L, N_s2 = 30L,
-  stage2_allocation = "top2_randomized", stringsAsFactors = FALSE
-)
-two_stage_highest_sizes <- data.frame(
-  allocation = "two_stage", Nmax = 30L, N_s1 = 6L, N_s2 = 30L,
-  stage2_allocation = "highest_utility", stringsAsFactors = FALSE
+  stringsAsFactors = FALSE
 )
 one_stage_sizes <- data.frame(
   allocation = "one_stage", Nmax = 30L, N_s1 = 30L, N_s2 = 30L,
-  stage2_allocation = "highest_utility", stringsAsFactors = FALSE
+  stringsAsFactors = FALSE
 )
-design_size_grid <- rbind(two_stage_top2_sizes, two_stage_highest_sizes, one_stage_sizes)
+design_size_grid <- rbind(two_stage_sizes, one_stage_sizes)
 model_grid <- data.frame(
   model_id = "additive_shared",
   carryover_model = "additive_shared",
@@ -116,8 +112,7 @@ calculate_true_obd <- function(p_true, e_true, true_mtd, utility_type,
 make_phase12_tite_config_tag <- function(task) {
   paste0(
     "P12TITE-a", if (task$allocation == "two_stage") "2s" else "1s",
-    "-N", task$Nmax, "-s1", task$N_s1, "-s2", task$N_s2,
-    "-s2a", task$stage2_allocation,
+    "-N", task$Nmax, "-s1", task$N_s1,
     "-u", task$utility_type, "-l", fmt_short(task$lambda_T),
     "-cm", task$carryover_model, "-tm", task$crm_r_model,
     "-em", task$efficacy_model,
@@ -168,7 +163,6 @@ for (setting_row in seq_len(nrow(setting_grid))) {
       p_true = p_true, e_true = e_true,
       allocation = as.character(setting$allocation), Nmax = as.integer(setting$Nmax),
       N_s1 = as.integer(setting$N_s1), N_s2 = as.integer(setting$N_s2),
-      stage2_allocation = as.character(setting$stage2_allocation),
       model_id = as.character(setting$model_id),
       carryover_model = as.character(setting$carryover_model),
       crm_r_model = as.character(setting$crm_r_model),
@@ -221,6 +215,8 @@ summarize_task <- function(results, task) {
   ntrial <- sum(vapply(results, function(x) as.integer(x$ntrial), integer(1)))
   mtd <- unlist(lapply(results, `[[`, "MTD_by_trial"), use.names = FALSE)
   obd <- unlist(lapply(results, `[[`, "OBD_by_trial"), use.names = FALSE)
+  ## Normalize legacy result files that encoded no OBD as NA.
+  obd[is.na(obd)] <- aide_phase12_no_obd
   trial_summary <- do.call(rbind, lapply(results, `[[`, "trial_summary"))
   dose_n <- colMeans(trial_matrix(results, "n_by_dose_by_trial", ndose))
   unique_n <- colMeans(trial_matrix(results, "unique_n_by_dose_by_trial", ndose))
@@ -231,11 +227,12 @@ summarize_task <- function(results, task) {
   carry <- colMeans(trial_matrix(results, "r_hat_by_trial", ndose))
   mtd_pct <- 100 * tabulate(mtd[!is.na(mtd) & mtd >= 1L & mtd <= ndose], nbins = ndose) / ntrial
   obd_pct <- 100 * tabulate(obd[!is.na(obd) & obd >= 1L & obd <= ndose], nbins = ndose) / ntrial
+  no_obd_pct <- 100 * mean(obd == aide_phase12_no_obd)
   data.frame(
     Task_ID = task$task_id, Scenario = task$Scenario,
     Source_Scenario = task$Source_Scenario, Scenario_Group = task$Scenario_Group,
     Attempt = task$Attempt, Allocation = task$allocation,
-    Stage2_Allocation = task$stage2_allocation, Model_ID = task$model_id,
+    Stage2_Allocation = "one_stage", Model_ID = task$model_id,
     Carryover_Model = task$carryover_model, Efficacy_Model = task$efficacy_model,
     Nmax = task$Nmax, N_s1 = task$N_s1, N_s2 = task$N_s2,
     n_eval = task$n_eval, Cycle_Max = task$cycle_max,
@@ -249,6 +246,7 @@ summarize_task <- function(results, task) {
     Estimated_CRM_pj = tox, Estimated_Efficacy = eff,
     Estimated_Utility = utility, Carryover_Mean = carry,
     MTD_Selection_pct = mtd_pct, OBD_Selection_pct = obd_pct,
+    No_OBD_Selection_pct = no_obd_pct,
     Pts_Treated = dose_n, Unique_Pts_by_Dose = unique_n, IPDE_Doses = ipde_n,
     Total_Administrations = safe_mean(trial_summary$administrations),
     Total_Unique_Patients = safe_mean(trial_summary$unique_patients),

@@ -4,9 +4,9 @@
 ## The fixed history has three completed new patients at every dose level,
 ## all with no DLT (y = 0) and no efficacy response (eff = 0). The script
 ## refits the same JAGS CRM and efficacy models used in AIDE_phase_I_II.R
-## 100 times and demonstrates the response-informed rules: one-stage stays
-## at the current admissible dose on a downward utility target, while
-## two-stage highest-utility allocation falls back to the current MTD.
+## 100 times and demonstrates the common no-response rule: both the one-stage
+## design and Stage II of the two-stage design target the current MTD, subject
+## to the universal no-skipping constraint.
 ##
 ## Run from the project root:
 ##   Rscript phase_I_II/what_if_next_dose_no_dlt_no_eff.R
@@ -131,41 +131,22 @@ one_step_models <- function(seed) {
 }
 
 next_one_stage <- function(model_state) {
-  candidates <- model_state$admissible
-  if (!length(candidates)) return(99L)
-  provisional_obd <- aide_phase12_select_lowest_tied(model_state$utility, candidates)
-  current_dose <- max(admin$dose)
-  highest_tried_dose <- max(admin$dose)
-  if (provisional_obd > current_dose) {
-    if (provisional_obd <= highest_tried_dose) return(provisional_obd)
-    return(min(candidates[
-      candidates > highest_tried_dose & candidates <= provisional_obd
-    ]))
-  }
-  if (provisional_obd == current_dose) return(current_dose)
   response_observed <- tabulate(
     as.integer(admin$dose[admin$eff == 1L]), nbins = ndose
   ) > 0L
-  response_qualified <- candidates[
-    candidates <= current_dose & response_observed[candidates]
-  ]
-  if (length(response_qualified)) return(max(response_qualified))
-  if (current_dose %in% candidates) return(current_dose)
-  lower_admissible <- candidates[candidates < current_dose]
-  if (length(lower_admissible)) max(lower_admissible) else 99L
+  aide_phase12_one_stage_allocation(
+    current_dose = max(admin$dose),
+    mtd = model_state$MTD,
+    admissible_doses = model_state$admissible,
+    utility = model_state$utility,
+    response_observed = response_observed,
+    tried_doses = unique(admin$dose)
+  )$dose
 }
 
-next_two_stage_highest_utility <- function(model_state) {
-  candidates <- model_state$admissible
-  if (!length(candidates)) return(99L)
-  response_observed <- tabulate(
-    as.integer(admin$dose[admin$eff == 1L]), nbins = ndose
-  ) > 0L
-  response_doses <- candidates[response_observed[candidates]]
-  if (length(response_doses)) {
-    return(aide_phase12_select_lowest_tied(model_state$utility, response_doses))
-  }
-  if (model_state$MTD %in% candidates) model_state$MTD else max(candidates)
+next_two_stage <- function(model_state) {
+  ## After Stage I, the two-stage design invokes exactly the same rule.
+  next_one_stage(model_state)
 }
 
 results <- lapply(seq_len(nrep), function(i) {
@@ -174,25 +155,25 @@ results <- lapply(seq_len(nrep), function(i) {
     replicate = i,
     MTD = state$MTD,
     one_stage_next_dose = next_one_stage(state),
-    two_stage_highest_utility_next_dose = next_two_stage_highest_utility(state),
+    two_stage_next_dose = next_two_stage(state),
     stringsAsFactors = FALSE
   )
 })
 results <- do.call(rbind, results)
 
 summary <- data.frame(
-  design = c("one_stage", "two_stage_highest_utility"),
+  design = c("one_stage", "two_stage"),
   average_next_dose = c(
     mean(results$one_stage_next_dose),
-    mean(results$two_stage_highest_utility_next_dose)
+    mean(results$two_stage_next_dose)
   ),
   minimum_next_dose = c(
     min(results$one_stage_next_dose),
-    min(results$two_stage_highest_utility_next_dose)
+    min(results$two_stage_next_dose)
   ),
   maximum_next_dose = c(
     max(results$one_stage_next_dose),
-    max(results$two_stage_highest_utility_next_dose)
+    max(results$two_stage_next_dose)
   ),
   stringsAsFactors = FALSE
 )

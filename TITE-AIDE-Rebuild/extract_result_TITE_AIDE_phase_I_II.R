@@ -25,6 +25,8 @@ safe_mean <- function(x) if (all(is.na(x))) NA_real_ else mean(x, na.rm = TRUE)
 summarize_task <- function(results, task) {
   ndose <- length(task$p_true); ntrial <- sum(vapply(results, function(x) x$ntrial, integer(1)))
   mtd <- unlist(lapply(results, `[[`, "MTD_by_trial")); obd <- unlist(lapply(results, `[[`, "OBD_by_trial"))
+  ## Normalize legacy result files that encoded no OBD as NA.
+  obd[is.na(obd)] <- aide_phase12_no_obd
   dose_n <- colMeans(trial_matrix(results, "n_by_dose_by_trial", ndose))
   unique_n <- colMeans(trial_matrix(results, "unique_n_by_dose_by_trial", ndose))
   ipde_n <- colMeans(trial_matrix(results, "nipde_by_dose_by_trial", ndose))
@@ -33,6 +35,7 @@ summarize_task <- function(results, task) {
   summaries <- do.call(rbind, lapply(results, `[[`, "trial_summary"))
   mtd_pct <- 100 * tabulate(mtd[!is.na(mtd) & mtd >= 1L & mtd <= ndose], nbins = ndose) / ntrial
   obd_pct <- 100 * tabulate(obd[!is.na(obd) & obd >= 1L & obd <= ndose], nbins = ndose) / ntrial
+  no_obd_pct <- 100 * mean(obd == aide_phase12_no_obd)
   data.frame(Task_ID = task$task_id, Scenario = task$Scenario, Source_Scenario = task$Source_Scenario,
     Scenario_Group = task$Scenario_Group, Attempt = task$Attempt, Allocation = task$allocation, Model_ID = task$model_id,
     Toxicity_Model = task$toxicity_model, Efficacy_Model = task$efficacy_model, Nmax = task$Nmax, s1_Max = task$s1_Max,
@@ -40,7 +43,7 @@ summarize_task <- function(results, task) {
     True_MTD = task$true_mtd, Target_Toxicity = task$target, Dose = seq_len(ndose), True_DLT_rate = task$p_true,
     True_Efficacy_rate = task$e_true, Estimated_CRM_pj = tox, Estimated_Efficacy = eff, Estimated_Utility = utility,
     Carryover_Mean = carry, MTD_Selection_pct = mtd_pct,
-    OBD_Selection_pct = obd_pct,
+    OBD_Selection_pct = obd_pct, No_OBD_Selection_pct = no_obd_pct,
     Pts_Treated = dose_n, Unique_Pts_by_Dose = unique_n, IPDE_Doses = ipde_n,
     Total_Administrations = safe_mean(summaries$administrations), Total_Unique_Patients = safe_mean(vapply(results, function(x) mean(x$n_unique_patients_by_trial), numeric(1))),
     Duration = safe_mean(summaries$duration), n_eval_blocks = safe_mean(summaries$n_eval_blocks), ntrial = ntrial)

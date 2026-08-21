@@ -143,8 +143,6 @@ make_phase12_config_tag <- function(task) {
     "-a", allocation_tag,
     "-N", fmt_short(task$Nmax),
     "-s1", fmt_short(task$N_s1),
-    "-s2", fmt_short(task$N_s2),
-    "-s2a", task$stage2_allocation,
     "-u", task$utility_type,
     "-l", fmt_short(task$lambda_T),
     "-en", enrollment_tag,
@@ -236,23 +234,13 @@ seed_base <- 1L
 ## Use all scenario IDs in the truth file by default.
 scenario_id_list <- 1:38
 
-## For two-stage allocation, N_s1 is the cumulative Stage I administration
-## threshold. Stage I transitions only after N_s1 and a stay decision; Stage II
-## stops when a dose reaches N_s2. One-stage does not use either threshold.
-two_stage_top2_sizes <- data.frame(
+## Stage II is not a separate allocation mode: after the cumulative Stage I
+## threshold and a stay decision, it uses the same one-stage rule to Nmax.
+two_stage_sizes <- data.frame(
   allocation = "two_stage",
   Nmax = c(30L),
   N_s1 = c(6L),
   N_s2 = c(30L),
-  stage2_allocation = "top2_randomized",
-  stringsAsFactors = FALSE
-)
-two_stage_highest_sizes <- data.frame(
-  allocation = "two_stage",
-  Nmax = c(30L),
-  N_s1 = c(6L),
-  N_s2 = c(30L),
-  stage2_allocation = "highest_utility",
   stringsAsFactors = FALSE
 )
 one_stage_sizes <- data.frame(
@@ -260,10 +248,9 @@ one_stage_sizes <- data.frame(
   Nmax = c(30L),
   N_s1 = c(30L),
   N_s2 = c(30L),
-  stage2_allocation = "highest_utility",
   stringsAsFactors = FALSE
 )
-design_size_grid <- rbind(two_stage_top2_sizes, two_stage_highest_sizes, one_stage_sizes)
+design_size_grid <- rbind(two_stage_sizes, one_stage_sizes)
 
 ## Four paired carryover options: efficacy can be shared or dose-specific,
 model_grid <- data.frame(
@@ -430,7 +417,6 @@ run_one_phase12_task <- function(task) {
       N_pat = task$Nmax,
       C = task$C,
       cycle_max = task$cycle_max,
-      stage2_allocation = task$stage2_allocation,
 
       model = "CRM",
       target = task$target,
@@ -483,7 +469,7 @@ run_one_phase12_task <- function(task) {
       task$efficacy_additive_alpha_a, task$efficacy_additive_alpha_b
     ),
     utility_scores = task$utility_scores,
-    stage2_allocation = task$stage2_allocation,
+    stage2_allocation = "one_stage",
     cycle_max = task$cycle_max,
     T_assess = task$T_assess,
     optional_ipde_gates = list(
@@ -554,7 +540,6 @@ for (setting_row in seq_len(nrow(setting_grid))) {
       Nmax = as.integer(setting$Nmax),
       N_s1 = as.integer(setting$N_s1),
       N_s2 = as.integer(setting$N_s2),
-      stage2_allocation = as.character(setting$stage2_allocation),
       model_id = as.character(setting$model_id),
       carryover_model = as.character(setting$carryover_model),
       crm_r_model = as.character(setting$crm_r_model),

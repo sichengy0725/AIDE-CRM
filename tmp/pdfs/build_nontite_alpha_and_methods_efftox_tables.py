@@ -13,15 +13,25 @@ from reportlab.pdfgen import canvas
 
 ROOT = Path(__file__).resolve().parents[2]
 PRESENTATION = ROOT / "Presentation 8-17-2026"
-OUTPUT_DIR = PRESENTATION / "Table and Plots"
-NEW_DESIGN_CSV = PRESENTATION / (
+OUTPUT_DIR = PRESENTATION / "Table and Plots" / "New Design"
+BASE_NEW_DESIGN_CSV = PRESENTATION / "Raw Data" / (
     "AIDE_phase_I_II_modelsadditive_newdesign_shared_N30_ncycle2_"
     "rp0p15x0p85_rate56d_ep0p5x0p5_cp0p15x0p85_eth0p2_fut0p85_"
     "ap0p15x0p85_IDX_0001_to_1000_dose_summary.csv"
 )
-BOIN12_CSV = PRESENTATION / "BOIN12_v1.4.2.0_Operating Characteristics_2026-08-09 170536.992978_fut0.85.csv"
-EFFTOX_MAIN = PRESENTATION / "EffTox N = 30.html"
-EFFTOX_38 = PRESENTATION / "Efftox N = 30 Sce 38.html"
+ONE_STAGE_REPLACEMENT_CSV = PRESENTATION / "Raw Data" / (
+    "AIDE_phase_I_II_modelsadditive_shared_N30_ncycle2_"
+    "rp0p15x0p85_rate56d_ep0p5x0p5_cp0p15x0p85_eth0p2_fut0p85_"
+    "ap0p15x0p85_IDX_0001_to_1000_newdesign_dose_summary.csv"
+)
+ORACLE_ONE_STAGE_REPLACEMENT_CSV = PRESENTATION / "Raw Data" / (
+    "AIDE_phase_N30_ncycle1_rp0p15x0p85_rate56d_ep0p5x0p5_"
+    "cp0p15x0p85_eth0p2_fut0p85_ap0p15x0p85_IDX_0001_to_1000_"
+    "newdesign_continuous_dose_summary.csv"
+)
+BOIN12_CSV = PRESENTATION / "Raw Data" / "BOIN12_v1.4.2.0_Operating Characteristics_2026-08-09 170536.992978_fut0.85.csv"
+EFFTOX_MAIN = PRESENTATION / "Raw Data" / "EffTox N = 30.html"
+EFFTOX_38 = PRESENTATION / "Raw Data" / "Efftox N = 30 Sce 38.html"
 
 ALPHA_PDF = OUTPUT_DIR / "nontite_newdesign_alpha_0_0p3_0p6_0p9_scenarios_1_16_20_24_27_38_tables.pdf"
 METHOD_PDF = OUTPUT_DIR / "nontite_alpha0_newdesign_vs_uboin_boin12_scenarios_1_16_20_24_27_38_tables.pdf"
@@ -31,15 +41,47 @@ DOSES = [1, 2, 3, 4, 5]
 ALPHAS = [0.0, 0.3, 0.6, 0.9]
 DESIGN_ORDER = ["one", "high", "top2"]
 
+# Retained oracle two-stage rows from the existing table.  The requested
+# update replaces only the oracle one-stage rows.
+ORACLE_TWO_STAGE_ROWS = {
+    1: {
+        "high": {"selection": [17.6, 5.7, 0.9, 0.4, 0.0], "none": 75.4, "treated": [11.2, 4.2, 2.3, 0.8, 0.2]},
+        "top2": {"selection": [16.6, 5.7, 1.5, 0.5, 0.1], "none": 75.6, "treated": [11.1, 4.2, 2.2, 0.9, 0.2]},
+    },
+    16: {
+        "high": {"selection": [32.5, 22.7, 16.3, 17.8, 10.6], "none": 0.1, "treated": [7.5, 6.9, 5.8, 5.6, 4.2]},
+        "top2": {"selection": [31.5, 22.3, 17.1, 16.1, 13.0], "none": 0.0, "treated": [6.6, 6.3, 5.7, 6.1, 5.3]},
+    },
+    20: {
+        "high": {"selection": [13.5, 51.2, 24.4, 6.6, 0.7], "none": 3.6, "treated": [5.4, 11.6, 8.0, 3.5, 1.0]},
+        "top2": {"selection": [9.2, 50.0, 25.3, 9.8, 2.0], "none": 3.7, "treated": [5.7, 9.8, 8.0, 4.4, 1.5]},
+    },
+    24: {
+        "high": {"selection": [2.0, 1.1, 6.8, 56.7, 33.4], "none": 0.0, "treated": [3.4, 3.5, 4.4, 10.9, 7.7]},
+        "top2": {"selection": [0.3, 0.3, 2.9, 56.3, 40.2], "none": 0.0, "treated": [3.6, 3.8, 4.9, 9.5, 8.4]},
+    },
+    27: {
+        "high": {"selection": [16.4, 25.1, 43.9, 6.8, 0.6], "none": 7.2, "treated": [7.8, 8.2, 9.4, 3.0, 0.7]},
+        "top2": {"selection": [12.0, 24.5, 45.2, 10.6, 1.1], "none": 6.6, "treated": [7.6, 8.4, 8.5, 3.7, 0.9]},
+    },
+    38: {
+        "high": {"selection": [19.2, 10.3, 8.6, 7.4, 52.8], "none": 1.7, "treated": [4.9, 4.8, 5.5, 5.6, 9.1]},
+        "top2": {"selection": [12.0, 5.6, 7.4, 7.8, 65.8], "none": 1.4, "treated": [4.8, 4.9, 5.4, 6.8, 7.8]},
+    },
+}
+
 PAGE_WIDTH, _ = landscape(letter)
 LEFT = 36
 RIGHT = PAGE_WIDTH - 36
 TABLE_WIDTH = RIGHT - LEFT
 LABEL_WIDTH = 255
 VALUE_WIDTH = (TABLE_WIDTH - LABEL_WIDTH) / 6
+SUMMARY_LABEL_WIDTH = 240
+SUMMARY_VALUE_WIDTH = (TABLE_WIDTH - SUMMARY_LABEL_WIDTH) / 7
 NAVY = HexColor("#173F5F")
 SECTION = HexColor("#E9ECEF")
 NEW_FILL = HexColor("#E6F3F1")
+ORACLE_FILL = HexColor("#F6F7F8")
 UBOIN_FILL = HexColor("#E5F1FB")
 BOIN_FILL = HexColor("#EEF2FF")
 EFFTOX_FILL = HexColor("#FFF4D6")
@@ -70,8 +112,8 @@ def design_info(row: dict[str, str]) -> tuple[str, str]:
     raise ValueError(f"Unexpected design row: {row['Allocation']} / {row['Stage2_Allocation']}")
 
 
-def read_new_design() -> list[dict]:
-    with NEW_DESIGN_CSV.open(newline="", encoding="utf-8-sig") as handle:
+def read_design_csv(path: Path) -> list[dict]:
+    with path.open(newline="", encoding="utf-8-sig") as handle:
         raw = list(csv.DictReader(handle))
     grouped: dict[tuple[int, str, float], list[dict[str, str]]] = defaultdict(list)
     for row in raw:
@@ -82,8 +124,8 @@ def read_new_design() -> list[dict]:
             continue
         design_key, _ = design_info(row)
         grouped[(scenario, design_key, tox_alpha)].append(row)
-    if len(grouped) != 72 or any(len(rows) != 5 for rows in grouped.values()):
-        raise RuntimeError("The supplied New Design CSV does not contain the complete 6 x 3 x 4 alpha grid.")
+    if any(len(rows) != 5 for rows in grouped.values()):
+        raise RuntimeError(f"{path.name} does not contain five dose rows for every selected setting.")
 
     records: list[dict] = []
     for (scenario, key, alpha), dose_rows in grouped.items():
@@ -101,7 +143,56 @@ def read_new_design() -> list[dict]:
             "selection": [num(row["OBD_Selection_pct"]) for row in dose_rows],
             "treated": [num(row["Pts_Treated"]) for row in dose_rows],
             "none": num(first["No_OBD_Selection_pct"]),
+            "unique_patients": num(first["Total_Unique_Patients"]),
         })
+    return records
+
+
+def read_new_design() -> list[dict]:
+    records = read_design_csv(BASE_NEW_DESIGN_CSV)
+    if len(records) != 72:
+        raise RuntimeError("The base New Design CSV does not contain the complete 6 x 3 x 4 alpha grid.")
+
+    replacements = {
+        (record["scenario"], record["key"], record["alpha"]): record
+        for record in read_design_csv(ONE_STAGE_REPLACEMENT_CSV)
+    }
+    required = {(scenario, "one", alpha) for scenario in SCENARIOS for alpha in ALPHAS}
+    if not required.issubset(replacements):
+        raise RuntimeError("The requested one-stage alpha-grid replacement rows are incomplete.")
+
+    return [
+        replacements[(record["scenario"], record["key"], record["alpha"])]
+        if (record["scenario"], record["key"], record["alpha"]) in required
+        else record
+        for record in records
+    ]
+
+
+def read_oracle_design() -> list[dict]:
+    replacements = read_design_csv(ORACLE_ONE_STAGE_REPLACEMENT_CSV)
+    required = {(scenario, "one", 0.0) for scenario in SCENARIOS}
+    observed = {(record["scenario"], record["key"], record["alpha"]) for record in replacements}
+    if observed != required:
+        raise RuntimeError("The requested cycle-1 oracle one-stage replacement rows are incomplete.")
+
+    records = list(replacements)
+    short_labels = {"high": "2-stage highest utility", "top2": "2-stage top-2 randomized"}
+    for scenario, rows in ORACLE_TWO_STAGE_ROWS.items():
+        for key, row in rows.items():
+            records.append({
+                "scenario": scenario,
+                "key": key,
+                "short": short_labels[key],
+                "alpha": 0.0,
+                "true_obd": 0,
+                "tox": [],
+                "eff": [],
+                "selection": row["selection"],
+                "treated": row["treated"],
+                "none": row["none"],
+                "unique_patients": None,
+            })
     return records
 
 
@@ -226,15 +317,46 @@ def draw_page_header(pdf, subtitle: str) -> float:
     return 518
 
 
+def draw_summary_header(pdf) -> float:
+    draw_text(pdf, "Mean Unique Patients by Method", PAGE_WIDTH / 2, 576, size=20, bold=True, align="center")
+    draw_text(pdf, "Mean number of unique patients per simulated trial", PAGE_WIDTH / 2, 556, size=10.2, color=MUTED, align="center")
+    pdf.setStrokeColor(NAVY)
+    pdf.setLineWidth(0.8)
+    pdf.line(LEFT, 545, RIGHT, 545)
+    headers = ["Scenario 1", "16", "20", "24", "27", "38", "Mean"]
+    for index, header in enumerate(headers):
+        draw_text(
+            pdf,
+            header,
+            LEFT + SUMMARY_LABEL_WIDTH + SUMMARY_VALUE_WIDTH * (index + 0.5),
+            531,
+            size=8.8,
+            bold=True,
+            align="center",
+        )
+    return 518
+
+
 def record_lookup(records: list[dict], scenario: int, key: str, alpha: float) -> dict:
     return next(record for record in records if record["scenario"] == scenario and record["key"] == key and record["alpha"] == alpha)
 
 
-def draw_alpha_scenario(pdf, y: float, scenario: int, records: list[dict]) -> float:
+def draw_alpha_scenario(
+    pdf, y: float, scenario: int, records: list[dict], oracle_records: list[dict]
+) -> float:
     reference = record_lookup(records, scenario, "one", 0.0)
     y = draw_truth(pdf, y, reference)
     y = draw_row(pdf, y, 12, "OBD selection (%)", [""] * 6, fill=SECTION, bold=True)
     for key in DESIGN_ORDER:
+        oracle = record_lookup(oracle_records, scenario, key, 0.0)
+        y = draw_row(
+            pdf,
+            y,
+            10.5,
+            f"Oracle | {oracle['short']} | cycle 1, alpha=0",
+            [fmt(value) for value in oracle["selection"]] + [fmt(oracle["none"])],
+            fill=ORACLE_FILL,
+        )
         for alpha in ALPHAS:
             row = record_lookup(records, scenario, key, alpha)
             y = draw_row(
@@ -243,6 +365,15 @@ def draw_alpha_scenario(pdf, y: float, scenario: int, records: list[dict]) -> fl
             )
     y = draw_row(pdf, y, 12, "Mean administrations by dose", [""] * 6, fill=SECTION, bold=True)
     for key in DESIGN_ORDER:
+        oracle = record_lookup(oracle_records, scenario, key, 0.0)
+        y = draw_row(
+            pdf,
+            y,
+            10.5,
+            f"Oracle | {oracle['short']} | cycle 1, alpha=0",
+            [fmt(value) for value in oracle["treated"]] + [""],
+            fill=ORACLE_FILL,
+        )
         for alpha in ALPHAS:
             row = record_lookup(records, scenario, key, alpha)
             y = draw_row(pdf, y, 10.5, f"New non-TITE | {row['short']} | alpha={fmt(alpha)}", [fmt(value) for value in row["treated"]] + [""], fill=NEW_FILL)
@@ -270,21 +401,66 @@ def draw_method_scenario(pdf, y: float, scenario: int, records: list[dict], efft
     return y
 
 
+def draw_summary_row(pdf, y_top: float, height: float, label: str, values: list[float], fill=None, bold: bool = False) -> float:
+    if fill is not None:
+        pdf.setFillColor(fill)
+        pdf.rect(LEFT, y_top - height, TABLE_WIDTH, height, fill=1, stroke=0)
+    baseline = y_top - height + (height - 7.8) / 2 + 1.2
+    draw_text(pdf, label, LEFT + 5, baseline, size=7.8, bold=bold)
+    for index, value in enumerate(values):
+        draw_text(
+            pdf,
+            fmt(value),
+            LEFT + SUMMARY_LABEL_WIDTH + SUMMARY_VALUE_WIDTH * (index + 0.5),
+            baseline,
+            size=7.8,
+            bold=bold,
+            align="center",
+        )
+    pdf.setStrokeColor(GRID)
+    pdf.setLineWidth(0.35)
+    pdf.line(LEFT, y_top - height, RIGHT, y_top - height)
+    return y_top - height
+
+
+def draw_unique_patients_summary(pdf, records: list[dict], efftox: dict[int, dict], boin12: dict[int, dict]) -> None:
+    y = draw_summary_header(pdf)
+    entries = []
+    for key in DESIGN_ORDER:
+        values = [record_lookup(records, scenario, key, 0.0)["unique_patients"] for scenario in SCENARIOS]
+        label = f"New non-TITE | {record_lookup(records, SCENARIOS[0], key, 0.0)['short']}"
+        entries.append((label, values, NEW_FILL, True))
+    entries.extend([
+        ("U-BOIN", [sum(UBOIN[scenario]["treated"]) for scenario in SCENARIOS], UBOIN_FILL, False),
+        ("BOIN12", [sum(boin12[scenario]["treated"]) for scenario in SCENARIOS], BOIN_FILL, False),
+        ("EffTox", [sum(efftox[scenario]["treated"]) for scenario in SCENARIOS], EFFTOX_FILL, False),
+    ])
+    for label, values, fill, bold in entries:
+        y = draw_summary_row(pdf, y, 18, label, values + [sum(values) / len(values)], fill=fill, bold=bold)
+    draw_footer(
+        pdf,
+        "New non-TITE values are reported Total_Unique_Patients. U-BOIN, BOIN12, and EffTox have no IPDE recycling, so unique patients equal the sum of dose-level means.",
+        "The updated New non-TITE | one-stage alpha = 0 rows use the specified modelsadditive_shared ... newdesign_dose_summary.csv source.",
+        len([SCENARIOS[index:index + 2] for index in range(0, len(SCENARIOS), 2)]) + 1,
+        len([SCENARIOS[index:index + 2] for index in range(0, len(SCENARIOS), 2)]) + 1,
+    )
+
+
 def draw_footer(pdf, source_note: str, outcome_note: str, page_number: int, page_count: int) -> None:
     draw_text(pdf, source_note, LEFT, 27, size=6.2, color=MUTED)
     draw_text(pdf, outcome_note, LEFT, 16, size=6.1, color=MUTED)
     draw_text(pdf, f"Page {page_number} of {page_count}", RIGHT, 16, size=6.2, color=MUTED, align="right")
 
 
-def build_alpha_pdf(records: list[dict]) -> None:
+def build_alpha_pdf(records: list[dict], oracle_records: list[dict]) -> None:
     pdf = canvas.Canvas(str(ALPHA_PDF), pagesize=landscape(letter), pageCompression=1)
     for page_number, scenario in enumerate(SCENARIOS, start=1):
-        y = draw_page_header(pdf, "New non-TITE alpha comparison: alpha = 0, 0.3, 0.6, and 0.9")
-        draw_alpha_scenario(pdf, y, scenario, records)
+        y = draw_page_header(pdf, "New non-TITE alpha comparison with cycle-1 oracle (alpha = 0)")
+        draw_alpha_scenario(pdf, y, scenario, records, oracle_records)
         draw_footer(
             pdf,
-            "Source: New non-TITE alpha grid under Presentation 8-17-2026 (1,000 simulations per populated row).",
-            "No OBD % = the New non-TITE no-OBD selection percentage.",
+            "Sources: cycle-2 new-design alpha grid; cycle-1 continuous one-stage oracle; existing two-stage oracle rows (1,000 simulations per populated row).",
+            "Oracle rows use Cycle_Max = 1 and alpha = 0; No OBD % is the source's no-OBD selection percentage.",
             page_number,
             len(SCENARIOS),
         )
@@ -295,36 +471,32 @@ def build_alpha_pdf(records: list[dict]) -> None:
 def build_methods_pdf(records: list[dict], efftox: dict[int, dict], boin12: dict[int, dict]) -> None:
     pdf = canvas.Canvas(str(METHOD_PDF), pagesize=landscape(letter), pageCompression=1)
     groups = [SCENARIOS[index:index + 2] for index in range(0, len(SCENARIOS), 2)]
+    page_count = len(groups) + 1
     for page_number, scenarios in enumerate(groups, start=1):
-        y = draw_page_header(pdf, "New non-TITE alpha = 0 versus U-BOIN, BOIN12, and EffTox")
+        y = draw_page_header(pdf, "New non-TITE alpha = 0 versus U-BOIN, BOIN12, and EffTox | updated one-stage rows")
         for index, scenario in enumerate(scenarios):
             y = draw_method_scenario(pdf, y, scenario, records, efftox, boin12)
             if index < len(scenarios) - 1:
                 y -= 8
         draw_footer(
             pdf,
-            "Sources: New non-TITE alpha = 0, U-BOIN, BOIN12, and EffTox N = 30, all under Presentation 8-17-2026 (1,000 simulations each).",
+            "Sources: updated New non-TITE one-stage alpha = 0, existing two-stage rows, U-BOIN, BOIN12, and EffTox N = 30 (1,000 simulations each).",
             "No OBD % is source-specific: New non-TITE = No OBD; U-BOIN = Stop; BOIN12 = No selection; EffTox = None selected.",
             page_number,
-            len(groups),
+            page_count,
         )
         pdf.showPage()
+    draw_unique_patients_summary(pdf, records, efftox, boin12)
+    pdf.showPage()
     pdf.save()
 
 
 def main() -> None:
     OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
     records = read_new_design()
-    efftox = read_efftox()
-    boin12 = read_boin12()
-    for scenario in SCENARIOS:
-        truth = record_lookup(records, scenario, "one", 0.0)
-        if truth["tox"] != efftox[scenario]["tox"] or truth["eff"] != efftox[scenario]["eff"]:
-            raise ValueError(f"EffTox truth does not match New Design truth for scenario {scenario}.")
-    build_alpha_pdf(records)
-    build_methods_pdf(records, efftox, boin12)
+    oracle_records = read_oracle_design()
+    build_alpha_pdf(records, oracle_records)
     print(ALPHA_PDF)
-    print(METHOD_PDF)
 
 
 if __name__ == "__main__":

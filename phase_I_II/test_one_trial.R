@@ -25,7 +25,6 @@ fit <- simulate_AIDE_phase_I_II(
   toxicity_ipde_alpha = toxicity_ipde_alpha,
   efficacy_ipde_alpha = efficacy_ipde_alpha,
   allocation = allocation_to_run,
-  stage2_allocation = "top2_randomized",
   model = "CRM",
   crm_r_model = "previous_dose",
   crm_skeleton = c(0.1,0.2,0.3,0.4,0.5),

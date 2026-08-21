@@ -2,12 +2,11 @@
 ## AIDE Phase I/II designs (non-TITE)
 ##
 ## Two allocation options are available:
-##   1. "two_stage": toxicity-only AIDE until the current dose reaches N_s1
-##      administrations and its allocation decision is to stay, followed by
-##      efficacy-directed allocation among Stage-I admissible doses until one
-##      dose reaches N_s2 or Nmax is met.
-##   2. "one_stage": toxicity decisions define a local candidate set after
-##      each cohort; efficacy-toxicity utility allocates within that set.
+##   1. "two_stage": toxicity-only AIDE until the cumulative Stage I sample
+##      reaches N_s1 and the next toxicity recommendation is stay.  Stage II
+##      then applies the same one-stage allocation rule after every cohort.
+##   2. "one_stage": the response floor and the toxicity-model MTD define
+##      the utility candidate interval after each cohort.
 ##
 ## Efficacy supports four paired carryover models: shared or dose-specific
 ## discount r, and shared or dose-specific additive alpha.  Toxicity uses the
@@ -1040,6 +1039,74 @@ aide_phase12_select_lowest_tied <- function(score, candidates) {
   candidates[which.max(score[candidates])]
 }
 
+## Apply the common one-stage allocation rule used by the one-stage design
+## and by Stage II of the two-stage design.  Safety and futility exclusions
+## are supplied through admissible_doses; an observed efficacy response sets
+## the lower end of the utility interval, while the toxicity-model MTD is the
+## fallback target when no such response exists.
+aide_phase12_one_stage_allocation <- function(current_dose,
+                                               mtd,
+                                               admissible_doses,
+                                               utility,
+                                               response_observed,
+                                               tried_doses = integer(0)) {
+  current_dose <- as.integer(current_dose)
+  mtd <- as.integer(mtd)
+  admissible_doses <- sort(unique(as.integer(admissible_doses)))
+  tried_doses <- unique(as.integer(tried_doses))
+  ndose <- length(utility)
+  if (length(current_dose) != 1L || is.na(current_dose) ||
+      current_dose < 1L || current_dose > ndose ||
+      length(mtd) != 1L || is.na(mtd) || mtd < 1L || mtd > ndose ||
+      length(response_observed) != ndose) {
+    stop("Invalid one-stage allocation inputs.")
+  }
+
+  below_mtd <- admissible_doses[admissible_doses <= mtd]
+  if (!length(below_mtd)) {
+    return(list(dose = 99L, target = NA_integer_, candidates = integer(0),
+                action = "no_admissible_one_stage_dose",
+                response_floor = NA_integer_))
+  }
+
+  response_doses <- below_mtd[as.logical(response_observed[below_mtd])]
+  if (length(response_doses)) {
+    response_floor <- min(response_doses)
+    candidates <- below_mtd[below_mtd >= response_floor]
+    target <- aide_phase12_select_lowest_tied(utility, candidates)
+    target_action <- "response_floor_utility_target"
+  } else {
+    response_floor <- NA_integer_
+    candidates <- below_mtd
+    ## The MTD is the specified no-response target.  If a standing
+    ## elimination removes it, use the highest remaining admissible dose
+    ## below that ceiling rather than assigning an eliminated dose.
+    target <- if (mtd %in% candidates) mtd else max(candidates)
+    target_action <- "mtd_no_response_fallback"
+  }
+
+  if (target <= current_dose) {
+    return(list(dose = target, target = target, candidates = candidates,
+                action = target_action, response_floor = response_floor))
+  }
+
+  ## Upward movement is governed by the path from the current dose, not by
+  ## the highest dose ever tried.  This prevents a previously tried high dose
+  ## from allowing an intervening untried dose to be skipped.
+  path <- seq.int(current_dose + 1L, target)
+  first_untried <- path[
+    path %in% admissible_doses & !(path %in% tried_doses)
+  ]
+  assigned <- if (length(first_untried)) min(first_untried) else target
+  list(
+    dose = assigned,
+    target = target,
+    candidates = candidates,
+    action = if (assigned == target) target_action else "no_skip_untried_dose",
+    response_floor = response_floor
+  )
+}
+
 simulate_AIDE_phase_I_II <- function(
     p_true,
     e_true,
@@ -1053,12 +1120,13 @@ simulate_AIDE_phase_I_II <- function(
     efficacy_ipde_alpha = 0,
     allocation = c("two_stage", "one_stage"),
 
-    ## Trial size. N_s1, N_s2, and Nmax count administrations, consistent
-    ## with AIDE.  For two-stage allocation, Stage I ends when the current
-    ## dose reaches N_s1 and the allocation decision is to stay; Stage II
-    ## ends when any dose reaches N_s2 or Nmax.
+    ## Stage I ends when the cumulative Stage I sample reaches N_s1 and the
+    ## toxicity recommendation is stay. Stage II continues to Nmax using the
+    ## same one-stage allocation rule.
     Nmax = 30L,
     N_s1 = 15L,
+    ## Retained for existing calls; the revised design has no per-dose Stage
+    ## II cap, so this value no longer affects allocation.
     N_s2 = Nmax,
     N_pat = Nmax,
     C = 3L,
@@ -1225,9 +1293,8 @@ simulate_AIDE_phase_I_II <- function(
   if (length(Nmax) != 1L || Nmax < C || Nmax != as.integer(Nmax)) {
     stop("Nmax must be an integer at least as large as C.")
   }
-  if (allocation == "two_stage" &&
-      (N_s1 < C || N_s1 > N_s2 || N_s2 > Nmax)) {
-    stop("For allocation = 'two_stage', C <= N_s1 <= N_s2 <= Nmax is required.")
+  if (allocation == "two_stage" && N_s1 > Nmax) {
+    stop("For allocation = 'two_stage', N_s1 must not exceed Nmax.")
   }
   if (length(N_pat) != 1L || N_pat < 1L || N_pat != as.integer(N_pat)) {
     stop("N_pat must be a positive integer.")
@@ -2167,32 +2234,40 @@ simulate_AIDE_phase_I_II <- function(
     )
   }
 
-  choose_one_stage_dose <- function(dose,
-                                    tox_move_out,
-                                    futility,
-                                    toxicity_estimate) {
-    if (isTRUE(tox_move_out$stop_trial) || tox_move_out$next_dose == 99L) {
-      return(99L)
-    }
-    n_current <- toxicity_counts()$n[dose]
-    if (tox_move_out$next_dose > dose ||
-        (tox_move_out$next_dose == dose && n_current < m_U)) {
-      candidates <- seq.int(max(1L, dose - 1L), min(ndose, dose + 1L))
-    } else if (tox_move_out$next_dose == dose) {
-      candidates <- seq.int(max(1L, dose - 1L), dose)
-    } else {
-      ## A toxicity-driven de-escalation is obeyed directly.
-      candidates <- as.integer(tox_move_out$next_dose)
-    }
-    candidates <- candidates[
-      toxicity_eliminated[candidates] == 0L &
-        futility$futility_eliminated[candidates] == 0L
-    ]
-    if (length(candidates) == 0L) return(99L)
-    utility <- efficacy_utility_current(toxicity_estimate)$utility
-    candidates <- candidates[is.finite(utility[candidates])]
-    if (length(candidates) == 0L) return(99L)
-    aide_phase12_select_lowest_tied(utility, candidates)
+  observed_efficacy_response <- function() {
+    tabulate(
+      as.integer(admin$dose[admin$eff == 1L]),
+      nbins = ndose
+    ) > 0L
+  }
+
+  current_utility_allocation <- function(toxicity_fit, futility, current_dose) {
+    MTD <- as.integer(toxicity_fit$MTD)
+    admissible <- seq_len(ndose) <= MTD &
+      toxicity_eliminated == 0L &
+      futility$futility_eliminated == 0L
+    utility <- efficacy_utility_current(
+      toxicity_estimate_from_fit(toxicity_fit)
+    )$utility
+    one_stage <- aide_phase12_one_stage_allocation(
+      current_dose = current_dose,
+      mtd = MTD,
+      admissible_doses = which(admissible),
+      utility = utility,
+      response_observed = observed_efficacy_response(),
+      tried_doses = unique(as.integer(admin$dose))
+    )
+    list(
+      MTD = MTD,
+      admissible = which(admissible),
+      utility = utility,
+      provisional_OBD = one_stage$target,
+      one_stage = one_stage
+    )
+  }
+
+  choose_one_stage_dose <- function(allocation_state) {
+    allocation_state$one_stage
   }
 
   ## Stage I remains toxicity-directed.  Futility cannot redirect an AIDE
@@ -2274,7 +2349,7 @@ simulate_AIDE_phase_I_II <- function(
         stop_reason <- "no_safe_nonfutile_stage1_candidate"
         break
       }
-      if (toxicity_counts()$n[current_dose] >= N_s1 &&
+      if (sum(admin$stage == "stage1") >= N_s1 &&
           isTRUE(tox_move_out$action == "stay") &&
           tox_move_out$next_dose == current_dose &&
           allocated_dose == current_dose) {
@@ -2298,32 +2373,28 @@ simulate_AIDE_phase_I_II <- function(
         stage1_tox_elim == 0L
     }
 
-    ## Stage II: efficacy-directed allocation among the current candidate set.
-    ## The Stage-I MTD ceiling is retained.  Toxicity is re-evaluated after
-    ## every cohort; efficacy futility is evaluated only for the dose just
-    ## treated. The trial ends when any dose accumulates N_s2 administrations
-    ## or Nmax is reached.
+    ## Stage II reuses the one-stage allocation rule after every evaluated
+    ## cohort. There is no separate Stage II allocation mode or per-dose cap.
     stage2_admissible <- stage1_admissible
-    while (!earlystop && nrow(admin) < Nmax && !dose_threshold_reached(N_s2)) {
-      update_toxicity_elimination()
+    while (!earlystop && !is.na(stage1_transition_dose) && nrow(admin) < Nmax) {
+      toxicity_fit_now <- update_toxicity_elimination()
       eff_now <- efficacy_summary_current()
       if (apply_early_stop_rule("stage2")) break
-      stage2_admissible <- stage1_admissible &
-        toxicity_eliminated == 0L &
-        eff_now$futility_eliminated == 0L
-      if (!any(stage2_admissible)) {
+      allocation_state <- current_utility_allocation(
+        toxicity_fit_now, eff_now, current_dose
+      )
+      stage2_admissible <- allocation_state$admissible
+      if (!length(stage2_admissible)) {
         stop_reason <- "no_stage2_admissible_dose"
         break
       }
-      allocated_dose <- aide_phase12_select_lowest_tied(
-        eff_now$posterior_mean,
-        which(stage2_admissible)
-      )
-      n_to_enroll <- min(
-        C,
-        Nmax - nrow(admin),
-        N_s2 - toxicity_counts()$n[allocated_dose]
-      )
+      stage2_choice <- choose_one_stage_dose(allocation_state)
+      allocated_dose <- stage2_choice$dose
+      if (allocated_dose == 99L) {
+        stop_reason <- "no_safe_nonfutile_stage2_candidate"
+        break
+      }
+      n_to_enroll <- min(C, Nmax - nrow(admin))
       if (!enroll_cohort(
         allocated_dose, "stage2", n_to_enroll, futility = eff_now
       )) {
@@ -2334,12 +2405,13 @@ simulate_AIDE_phase_I_II <- function(
       futility_after <- evaluate_current_dose_futility(allocated_dose)
       record_decision(
         "stage2",
-        allocated_dose,
-        list(next_dose = allocated_dose, action = "efficacy_maximization"),
+        current_dose,
+        list(next_dose = allocated_dose, action = stage2_choice$action),
         allocated_dose,
         futility_after
       )
       if (apply_early_stop_rule("stage2")) break
+      current_dose <- allocated_dose
     }
     if (!earlystop && nrow(admin) < Nmax && !any(stage2_admissible)) {
       stop_reason <- "no_stage2_admissible_dose"
@@ -2370,16 +2442,20 @@ simulate_AIDE_phase_I_II <- function(
 
       tox_move_out <- toxicity_move(current_dose)
       absorb_toxicity_model_elimination(tox_move_out)
-      allocated_dose <- choose_one_stage_dose(
-        current_dose,
-        tox_move_out,
-        futility_now,
-        toxicity_estimate_from_fit(toxicity_fit_now)
+      if (isTRUE(tox_move_out$stop_trial) || tox_move_out$next_dose == 99L) {
+        if (apply_early_stop_rule("one_stage")) break
+        stop_reason <- "no_safe_nonfutile_one_stage_candidate"
+        break
+      }
+      allocation_state <- current_utility_allocation(
+        toxicity_fit_now, futility_now, current_dose
       )
+      one_stage_choice <- choose_one_stage_dose(allocation_state)
+      allocated_dose <- one_stage_choice$dose
       record_decision(
         "one_stage",
         current_dose,
-        tox_move_out,
+        list(next_dose = allocated_dose, action = one_stage_choice$action),
         allocated_dose,
         futility_now
       )
@@ -2421,10 +2497,12 @@ simulate_AIDE_phase_I_II <- function(
 
   final_admissible <- rep(FALSE, ndose)
   tried_dose <- tabulate(as.integer(admin$dose), nbins = ndose) > 0L
+  response_observed_final <- observed_efficacy_response()
   if (!is.na(final_mtd) && final_mtd >= 1L && final_mtd <= ndose && !earlystop) {
     final_admissible <- tried_dose & seq_len(ndose) <= final_mtd &
       final_tox_elim == 0L &
-      final_futility$futility_eliminated == 0L
+      final_futility$futility_eliminated == 0L &
+      response_observed_final
   }
   final_candidates <- which(final_admissible & is.finite(final_utility$utility))
   final_obd <- if (length(final_candidates) == 0L) {
@@ -2471,12 +2549,12 @@ simulate_AIDE_phase_I_II <- function(
       admissible = stage1_admissible
     ),
     stage2 = list(
-      N_s2 = as.integer(N_s2),
+      N_s2 = NA_integer_,
       n_by_dose = tabulate(
         as.integer(admin$dose[admin$stage == "stage2"]),
         nbins = ndose
       ),
-      threshold_reached = dose_threshold_reached(N_s2)
+      threshold_reached = nrow(admin) >= Nmax
     ),
     final = list(
       allocation = allocation,
@@ -2484,6 +2562,7 @@ simulate_AIDE_phase_I_II <- function(
       OBD = as.integer(final_obd),
       admissible = final_admissible,
       tried_dose = tried_dose,
+      response_observed = response_observed_final,
       toxicity_fit = final_fit,
       toxicity_utility_fit = final_utility_fit,
       efficacy = final_futility,
@@ -2630,6 +2709,9 @@ get_oc_sim_AIDE_phase_I_II <- function(p_true,
     if (isTRUE(store_raw)) raw[[i]] <- fit
   }
 
+  ## Keep the OC vector consistent with the trial-level no-OBD sentinel.
+  obd[is.na(obd)] <- 99L
+
   list(
     p_true = p_true,
     e_true = e_true,
@@ -2651,6 +2733,7 @@ get_oc_sim_AIDE_phase_I_II <- function(p_true,
       mtd[!is.na(mtd) & mtd >= 1L & mtd <= ndose], nbins = ndose
     ) / ntrial,
     OBD_selection_percent = 100 * obd_selection / ntrial,
+    No_OBD_selection_percent = 100 * mean(obd == 99L),
     early_stop_percent = 100 * mean(stopped),
     mean_administrations = mean(n_admin),
     mean_administrations_by_dose = colMeans(n_by_dose_by_trial),

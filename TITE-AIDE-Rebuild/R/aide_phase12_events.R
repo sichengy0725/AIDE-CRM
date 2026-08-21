@@ -183,12 +183,7 @@ aide_fill_open_cohort <- function(state, config, scenario) {
       decision_id = state$cohort$decision_id, stage = state$cohort$stage, action = state$cohort$decision_action,
       next_dose = state$cohort$next_dose, filled = state$cohort$filled, closed_time = state$t_now))
   }
-  stage2_dose_cap <- state$cohort$stage == "stage2" &&
-    any(tabulate(state$admin$dose[state$admin$stage == "stage2"],
-                 nbins = length(state$eliminated)) >= config$design$N_s2)
-  if (stage2_dose_cap) {
-    state$active <- FALSE; state$stop_reason <- "stage2_dose_cap"
-  } else if (nrow(state$admin) >= config$design$Nmax) {
+  if (nrow(state$admin) >= config$design$Nmax) {
     state$active <- FALSE; state$stop_reason <- "administration_cap"
   }
   state
@@ -252,29 +247,55 @@ simulate_AIDE_phase_I_II_event <- function(config, scenario, seed = 1L) {
     }
     # Only new arrivals and newly eligible retreat opportunities are assignable events.
     if (is.na(trigger_type)) next
+
+    ## Every assignable opportunity enters the waiting queue before deciding
+    ## whether a cohort can be opened.  This is essential when the n_eval
+    ## gate is not met: new-patient and retreat opportunities are retained,
+    ## rather than being discarded or treated differently.
+    if (trigger_type == "new") {
+      state <- aide_queue_add(state, state$t_now, event$seq, "new", event$patient_id)
+    }
     if (state$cohort$open) {
-      if (trigger_type == "new") state <- aide_queue_add(state, state$t_now, event$seq, "new", event$patient_id)
       state <- aide_fill_open_cohort(state, config, scenario)
       aide_phase12_validate_state(state, config)
       next
     }
+
+    ## No open cohort: first determine whether the required number of
+    ## patients at the current dose has a fully ascertained DLT outcome.  Do
+    ## not refit models or make a dose decision while this gate is closed.
+    gate <- aide_apply_n_eval_gate(
+      state, list(action = "decision_attempt"), config, trigger_type,
+      trigger_queue_id
+    )
+    state <- gate$state
+    if (gate$blocked) {
+      state$logs$n_eval_log <- aide_add_row(state$logs$n_eval_log, list(
+        decision_id = NA_integer_, time = state$t_now,
+        current_dose = state$current_dose,
+        n_eval_required = config$design$n_eval,
+        n_eval_observed = gate$n_eval_observed,
+        evaluated_admin_ids = paste(gate$qualifying_admin_ids, collapse = ";"),
+        blocked = TRUE, trigger_type = trigger_type,
+        trigger_disposition = gate$trigger_disposition
+      ))
+      next
+    }
+
     interim <- aide_build_interim_data(state, state$t_now, config)
     tox_fit <- aide_fit_toxicity(interim$toxicity, config, scenario$ndose)
     eff_fit <- aide_fit_efficacy(interim$efficacy, config, scenario$ndose)
     decision <- aide_make_design_decision(state, tox_fit, eff_fit, config, scenario)
     state$eliminated <- decision$toxicity_eliminated; state$futile <- decision$efficacy_futile
     state$counters$decision <- state$counters$decision + 1L
-    gate <- aide_apply_n_eval_gate(state, decision, config, trigger_type, trigger_queue_id); state <- gate$state
     state <- aide_record_decision(state, decision, event, gate, config)
-    if (decision$action %in% c("stay", "escalate")) state$logs$n_eval_log <- aide_add_row(state$logs$n_eval_log, list(
+    state$logs$n_eval_log <- aide_add_row(state$logs$n_eval_log, list(
       decision_id = state$counters$decision, time = state$t_now, current_dose = decision$current_dose,
       n_eval_required = config$design$n_eval, n_eval_observed = gate$n_eval_observed,
       evaluated_admin_ids = paste(gate$qualifying_admin_ids, collapse = ";"), blocked = gate$blocked,
       trigger_type = trigger_type, trigger_disposition = gate$trigger_disposition))
     if (decision$stop_trial) { state$active <- FALSE; state$stop_reason <- decision$stop_reason; break }
     if (is.na(decision$next_dose)) next
-    if (!gate$allowed) next
-    if (trigger_type == "new") state <- aide_queue_add(state, state$t_now, event$seq, "new", event$patient_id)
     state <- aide_open_cohort(state, decision)
     state <- aide_fill_open_cohort(state, config, scenario)
     aide_phase12_validate_state(state, config)

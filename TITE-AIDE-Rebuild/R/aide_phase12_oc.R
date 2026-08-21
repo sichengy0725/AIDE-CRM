@@ -1,6 +1,9 @@
 get_oc_sim_AIDE_phase_I_II <- function(scenario, config, ntrial = 100L, seed = 1L, store_raw_tables = FALSE) {
   trials <- lapply(seq_len(ntrial), function(i) simulate_AIDE_phase_I_II_event(config, scenario, seed = seed + i - 1L))
-  mtd <- vapply(trials, function(x) x$final$MTD %||% NA_integer_, integer(1)); obd <- vapply(trials, function(x) x$final$OBD %||% NA_integer_, integer(1))
+  mtd <- vapply(trials, function(x) x$final$MTD %||% NA_integer_, integer(1))
+  obd <- vapply(trials, function(x) x$final$OBD %||% aide_phase12_no_obd, integer(1))
+  ## Normalize legacy trial objects that recorded no OBD as NA.
+  obd[is.na(obd)] <- aide_phase12_no_obd
   ndose <- scenario$ndose
   dose_counts <- function(x, type = NULL) {
     dat <- x$admin
@@ -31,6 +34,7 @@ get_oc_sim_AIDE_phase_I_II <- function(scenario, config, ntrial = 100L, seed = 1
               n_eval_blocks_by_trial = summaries$n_eval_blocks,
               MTD_selection = prop.table(table(factor(mtd, levels = seq_len(ndose)), useNA = "ifany")),
               OBD_selection = prop.table(table(factor(obd, levels = seq_len(ndose)), useNA = "ifany")),
+              No_OBD_selection_percent = 100 * mean(obd == aide_phase12_no_obd),
               mean_administrations = mean(summaries$administrations), mean_duration = mean(summaries$duration))
   if (store_raw_tables) out$trials <- trials
   out

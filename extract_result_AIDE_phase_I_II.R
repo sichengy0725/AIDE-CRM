@@ -28,10 +28,9 @@ block_id_expected <- 1L
 ## list synchronized if you run a subset of scenarios.
 scenario_id_list <- 1:37
 
-## For two-stage allocation, N_s1 and N_s2 are per-dose administration
-## thresholds: Stage I ends at N_s1 only after a stay decision at the current
-## dose, and Stage II ends at N_s2. Nmax remains the total administration
-## limit. One-stage does not use either threshold.
+## For two-stage allocation, N_s1 is the cumulative Stage I threshold. After
+## a stay decision, Stage II uses the one-stage rule through Nmax. N_s2 is
+## retained in the task grid only for compatibility with prior result files.
 two_stage_sizes <- data.frame(
   allocation = "two_stage",
   Nmax = c(30L),
@@ -233,7 +232,6 @@ make_phase12_config_tag <- function(task) {
     "-a", allocation_tag,
     "-N", fmt_short(task$Nmax),
     "-s1", fmt_short(task$N_s1),
-    "-s2", fmt_short(task$N_s2),
     "-u", task$utility_type,
     "-l", fmt_short(task$lambda_T),
     "-en", enrollment_tag,
@@ -487,6 +485,8 @@ summarize_task <- function(results, task_id) {
 
   mtd <- extract_trial_vector(results, "MTD_by_trial", required = TRUE)
   obd <- extract_trial_vector(results, "OBD_by_trial", required = TRUE)
+  ## Normalize legacy result files that encoded no OBD as NA.
+  obd[is.na(obd)] <- 99L
   design_early_stop <- extract_trial_vector(
     results, "early_stop_by_trial", "early_stop_percent", mean_multiplier = 0.01
   )
@@ -533,7 +533,7 @@ summarize_task <- function(results, task_id) {
   if (is.nan(early_stopping)) early_stopping <- NA_real_
   design_early_stopping <- 100 * mean(design_early_stop, na.rm = TRUE)
   if (is.nan(design_early_stopping)) design_early_stopping <- NA_real_
-  no_obd <- 100 * mean(is.na(obd) | obd == 99L)
+  no_obd <- 100 * mean(obd == 99L)
 
   metadata <- make_metadata(first, task_id)
   dose_summary <- metadata[rep(1L, ndose), , drop = FALSE]
