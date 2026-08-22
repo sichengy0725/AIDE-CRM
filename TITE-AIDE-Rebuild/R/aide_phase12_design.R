@@ -190,10 +190,12 @@ aide_make_design_decision <- function(state, toxicity_fit, efficacy_fit, config,
        stage2_allocation = raw$stage2_allocation %||% "not_applicable",
        allocation_probabilities = raw$allocation_probabilities %||% numeric(0),
        allocation_doses = raw$allocation_doses %||% next_dose,
-       individual_randomization = raw$individual_randomization %||% FALSE,
-       toxicity_action = tox_rec$action, toxicity_recommended_dose = tox_rec$recommended_dose,
-       toxicity_eliminated = state$eliminated, efficacy_futile = state$futile,
-       futility = futility)
+        individual_randomization = raw$individual_randomization %||% FALSE,
+        toxicity_action = tox_rec$action, toxicity_recommended_dose = tox_rec$recommended_dose,
+        toxicity_eliminated = state$eliminated, efficacy_futile = state$futile,
+        futility = futility,
+        toxicity_fit = toxicity_fit,
+        efficacy_fit = efficacy_fit)
 }
 
 aide_apply_n_eval_gate <- function(state, decision, config, trigger_type, trigger_queue_id = NA_integer_) {

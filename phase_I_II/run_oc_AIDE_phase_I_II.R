@@ -28,7 +28,10 @@ if (length(script_file) == 1L && file.exists(script_file)) {
 }
 setwd(dirname(phase12_dir))
 
-source("phase_I_II/AIDE_phase_I_II.R")
+## Use the maintained Phase I/II implementation at the project root.  The
+## phase_I_II copy is retained for historical runs but does not include the
+## arbitrary-cycle carryover backend.
+source("AIDE_phase_I_II.R")
 
 fmt_short <- function(x, digits = 2L) {
   x <- round(as.numeric(x), digits)
@@ -252,13 +255,14 @@ one_stage_sizes <- data.frame(
 )
 design_size_grid <- rbind(two_stage_sizes, one_stage_sizes)
 
-## Four paired carryover options: efficacy can be shared or dose-specific,
+## The arbitrary-cycle shared additive model propagates each patient's
+## uncapped endpoint state across all administrations.
 model_grid <- data.frame(
-  model_id = c("additive_shared"),
-  carryover_model = c("additive_shared"),
-  crm_r_model = c("previous_dose"),
+  model_id = c("multicycle_additive"),
+  carryover_model = c("multicycle_additive"),
+  crm_r_model = c("multicycle_additive"),
   efficacy_model = c(
-    "previous_dose_additive"
+    "multicycle_additive"
   ),
   stringsAsFactors = FALSE
 )
@@ -301,7 +305,7 @@ alpha_grid <- data.frame(
 
 utility_scores <- c(u00 = 0, u01 = 40, u10 = 60, u11 = 100)
 cohort_size <- 3L
-cycle_max <- 1L
+cycle_max <- 2L
 T_assess <- 28
 crm_skeleton <- c(0.15, 0.20, 0.30, 0.35, 0.45)
 crm_alpha_sd <- sqrt(2)
@@ -380,7 +384,7 @@ cat("First seed for this job:", job_seed, "\n")
 
 run_one_phase12_task <- function(task) {
   setwd(task$workdir)
-  source("phase_I_II/AIDE_phase_I_II.R")
+  source("AIDE_phase_I_II.R")
   library(rjags)
   library(coda)
 

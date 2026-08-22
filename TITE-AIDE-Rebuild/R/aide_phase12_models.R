@@ -28,6 +28,72 @@ aide_expand_beta_prior <- function(prior, ndose, name) {
   matrix(prior, ncol = 2L, byrow = TRUE)
 }
 
+## Order administration-level data within patient and build the recursive
+## state pointer required by the arbitrary-cycle model. State index one is the
+## zero-state sentinel; each later row points to the preceding administration
+## of the same patient rather than the preceding global/calendar row.
+aide_multicycle_history_data <- function(dat) {
+  if (!nrow(dat)) return(dat)
+  required <- c("admin_id", "patient_id", "cycle", "t_start", "dose")
+  if (!all(required %in% names(dat))) {
+    stop("Multicycle interim data are missing administration-history fields.")
+  }
+  out <- dat[order(dat$patient_id, dat$cycle, dat$t_start, dat$admin_id), , drop = FALSE]
+  rownames(out) <- NULL
+  out$previous_state_index <- 1L
+  for (rows in split(seq_len(nrow(out)), as.character(out$patient_id))) {
+    if (length(rows) > 1L) {
+      out$previous_state_index[rows[-1L]] <- rows[-length(rows)] + 1L
+    }
+  }
+  out$previous_state_index <- as.integer(out$previous_state_index)
+  out
+}
+
+## The ordered history is retained for state construction. Only the final
+## administration of each patient is a likelihood row at the current refit.
+aide_multicycle_latest_admin_index <- function(dat) {
+  if (is.null(dat) || !nrow(dat)) return(integer(0))
+  if (!"patient_id" %in% names(dat)) {
+    stop("Multicycle interim data are missing patient_id for likelihood mapping.")
+  }
+  as.integer(which(!duplicated(dat$patient_id, fromLast = TRUE)))
+}
+
+aide_multicycle_state_draws <- function(p_draws, alpha_draws, dat) {
+  if (!nrow(dat)) return(matrix(0, nrow = nrow(p_draws), ncol = 1L))
+  alpha_draws <- as.numeric(alpha_draws)
+  if (length(alpha_draws) != nrow(p_draws)) {
+    stop("Multicycle carryover draws do not align with regular probability draws.")
+  }
+  out <- matrix(0, nrow = nrow(p_draws), ncol = nrow(dat) + 1L)
+  for (row in seq_len(nrow(dat))) {
+    out[, row + 1L] <- p_draws[, dat$dose[row]] +
+      alpha_draws * out[, dat$previous_state_index[row]]
+  }
+  out
+}
+
+aide_multicycle_next_probability_draws <- function(fit, source_admin_id,
+                                                    next_dose) {
+  history <- fit$history_data
+  if (is.null(history) || is.null(fit$state_draws) ||
+      is.null(fit$regular_draws) || is.null(fit$carryover_draws)) {
+    stop("The fit does not retain multicycle posterior state draws.")
+  }
+  row <- match(as.integer(source_admin_id), as.integer(history$admin_id))
+  if (is.na(row)) stop("The source administration is absent from the multicycle posterior history.")
+  next_dose <- as.integer(next_dose)
+  if (next_dose < 1L || next_dose > ncol(fit$regular_draws)) {
+    stop("next_dose is outside the fitted dose range.")
+  }
+  pmin(
+    1,
+    fit$regular_draws[, next_dose] +
+      as.numeric(fit$carryover_draws) * fit$state_draws[, row + 1L]
+  )
+}
+
 aide_beta_binomial_futility <- function(interim, efficacy, ndose) {
   ## Futility is deliberately separate from the delayed-outcome efficacy
   ## model used for utility.  It has the specified Beta(1, 1) posterior and
@@ -97,14 +163,55 @@ aide_fit_toxicity <- function(interim, config, ndose) {
   if (length(skeleton) != ndose) stop("toxicity$skeleton must have one entry per dose.")
   tx <- config$toxicity
   carry_prior <- aide_beta_prior(tx$carryover_prior, "toxicity$carryover_prior")
+  multicycle <- identical(tx$model, "multicycle_additive")
   dat <- interim
-  if (!nrow(dat)) dat <- data.frame(dose = 1L, previous_dose = 1L, ipde = 0L, y = 0L, weight = 0)
+  if (!nrow(dat)) {
+    dat <- if (multicycle) {
+      data.frame(admin_id = 1L, patient_id = 1L, cycle = 1L, t_start = 0,
+                 dose = 1L, previous_dose = 1L, previous_admin_id = 0L,
+                 ipde = 0L, y = 0L, weight = 0)
+    } else {
+      data.frame(dose = 1L, previous_dose = 1L, ipde = 0L, y = 0L, weight = 0)
+    }
+  }
+  if (multicycle) dat <- aide_multicycle_history_data(dat)
   dat$y <- ifelse(is.na(dat$y), 0L, as.integer(dat$y)); dat$weight[dat$y == 1L] <- 1
-  jags_data <- list(N = nrow(dat), J = ndose, y = as.integer(dat$y), dose = as.integer(dat$dose),
-    ipde = as.integer(dat$ipde), w = as.numeric(dat$weight), q = as.numeric(skeleton), beta_mean = tx$beta_prior_mean,
-    a_r = carry_prior[1], b_r = carry_prior[2])
-  additive <- identical(tx$model, "additive_alpha")
-  if (additive) {
+  latest_admin_index <- if (multicycle) aide_multicycle_latest_admin_index(dat) else NULL
+  jags_data <- if (multicycle) {
+    list(
+      N_admin = nrow(dat),
+      N_patient = length(latest_admin_index),
+      y_patient = as.integer(dat$y[latest_admin_index]),
+      w_patient = as.numeric(dat$weight[latest_admin_index]),
+      dose = as.integer(dat$dose),
+      previous_state_index = as.integer(dat$previous_state_index),
+      latest_admin_index = latest_admin_index,
+      J = ndose,
+      q = as.numeric(skeleton),
+      beta_mean = tx$beta_prior_mean,
+      a_r = carry_prior[1],
+      b_r = carry_prior[2]
+    )
+  } else {
+    list(
+      N = nrow(dat),
+      J = ndose,
+      y = as.integer(dat$y),
+      dose = as.integer(dat$dose),
+      ipde = as.integer(dat$ipde),
+      w = as.numeric(dat$weight),
+      q = as.numeric(skeleton),
+      beta_mean = tx$beta_prior_mean,
+      a_r = carry_prior[1],
+      b_r = carry_prior[2]
+    )
+  }
+  additive <- tx$model %in% c("additive_alpha", "multicycle_additive")
+  if (multicycle) {
+    jags_data$tau_beta <- 1 / tx$beta_prior_sd^2
+    model_file <- aide_phase12_jags_file("multicycle_additive_CRM_TITE.bug")
+    monitors <- c("p", "theta_ipde", "alpha")
+  } else if (additive) {
     jags_data$previous_dose <- ifelse(is.na(dat$previous_dose), 1L, as.integer(dat$previous_dose))
     jags_data$tau_beta <- 1 / tx$beta_prior_sd^2
     model_file <- aide_phase12_jags_file("previous_dose_additive_CRM_TITE.bug")
@@ -120,13 +227,23 @@ aide_fit_toxicity <- function(interim, config, ndose) {
   p_cols <- paste0("p[", seq_len(ndose), "]"); ipde_cols <- paste0("theta_ipde[", seq_len(ndose), "]")
   if (!all(p_cols %in% colnames(draws)) || !all(ipde_cols %in% colnames(draws))) stop("The toxicity JAGS model did not return all dose summaries.")
   carry_draws <- if (additive) draws[, "alpha"] else draws[, "r"]
+  p_draws <- draws[, p_cols, drop = FALSE]
+  state_draws <- if (multicycle) {
+    aide_multicycle_state_draws(p_draws, carry_draws, dat)
+  } else {
+    NULL
+  }
   prob_overtox <- colMeans(draws[, p_cols, drop = FALSE] > tx$target)
   prob_ipde_overtox <- colMeans(draws[, ipde_cols, drop = FALSE] > tx$target)
-  list(model = tx$model, p_regular_mean = colMeans(draws[, p_cols, drop = FALSE]),
+  list(model = tx$model, p_regular_mean = colMeans(p_draws),
        carryover_mean = rep(mean(carry_draws), ndose), p_ipde_mean = colMeans(draws[, ipde_cols, drop = FALSE]),
        prob_overtox_by_dose = prob_overtox, prob_ipde_overtox_by_dose = prob_ipde_overtox,
-       eliminated = prob_overtox > tx$cutoff,
-       skeleton = skeleton, posterior_carryover_mean = mean(carry_draws))
+        eliminated = prob_overtox > tx$cutoff,
+        skeleton = skeleton, posterior_carryover_mean = mean(carry_draws),
+        regular_draws = p_draws, carryover_draws = as.numeric(carry_draws),
+        history_data = if (multicycle) dat else NULL,
+        latest_admin_index = latest_admin_index,
+        state_draws = state_draws)
 }
 
 aide_fit_efficacy <- function(interim, config, ndose) {
@@ -134,20 +251,63 @@ aide_fit_efficacy <- function(interim, config, ndose) {
   futility <- aide_beta_binomial_futility(interim, ef, ndose)
   regular_prior <- aide_expand_beta_prior(ef$prior, ndose, "efficacy$prior")
   carry_prior <- aide_expand_beta_prior(ef$carryover_prior, ndose, "efficacy$carryover_prior")
+  model <- ef$model
+  multicycle <- identical(model, "multicycle_additive")
   dat <- interim
-  if (!nrow(dat)) dat <- data.frame(dose = 1L, previous_dose = 1L, ipde = 0L, y = NA_integer_, ascertained = FALSE, weight = 0)
+  if (!nrow(dat)) {
+    dat <- if (multicycle) {
+      data.frame(admin_id = 1L, patient_id = 1L, cycle = 1L, t_start = 0,
+                 dose = 1L, previous_dose = 1L, previous_admin_id = 0L,
+                 ipde = 0L, y = NA_integer_, ascertained = FALSE, weight = 0)
+    } else {
+      data.frame(dose = 1L, previous_dose = 1L, ipde = 0L, y = NA_integer_, ascertained = FALSE, weight = 0)
+    }
+  }
+  if (multicycle) dat <- aide_multicycle_history_data(dat)
   dat$y <- ifelse(is.na(dat$y), 0L, as.integer(dat$y)); dat$ascertained <- as.integer(dat$ascertained)
-  model <- ef$model; additive <- model %in% c("previous_dose_additive", "dose_specific_previous_dose_additive")
+  latest_admin_index <- if (multicycle) aide_multicycle_latest_admin_index(dat) else NULL
+  additive <- model %in% c("previous_dose_additive", "dose_specific_previous_dose_additive", "multicycle_additive")
   model_file <- switch(model,
     dose_specific_carryover = "beta_binomial_tite_dose_specific_carryover.jags",
     shared_carryover = "beta_binomial_tite_shared_carryover.jags",
     previous_dose_additive = "previous_dose_additive_tite_beta_binomial_efficacy.jags",
-    dose_specific_previous_dose_additive = "previous_dose_additive_dose_specific_tite_beta_binomial_efficacy.jags")
-  jags_data <- list(N = nrow(dat), ndose = ndose, eff = as.integer(dat$y), dose = as.integer(dat$dose),
-    ipde = as.integer(dat$ipde),
-    eff_ascertained = as.integer(dat$ascertained), eff_weight = as.numeric(dat$weight), zeros = rep.int(0L, nrow(dat)),
-    eps = 1e-12, zero_trick_constant = 1, a_regular = regular_prior[, 1L], b_regular = regular_prior[, 2L])
-  if (additive) { jags_data$previous_dose <- ifelse(is.na(dat$previous_dose), 1L, as.integer(dat$previous_dose)); jags_data$a_alpha <- if (model == "previous_dose_additive") carry_prior[1L, 1L] else carry_prior[, 1L]; jags_data$b_alpha <- if (model == "previous_dose_additive") carry_prior[1L, 2L] else carry_prior[, 2L]; monitors <- c("p_regular", "alpha")
+    dose_specific_previous_dose_additive = "previous_dose_additive_dose_specific_tite_beta_binomial_efficacy.jags",
+    multicycle_additive = "multicycle_additive_tite_beta_binomial_efficacy.jags")
+  jags_data <- if (multicycle) {
+    list(
+      N_admin = nrow(dat),
+      N_patient = length(latest_admin_index),
+      eff_patient = as.integer(dat$y[latest_admin_index]),
+      eff_ascertained_patient = as.integer(dat$ascertained[latest_admin_index]),
+      eff_weight_patient = as.numeric(dat$weight[latest_admin_index]),
+      zeros = rep.int(0L, length(latest_admin_index)),
+      dose = as.integer(dat$dose),
+      previous_state_index = as.integer(dat$previous_state_index),
+      latest_admin_index = latest_admin_index,
+      ndose = ndose,
+      eps = 1e-12,
+      zero_trick_constant = 1,
+      a_regular = regular_prior[, 1L],
+      b_regular = regular_prior[, 2L]
+    )
+  } else {
+    list(
+      N = nrow(dat),
+      ndose = ndose,
+      eff = as.integer(dat$y),
+      dose = as.integer(dat$dose),
+      ipde = as.integer(dat$ipde),
+      eff_ascertained = as.integer(dat$ascertained),
+      eff_weight = as.numeric(dat$weight),
+      zeros = rep.int(0L, nrow(dat)),
+      eps = 1e-12,
+      zero_trick_constant = 1,
+      a_regular = regular_prior[, 1L],
+      b_regular = regular_prior[, 2L]
+    )
+  }
+  if (multicycle) { jags_data$a_alpha <- carry_prior[1L, 1L]; jags_data$b_alpha <- carry_prior[1L, 2L]; monitors <- c("p_regular", "alpha")
+  } else if (additive) { jags_data$previous_dose <- ifelse(is.na(dat$previous_dose), 1L, as.integer(dat$previous_dose)); jags_data$a_alpha <- if (model == "previous_dose_additive") carry_prior[1L, 1L] else carry_prior[, 1L]; jags_data$b_alpha <- if (model == "previous_dose_additive") carry_prior[1L, 2L] else carry_prior[, 2L]; monitors <- c("p_regular", "alpha")
   } else if (model == "shared_carryover") { jags_data$a_carry <- carry_prior[1L, 1L]; jags_data$b_carry <- carry_prior[1L, 2L]; monitors <- c("p_regular", "r_e")
   } else { jags_data$a_carry <- carry_prior[, 1L]; jags_data$b_carry <- carry_prior[, 2L]; monitors <- c("p_regular", "r_e") }
   jm <- rjags::jags.model(aide_phase12_jags_file(model_file), data = jags_data, n.chains = ef$n_chains, n.adapt = ef$n_adapt, quiet = TRUE)
@@ -155,15 +315,25 @@ aide_fit_efficacy <- function(interim, config, ndose) {
   draws <- as.matrix(rjags::coda.samples(jm, variable.names = monitors, n.iter = ef$n_iter, thin = ef$thin, progress.bar = "none"))
   p_cols <- paste0("p_regular[", seq_len(ndose), "]"); if (!all(p_cols %in% colnames(draws))) stop("The efficacy JAGS model did not return all regular-dose draws.")
   p_draws <- draws[, p_cols, drop = FALSE]
-  if (additive) { alpha_cols <- if (model == "previous_dose_additive") "alpha" else paste0("alpha[", seq_len(ndose), "]"); carry_draws <- if (length(alpha_cols) == 1L) matrix(draws[, alpha_cols], ncol = ndose, nrow = nrow(draws)) else draws[, alpha_cols, drop = FALSE]; ipde_draws <- matrix(pmin(1, p_draws + carry_draws * p_draws), nrow = nrow(p_draws), ncol = ncol(p_draws))
+  if (additive) { alpha_cols <- if (model %in% c("previous_dose_additive", "multicycle_additive")) "alpha" else paste0("alpha[", seq_len(ndose), "]"); carry_draws <- if (length(alpha_cols) == 1L) matrix(draws[, alpha_cols], ncol = ndose, nrow = nrow(draws)) else draws[, alpha_cols, drop = FALSE]; ipde_draws <- matrix(pmin(1, p_draws + carry_draws * p_draws), nrow = nrow(p_draws), ncol = ncol(p_draws))
   } else { r_cols <- if (model == "shared_carryover") "r_e" else paste0("r_e[", seq_len(ndose), "]"); carry_draws <- if (length(r_cols) == 1L) matrix(draws[, r_cols], ncol = ndose, nrow = nrow(draws)) else draws[, r_cols, drop = FALSE]; ipde_draws <- carry_draws + (1 - carry_draws) * p_draws }
+  state_draws <- if (multicycle) {
+    aide_multicycle_state_draws(p_draws, draws[, "alpha"], dat)
+  } else {
+    NULL
+  }
   list(model = model, p_regular_mean = colMeans(p_draws), carryover_mean = colMeans(carry_draws),
        p_ipde_mean = colMeans(ipde_draws),
        prob_below_threshold = futility$prob_below_threshold,
        futile = futility$futile,
        n_fully_ascertained_by_dose = futility$n_fully_ascertained_by_dose,
-       y_fully_ascertained_by_dose = futility$y_fully_ascertained_by_dose,
-       futility_prior = futility$prior)
+        y_fully_ascertained_by_dose = futility$y_fully_ascertained_by_dose,
+        futility_prior = futility$prior,
+        regular_draws = p_draws,
+        carryover_draws = if (multicycle) as.numeric(draws[, "alpha"]) else NULL,
+        history_data = if (multicycle) dat else NULL,
+        latest_admin_index = latest_admin_index,
+        state_draws = state_draws)
 }
 
 aide_update_futility <- function(efficacy_fit, previous) list(

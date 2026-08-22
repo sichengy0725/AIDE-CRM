@@ -1,0 +1,31 @@
+model {
+  # Arbitrary-cycle shared-alpha delayed-outcome efficacy model. State index
+  # one is an explicit zero-state sentinel. The zeros-trick likelihood keeps
+  # the existing latest-cycle pending-nonresponse contribution (1 - q)^weight.
+  g_alpha_1 ~ dgamma(a_alpha, 1)
+  g_alpha_2 ~ dgamma(b_alpha, 1)
+  alpha <- g_alpha_1 / (g_alpha_1 + g_alpha_2)
+
+  for (j in 1:ndose) {
+    g_regular_1[j] ~ dgamma(a_regular[j], 1)
+    g_regular_2[j] ~ dgamma(b_regular[j], 1)
+    p_regular[j] <- g_regular_1[j] / (g_regular_1[j] + g_regular_2[j])
+  }
+
+  # All historical rows construct state; only terminal patient rows are scored.
+  state_eff[1] <- 0
+  for (r in 1:N_admin) {
+    state_eff[r + 1] <- p_regular[dose[r]] + alpha * state_eff[previous_state_index[r]]
+    q_eff_admin[r] <- min(1, state_eff[r + 1])
+  }
+
+  for (i in 1:N_patient) {
+    q_eff_patient[i] <- q_eff_admin[latest_admin_index[i]]
+    theta_safe[i] <- max(eps, min(1 - eps, q_eff_patient[i]))
+    loglik[i] <- eff_ascertained_patient[i] * eff_patient[i] * log(theta_safe[i]) +
+      (eff_ascertained_patient[i] * (1 - eff_patient[i]) +
+       (1 - eff_ascertained_patient[i]) * eff_weight_patient[i]) * log(1 - theta_safe[i])
+    phi[i] <- -loglik[i] + zero_trick_constant
+    zeros[i] ~ dpois(phi[i])
+  }
+}

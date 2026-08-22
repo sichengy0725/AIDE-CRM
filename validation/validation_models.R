@@ -33,6 +33,24 @@ validation_complete_toxicity_model <- function(model) {
       }
     }")
   }
+  if (model == "multicycle_additive") {
+    return("model {
+      beta ~ dnorm(beta_mean, tau_beta)
+      g_alpha_1 ~ dgamma(a_r, 1)
+      g_alpha_2 ~ dgamma(b_r, 1)
+      alpha <- g_alpha_1 / (g_alpha_1 + g_alpha_2)
+      for (j in 1:J) {
+        p[j] <- pow(q[j], exp(beta))
+        theta_ipde[j] <- min(1, p[j] + alpha * p[j])
+      }
+      state_tox[1] <- 0
+      for (i in 1:N) {
+        state_tox[i + 1] <- p[dose[i]] + alpha * state_tox[previous_state_index[i]]
+        theta[i] <- min(1, state_tox[i + 1])
+        y[i] ~ dbern(theta[i])
+      }
+    }")
+  }
   "model {
     beta ~ dnorm(beta_mean, tau_beta)
     g_alpha_1 ~ dgamma(a_r, 1)
@@ -103,6 +121,24 @@ validation_complete_efficacy_model <- function(model) {
       }
     }")
   }
+  if (model == "multicycle_additive") {
+    return("model {
+      g_alpha_1 ~ dgamma(a_alpha, 1)
+      g_alpha_2 ~ dgamma(b_alpha, 1)
+      alpha <- g_alpha_1 / (g_alpha_1 + g_alpha_2)
+      for (j in 1:ndose) {
+        g_regular_1[j] ~ dgamma(a_regular[j], 1)
+        g_regular_2[j] ~ dgamma(b_regular[j], 1)
+        p_regular[j] <- g_regular_1[j] / (g_regular_1[j] + g_regular_2[j])
+      }
+      state_eff[1] <- 0
+      for (i in 1:N) {
+        state_eff[i + 1] <- p_regular[dose[i]] + alpha * state_eff[previous_state_index[i]]
+        theta_eff[i] <- min(1, state_eff[i + 1])
+        eff[i] ~ dbern(theta_eff[i])
+      }
+    }")
+  }
   "model {
     for (j in 1:ndose) {
       g_alpha_1[j] ~ dgamma(a_alpha[j], 1)
@@ -125,13 +161,19 @@ validation_fit_complete_toxicity <- function(interim, config, ndose) {
   skeleton <- tx$skeleton %||% aide_default_toxicity_skeleton(ndose, tx$target)
   carry_prior <- as.numeric(tx$carryover_prior)
   dat <- interim
+  multicycle <- identical(tx$model, "multicycle_additive")
+  if (multicycle) dat <- aide_multicycle_history_data(dat)
   dat$y <- as.integer(dat$y)
   jags_data <- list(
     N = nrow(dat), J = ndose, y = dat$y, dose = as.integer(dat$dose),
     ipde = as.integer(dat$ipde), q = as.numeric(skeleton),
     beta_mean = tx$beta_prior_mean, a_r = carry_prior[1L], b_r = carry_prior[2L]
   )
-  if (tx$model == "additive_alpha") {
+  if (multicycle) {
+    jags_data$previous_state_index <- as.integer(dat$previous_state_index)
+    jags_data$tau_beta <- 1 / tx$beta_prior_sd^2
+    monitors <- c("p", "theta_ipde", "alpha")
+  } else if (tx$model == "additive_alpha") {
     jags_data$previous_dose <- as.integer(dat$previous_dose)
     jags_data$tau_beta <- 1 / tx$beta_prior_sd^2
     monitors <- c("p", "theta_ipde", "alpha")
@@ -146,7 +188,7 @@ validation_fit_complete_toxicity <- function(interim, config, ndose) {
   draws <- as.matrix(rjags::coda.samples(jm, variable.names = monitors, n.iter = tx$n_iter, thin = tx$thin, progress.bar = "none"))
   p_cols <- paste0("p[", seq_len(ndose), "]")
   ipde_cols <- paste0("theta_ipde[", seq_len(ndose), "]")
-  carry_draws <- if (tx$model == "additive_alpha") draws[, "alpha"] else draws[, "r"]
+  carry_draws <- if (tx$model %in% c("additive_alpha", "multicycle_additive")) draws[, "alpha"] else draws[, "r"]
   list(
     model = tx$model,
     p_regular_mean = colMeans(draws[, p_cols, drop = FALSE]),
@@ -165,12 +207,19 @@ validation_fit_complete_efficacy <- function(interim, config, ndose) {
   regular_prior <- aide_expand_beta_prior(ef$prior, ndose, "efficacy$prior")
   carry_prior <- aide_expand_beta_prior(ef$carryover_prior, ndose, "efficacy$carryover_prior")
   dat <- interim
+  multicycle <- identical(ef$model, "multicycle_additive")
+  if (multicycle) dat <- aide_multicycle_history_data(dat)
   jags_data <- list(
     N = nrow(dat), ndose = ndose, eff = as.integer(dat$y), dose = as.integer(dat$dose),
     ipde = as.integer(dat$ipde), a_regular = regular_prior[, 1L], b_regular = regular_prior[, 2L]
   )
-  additive <- ef$model %in% c("previous_dose_additive", "dose_specific_previous_dose_additive")
-  if (additive) {
+  additive <- ef$model %in% c("previous_dose_additive", "dose_specific_previous_dose_additive", "multicycle_additive")
+  if (multicycle) {
+    jags_data$previous_state_index <- as.integer(dat$previous_state_index)
+    jags_data$a_alpha <- carry_prior[1L, 1L]
+    jags_data$b_alpha <- carry_prior[1L, 2L]
+    monitors <- c("p_regular", "alpha")
+  } else if (additive) {
     jags_data$previous_dose <- as.integer(dat$previous_dose)
     jags_data$a_alpha <- if (ef$model == "previous_dose_additive") carry_prior[1L, 1L] else carry_prior[, 1L]
     jags_data$b_alpha <- if (ef$model == "previous_dose_additive") carry_prior[1L, 2L] else carry_prior[, 2L]
@@ -192,7 +241,7 @@ validation_fit_complete_efficacy <- function(interim, config, ndose) {
   p_cols <- paste0("p_regular[", seq_len(ndose), "]")
   p_draws <- draws[, p_cols, drop = FALSE]
   if (additive) {
-    alpha_cols <- if (ef$model == "previous_dose_additive") "alpha" else paste0("alpha[", seq_len(ndose), "]")
+    alpha_cols <- if (ef$model %in% c("previous_dose_additive", "multicycle_additive")) "alpha" else paste0("alpha[", seq_len(ndose), "]")
     carry_draws <- if (length(alpha_cols) == 1L) matrix(draws[, alpha_cols], ncol = ndose, nrow = nrow(draws)) else draws[, alpha_cols, drop = FALSE]
     ipde_draws <- matrix(pmin(1, p_draws + carry_draws * p_draws), nrow = nrow(p_draws), ncol = ncol(p_draws))
   } else {

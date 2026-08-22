@@ -4,9 +4,10 @@ aide_phase12_root <- function() {
 }
 
 aide_phase12_model_choices <- function() list(
-  toxicity = c("discount_r", "additive_alpha"),
+  toxicity = c("discount_r", "additive_alpha", "multicycle_additive"),
   efficacy = c("dose_specific_carryover", "shared_carryover",
-               "dose_specific_previous_dose_additive", "previous_dose_additive")
+               "dose_specific_previous_dose_additive", "previous_dose_additive",
+               "multicycle_additive")
 )
 
 aide_phase12_merge <- function(x, defaults) modifyList(defaults, x %||% list())

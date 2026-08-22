@@ -65,17 +65,18 @@ aide_phase12_tite_model_map <- function(carryover_model = NULL,
                                          crm_r_model = NULL,
                                          efficacy_model = NULL) {
   if (!is.null(carryover_model)) {
-    carryover_model <- match.arg(
-      carryover_model,
-      c("discount_shared", "discount_dose_specific",
-        "additive_shared", "additive_dose_specific")
+      carryover_model <- match.arg(
+        carryover_model,
+        c("discount_shared", "discount_dose_specific",
+          "additive_shared", "additive_dose_specific", "multicycle_additive")
     )
     mapped <- switch(
       carryover_model,
       discount_shared = list(toxicity = "discount_r", efficacy = "shared_carryover"),
       discount_dose_specific = list(toxicity = "discount_r", efficacy = "dose_specific_carryover"),
-      additive_shared = list(toxicity = "additive_alpha", efficacy = "previous_dose_additive"),
-      additive_dose_specific = list(toxicity = "additive_alpha", efficacy = "dose_specific_previous_dose_additive")
+       additive_shared = list(toxicity = "additive_alpha", efficacy = "previous_dose_additive"),
+       additive_dose_specific = list(toxicity = "additive_alpha", efficacy = "dose_specific_previous_dose_additive"),
+       multicycle_additive = list(toxicity = "multicycle_additive", efficacy = "multicycle_additive")
     )
   } else {
     if (is.null(toxicity_model)) {
@@ -84,17 +85,20 @@ aide_phase12_tite_model_map <- function(carryover_model = NULL,
         crm_r_model,
         random = "discount_r",
         discount_r = "discount_r",
-        previous_dose = "additive_alpha",
-        previous_dose_additive = "additive_alpha",
-        additive_alpha = "additive_alpha",
-        stop("TITE-AIDE supports crm_r_model = 'random' or 'previous_dose'.")
+         previous_dose = "additive_alpha",
+         previous_dose_additive = "additive_alpha",
+         additive_alpha = "additive_alpha",
+         multicycle_additive = "multicycle_additive",
+         stop("TITE-AIDE supports crm_r_model = 'random', 'previous_dose', or 'multicycle_additive'.")
       )
     }
-    toxicity_model <- match.arg(toxicity_model, c("discount_r", "additive_alpha"))
+    toxicity_model <- match.arg(toxicity_model, c("discount_r", "additive_alpha", "multicycle_additive"))
     mapped <- list(
       toxicity = toxicity_model,
       efficacy = if (toxicity_model == "discount_r") {
         "shared_carryover"
+      } else if (toxicity_model == "multicycle_additive") {
+        "multicycle_additive"
       } else {
         "previous_dose_additive"
       }
@@ -103,7 +107,8 @@ aide_phase12_tite_model_map <- function(carryover_model = NULL,
   if (!is.null(efficacy_model)) mapped$efficacy <- match.arg(
     efficacy_model,
     c("dose_specific_carryover", "shared_carryover",
-      "dose_specific_previous_dose_additive", "previous_dose_additive")
+      "dose_specific_previous_dose_additive", "previous_dose_additive",
+      "multicycle_additive")
   )
   mapped
 }
@@ -118,10 +123,13 @@ aide_phase12_tite_admin_view <- function(admin) {
     t_eff = admin$t_response,
     t_eval = admin$assessment_end,
     dose = admin$dose,
+    previous_admin_id = admin$previous_admin_id,
     y = admin$dlt_final,
     eff = admin$eff_final,
     true_toxicity_probability = admin$true_p_tox,
     true_efficacy_probability = admin$true_p_eff,
+    true_toxicity_state = admin$true_toxicity_state,
+    true_efficacy_state = admin$true_efficacy_state,
     ncycle = admin$cycle,
     cohort = admin$cohort_id,
     stage = admin$stage,

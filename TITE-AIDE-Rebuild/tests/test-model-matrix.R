@@ -5,7 +5,7 @@ if (!requireNamespace("rjags", quietly = TRUE) || !requireNamespace("coda", quie
 }
 scenario <- aide_phase12_scenario(c(.05, .14, .28), c(.12, .30, .42),
                                   list(alpha_true = .10), list(alpha_true = .10))
-for (toxicity_model in c("discount_r", "additive_alpha")) {
+for (toxicity_model in aide_phase12_model_choices()$toxicity) {
   for (efficacy_model in aide_phase12_model_choices()$efficacy) {
     config <- aide_phase12_config(Nmax = 9L, cohort_size = 3L, n_eval = 1L,
                                   toxicity = list(

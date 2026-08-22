@@ -1,0 +1,29 @@
+model {
+  # Arbitrary-cycle additive CRM. State index 1 is an explicit zero-state
+  # sentinel. Each later pointer refers to the preceding administration of
+  # the same patient, never to the preceding global administration row.
+  beta ~ dnorm(0, tau_beta)
+  g_alpha_1 ~ dgamma(a_r, 1)
+  g_alpha_2 ~ dgamma(b_r, 1)
+  alpha <- g_alpha_1 / (g_alpha_1 + g_alpha_2)
+
+  for (j in 1:J) {
+    p[j] <- pow(q[j], exp(beta))
+    # Reference probability for reporting only. Actual administration rows
+    # use their patient-specific recursive state below.
+    theta_ipde[j] <- min(1, p[j] + alpha * p[j])
+  }
+
+  # Every administration contributes to the uncapped state recursion.
+  state_tox[1] <- 0
+  for (r in 1:N_admin) {
+    state_tox[r + 1] <- p[dose[r]] + alpha * state_tox[previous_state_index[r]]
+    theta_admin[r] <- min(1, state_tox[r + 1])
+  }
+
+  # Each patient contributes exactly one likelihood term: the latest cycle.
+  for (i in 1:N_patient) {
+    theta_patient[i] <- theta_admin[latest_admin_index[i]]
+    y_patient[i] ~ dbern(theta_patient[i])
+  }
+}

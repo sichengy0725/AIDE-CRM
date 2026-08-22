@@ -81,8 +81,18 @@ aide_retreat_individual_risk_screen <- function(state, queue_index, config,
   }
   risk <- state$cohort$risk_context
   eligible <- candidate_doses
+  source_admin_id <- state$queue$source_admin_id[queue_index]
+  source_row <- state$admin[match(source_admin_id, state$admin$admin_id), , drop = FALSE]
   if (isTRUE(config$recycle$apply_individual_toxicity_risk)) {
-    prob <- risk$prob_toxicity_ipde_overdose[eligible]
+    prob <- if (identical(config$toxicity$model, "multicycle_additive")) {
+      vapply(eligible, function(dose) {
+        mean(aide_multicycle_next_probability_draws(
+          risk$toxicity_fit, source_admin_id, dose
+        ) > config$toxicity$target)
+      }, numeric(1))
+    } else {
+      risk$prob_toxicity_ipde_overdose[eligible]
+    }
     eligible <- eligible[is.finite(prob) & prob <= config$recycle$toxicity_ipde_overdose_cutoff]
     if (!length(eligible)) {
       return(list(allowed = FALSE, reason = "blocked_individual_toxicity_risk",
@@ -90,7 +100,16 @@ aide_retreat_individual_risk_screen <- function(state, queue_index, config,
     }
   }
   if (isTRUE(config$recycle$apply_individual_efficacy_benefit)) {
-    benefit <- risk$p_efficacy_ipde[eligible] - risk$p_efficacy[eligible]
+    benefit <- if (identical(config$efficacy$model, "multicycle_additive")) {
+      current_dose <- as.integer(source_row$dose)
+      vapply(eligible, function(dose) {
+        mean(aide_multicycle_next_probability_draws(
+          risk$efficacy_fit, source_admin_id, dose
+        ) - risk$efficacy_fit$regular_draws[, current_dose])
+      }, numeric(1))
+    } else {
+      risk$p_efficacy_ipde[eligible] - risk$p_efficacy[eligible]
+    }
     eligible <- eligible[is.finite(benefit) & benefit > config$recycle$efficacy_ipde_min_increment]
     if (!length(eligible)) {
       return(list(allowed = FALSE, reason = "blocked_individual_efficacy_benefit",
@@ -154,16 +173,40 @@ aide_append_administration <- function(state, queue_index, config, scenario) {
   if (isTRUE(state$cohort$individual_randomization)) {
     state$cohort$randomization_draws <- state$cohort$randomization_draws + 1L
   }
-  p_tox <- if (is_retreat) aide_phase12_ipde_probability(scenario$p_true, scenario$toxicity_ipde_dgm$alpha_true, dose) else scenario$p_true[dose]
-  p_eff <- if (is_retreat) aide_phase12_ipde_probability(scenario$e_true, scenario$efficacy_ipde_dgm$alpha_true, dose) else scenario$e_true[dose]
+  previous_admin_id <- 0L
+  previous_tox_state <- 0
+  previous_eff_state <- 0
+  if (is_retreat) {
+    source_row <- state$admin[match(q$source_admin_id, state$admin$admin_id), , drop = FALSE]
+    previous_admin_id <- as.integer(source_row$admin_id)
+    previous_tox_state <- as.numeric(source_row$true_toxicity_state)
+    previous_eff_state <- as.numeric(source_row$true_efficacy_state)
+  }
+  tox_state <- scenario$p_true[dose] + scenario$toxicity_ipde_dgm$alpha_true * previous_tox_state
+  eff_state <- scenario$e_true[dose] + scenario$efficacy_ipde_dgm$alpha_true * previous_eff_state
+  p_tox <- if (is_retreat && identical(config$toxicity$model, "multicycle_additive")) {
+    min(1, tox_state)
+  } else if (is_retreat) {
+    aide_phase12_ipde_probability(scenario$p_true, scenario$toxicity_ipde_dgm$alpha_true, dose)
+  } else {
+    scenario$p_true[dose]
+  }
+  p_eff <- if (is_retreat && identical(config$efficacy$model, "multicycle_additive")) {
+    min(1, eff_state)
+  } else if (is_retreat) {
+    aide_phase12_ipde_probability(scenario$e_true, scenario$efficacy_ipde_dgm$alpha_true, dose)
+  } else {
+    scenario$e_true[dose]
+  }
   tox <- aide_draw_binary_event_time(p_tox, state$t_now, config$time$T_assess, config$time$dlt_dist)
   eff <- aide_draw_binary_event_time(p_eff, state$t_now, config$time$T_assess, config$time$efficacy_dist)
   state$counters$admin <- state$counters$admin + 1L; id <- state$counters$admin
   state$admin <- aide_add_row(state$admin, list(admin_id = id, patient_id = q$patient_id, cohort_id = state$cohort$cohort_id,
     decision_id = state$cohort$decision_id, stage = state$cohort$stage, assignment_type = q$type, dose = dose,
-    decision_next_dose = dose, previous_dose = previous, cycle = cycle, t_arrival = arrival, t_start = state$t_now,
+    decision_next_dose = dose, previous_dose = previous, previous_admin_id = previous_admin_id, cycle = cycle, t_arrival = arrival, t_start = state$t_now,
     t_dlt = tox$event_time, t_response = eff$event_time, assessment_end = tox$window_end, dlt_final = tox$outcome,
-    eff_final = eff$outcome, true_p_tox = p_tox, true_p_eff = p_eff))
+    eff_final = eff$outcome, true_p_tox = p_tox, true_p_eff = p_eff,
+    true_toxicity_state = tox_state, true_efficacy_state = eff_state))
   if (is.finite(tox$event_time)) state <- aide_event_schedule(state, tox$event_time, "dlt_observed", q$patient_id, id)
   if (is.finite(eff$event_time)) state <- aide_event_schedule(state, eff$event_time, "efficacy_response", q$patient_id, id)
   state <- aide_event_schedule(state, tox$window_end, "assessment_complete", q$patient_id, id)
@@ -206,7 +249,8 @@ aide_open_cohort <- function(state, decision) {
     allocation_probabilities = allocation_probabilities,
     individual_randomization = isTRUE(decision$individual_randomization), randomization_draws = 0L)
   state$cohort$risk_context <- list(p_efficacy = decision$p_efficacy, p_efficacy_ipde = decision$p_efficacy_ipde,
-    prob_toxicity_ipde_overdose = decision$prob_toxicity_ipde_overdose)
+    prob_toxicity_ipde_overdose = decision$prob_toxicity_ipde_overdose,
+    toxicity_fit = decision$toxicity_fit, efficacy_fit = decision$efficacy_fit)
   state$current_dose <- decision$next_dose; state$stage$active <- decision$stage; state$stage$transitioned <- state$stage$transitioned || isTRUE(decision$stage_transition)
   state
 }

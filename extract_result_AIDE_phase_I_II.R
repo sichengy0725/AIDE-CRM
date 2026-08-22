@@ -47,20 +47,25 @@ one_stage_sizes <- data.frame(
 )
 design_size_grid <- rbind(two_stage_sizes, one_stage_sizes)
 
-## Keep this paired model grid synchronized with the OC runner.
+## Keep this paired model grid synchronized with the OC runner, including the
+## arbitrary-cycle shared additive carryover model.
 model_grid <- data.frame(
   model_id = c(
     "discount_shared", "discount_dose_specific",
-    "additive_shared", "additive_dose_specific"
+    "additive_shared", "additive_dose_specific", "multicycle_additive"
   ),
   carryover_model = c(
     "discount_shared", "discount_dose_specific",
-    "additive_shared", "additive_dose_specific"
+    "additive_shared", "additive_dose_specific", "multicycle_additive"
   ),
-  crm_r_model = c("random", "random", "previous_dose", "previous_dose"),
+  crm_r_model = c(
+    "random", "random", "previous_dose", "previous_dose",
+    "multicycle_additive"
+  ),
   efficacy_model = c(
     "shared_carryover", "dose_specific_carryover",
-    "previous_dose_additive", "dose_specific_previous_dose_additive"
+    "previous_dose_additive", "dose_specific_previous_dose_additive",
+    "multicycle_additive"
   ),
   stringsAsFactors = FALSE
 )

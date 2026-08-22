@@ -46,26 +46,16 @@ one_stage_sizes <- data.frame(
 )
 design_size_grid <- rbind(two_stage_sizes, one_stage_sizes)
 
-## Keep this paired model grid synchronized with the OC runner.
+## Keep this paired model grid synchronized with the arbitrary-cycle runner.
 model_grid <- data.frame(
-   model_id = c("additive_shared", "additive_dose_specific"),
-   carryover_model = c("additive_shared", "additive_dose_specific"),
-   crm_r_model = c("previous_dose", "previous_dose"),
+   model_id = c("multicycle_additive"),
+   carryover_model = c("multicycle_additive"),
+   crm_r_model = c("multicycle_additive"),
    efficacy_model = c(
-     "previous_dose_additive",
-     "dose_specific_previous_dose_additive"
+     "multicycle_additive"
    ),
    stringsAsFactors = FALSE
  )
-# model_grid <- data.frame(
-#   model_id = c("additive_shared"),
-#   carryover_model = c("additive_shared"),
-#   crm_r_model = c("previous_dose"),
-#   efficacy_model = c(
-#    "previous_dose_additive"
-#  ),
-#  stringsAsFactors = FALSE
-# )
 ## Beta-equivalent prior shapes for random CRM r or the additive toxicity
 ## alpha. The JAGS models implement these through equal-rate Gamma ratios.
 crm_prior_grid <- data.frame(

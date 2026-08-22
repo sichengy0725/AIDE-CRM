@@ -115,10 +115,10 @@ one_stage_sizes <- data.frame(
 design_size_grid <- rbind(two_stage_sizes, one_stage_sizes)
 
 model_grid <- data.frame(
-  model_id = "additive_shared",
-  carryover_model = "additive_shared",
-  crm_r_model = "previous_dose",
-  efficacy_model = "previous_dose_additive",
+  model_id = "multicycle_additive",
+  carryover_model = "multicycle_additive",
+  crm_r_model = "multicycle_additive",
+  efficacy_model = "multicycle_additive",
   stringsAsFactors = FALSE
 )
 crm_prior_grid <- data.frame(
@@ -140,7 +140,7 @@ alpha_grid <- data.frame(
 
 utility_scores <- c(u00 = 0, u01 = 40, u10 = 60, u11 = 100)
 cohort_size <- 3L
-cycle_max <- 1L
+cycle_max <- 2L
 T_assess <- 28
 n_eval <- 3L
 m_U <- 6L

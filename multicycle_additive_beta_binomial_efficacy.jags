@@ -1,0 +1,26 @@
+model {
+  # Arbitrary-cycle additive efficacy model with a shared alpha. State index
+  # 1 is the zero-state sentinel; every later pointer targets the prior
+  # administration of the same patient.
+  g_alpha_1 ~ dgamma(a_alpha, 1)
+  g_alpha_2 ~ dgamma(b_alpha, 1)
+  alpha <- g_alpha_1 / (g_alpha_1 + g_alpha_2)
+
+  for (j in 1:ndose) {
+    g_regular_1[j] ~ dgamma(a_regular[j], 1)
+    g_regular_2[j] ~ dgamma(b_regular[j], 1)
+    p_regular[j] <- g_regular_1[j] / (g_regular_1[j] + g_regular_2[j])
+  }
+
+  # Earlier cycles construct state only; they have no separate likelihood.
+  state_eff[1] <- 0
+  for (r in 1:N_admin) {
+    state_eff[r + 1] <- p_regular[dose[r]] + alpha * state_eff[previous_state_index[r]]
+    theta_eff_admin[r] <- min(1, state_eff[r + 1])
+  }
+
+  for (i in 1:N_patient) {
+    theta_eff_patient[i] <- theta_eff_admin[latest_admin_index[i]]
+    eff_patient[i] ~ dbern(theta_eff_patient[i])
+  }
+}

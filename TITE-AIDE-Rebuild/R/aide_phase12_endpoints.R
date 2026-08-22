@@ -23,8 +23,14 @@ aide_update_endpoint_status <- function(admin, t_now, endpoint = c("toxicity", "
 aide_phase12_tite_toxicity_data <- function(admin, t_now, T_assess) {
   if (!nrow(admin)) return(data.frame())
   s <- aide_update_endpoint_status(admin, t_now, "toxicity")
+  previous_admin_id <- if ("previous_admin_id" %in% names(admin)) {
+    admin$previous_admin_id
+  } else {
+    rep.int(0L, nrow(admin))
+  }
   data.frame(admin_id = admin$admin_id, patient_id = admin$patient_id, cycle = admin$cycle, t_start = admin$t_start,
              dose = admin$dose, previous_dose = admin$previous_dose,
+             previous_admin_id = previous_admin_id,
              ipde = as.integer(admin$assignment_type == "retreat"), y = s$y, weight = s$weight,
              ascertained = s$ascertained)
 }
@@ -32,8 +38,14 @@ aide_phase12_tite_toxicity_data <- function(admin, t_now, T_assess) {
 aide_phase12_tite_efficacy_data <- function(admin, t_now, T_assess) {
   if (!nrow(admin)) return(data.frame())
   s <- aide_update_endpoint_status(admin, t_now, "efficacy")
+  previous_admin_id <- if ("previous_admin_id" %in% names(admin)) {
+    admin$previous_admin_id
+  } else {
+    rep.int(0L, nrow(admin))
+  }
   data.frame(admin_id = admin$admin_id, patient_id = admin$patient_id, cycle = admin$cycle, t_start = admin$t_start,
              dose = admin$dose, previous_dose = admin$previous_dose,
+             previous_admin_id = previous_admin_id,
              ipde = as.integer(admin$assignment_type == "retreat"), y = s$y, weight = s$weight,
              ascertained = s$ascertained)
 }
