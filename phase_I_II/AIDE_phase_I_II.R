@@ -43,7 +43,7 @@ aide_phase12_carryover_model_map <- function(carryover_model) {
     carryover_model,
     c(
       "discount_shared", "discount_dose_specific",
-      "additive_shared", "additive_dose_specific"
+      "additive_shared", "additive_dose_specific", "multicycle_additive"
     )
   )
   switch(
@@ -67,14 +67,117 @@ aide_phase12_carryover_model_map <- function(carryover_model) {
       toxicity_model = "additive_shared",
       crm_r_model = "previous_dose",
       efficacy_model = "dose_specific_previous_dose_additive"
+    ),
+    multicycle_additive = list(
+      toxicity_model = "multicycle_additive",
+      crm_r_model = "multicycle_additive",
+      efficacy_model = "multicycle_additive"
     )
   )
 }
 
 aide_phase12_is_additive_efficacy_model <- function(efficacy_model) {
   efficacy_model %in% c(
-    "previous_dose_additive", "dose_specific_previous_dose_additive"
+    "previous_dose_additive", "dose_specific_previous_dose_additive",
+    "multicycle_additive"
   )
+}
+
+aide_phase12_is_multicycle_efficacy_model <- function(efficacy_model) {
+  identical(efficacy_model, "multicycle_additive")
+}
+
+## The arbitrary-cycle state is deliberately uncapped. Only the probability
+## used to generate or score an administration is capped at one.
+aide_phase12_multicycle_next_state <- function(regular_probability,
+                                                alpha,
+                                                previous_state = 0) {
+  if (length(regular_probability) != 1L || !is.finite(regular_probability) ||
+      regular_probability < 0 || regular_probability > 1 ||
+      length(alpha) != 1L || !is.finite(alpha) || alpha < 0 ||
+      length(previous_state) != 1L || !is.finite(previous_state) ||
+      previous_state < 0) {
+    stop("multicycle state inputs must be finite non-negative values, with regular_probability in [0, 1].")
+  }
+  state <- as.numeric(regular_probability) +
+    as.numeric(alpha) * as.numeric(previous_state)
+  list(state = state, probability = min(1, state))
+}
+
+## Build the ordered administration history used to recursively reconstruct
+## each patient's state. previous_state_index = 1 selects the zero sentinel.
+aide_phase12_multicycle_history_data <- function(admin, ndose) {
+  if (is.null(admin)) admin <- data.frame(dose = integer(0), eff = integer(0))
+  if (!all(c("dose", "eff") %in% names(admin))) {
+    stop("admin must contain dose and eff for the multicycle efficacy model.")
+  }
+  if (nrow(admin) == 0L) {
+    return(data.frame(
+      admin_id = integer(0), patient_id = integer(0), cycle = integer(0),
+      dose = integer(0), efficacy = integer(0), ipde = integer(0),
+      previous_admin_id = integer(0), previous_state_index = integer(0)
+    ))
+  }
+  if (any(!is.finite(admin$dose)) ||
+      any(admin$dose < 1L | admin$dose > ndose) ||
+      any(!admin$eff %in% c(0L, 1L))) {
+    stop("admin contains invalid dose or efficacy values.")
+  }
+  patient_id <- if ("id" %in% names(admin)) admin$id else seq_len(nrow(admin))
+  if (any(is.na(patient_id))) stop("admin$id cannot be missing for multicycle carryover.")
+  cycle <- if ("ncycle" %in% names(admin)) {
+    admin$ncycle
+  } else if ("cycle" %in% names(admin)) {
+    admin$cycle
+  } else {
+    ave(seq_len(nrow(admin)), patient_id, FUN = seq_along)
+  }
+  time <- if ("t_start" %in% names(admin)) {
+    admin$t_start
+  } else if ("t_arrival" %in% names(admin)) {
+    admin$t_arrival
+  } else {
+    seq_len(nrow(admin))
+  }
+  admin_id <- if ("row_id" %in% names(admin)) admin$row_id else seq_len(nrow(admin))
+  if (any(!is.finite(cycle)) || any(cycle < 1L) || any(!is.finite(time)) ||
+      any(is.na(admin_id)) || anyDuplicated(admin_id)) {
+    stop("multicycle administration identifiers, cycles, and times must be valid.")
+  }
+  order_index <- order(patient_id, cycle, time, admin_id)
+  patient_id <- patient_id[order_index]
+  admin_id <- as.integer(admin_id[order_index])
+  cycle <- as.integer(cycle[order_index])
+  dose <- as.integer(admin$dose[order_index])
+  efficacy <- as.integer(admin$eff[order_index])
+  ipde <- as.integer(if ("type" %in% names(admin)) {
+    admin$type[order_index] == "retreat"
+  } else {
+    FALSE
+  })
+  previous_admin_id <- rep.int(0L, length(admin_id))
+  previous_state_index <- rep.int(1L, length(admin_id))
+  for (rows in split(seq_along(admin_id), as.character(patient_id))) {
+    if (length(rows) > 1L) {
+      previous_admin_id[rows[-1L]] <- admin_id[rows[-length(rows)]]
+      previous_state_index[rows[-1L]] <- rows[-length(rows)] + 1L
+    }
+  }
+  data.frame(
+    admin_id = admin_id, patient_id = as.integer(patient_id), cycle = cycle,
+    dose = dose, efficacy = efficacy, ipde = ipde,
+    previous_admin_id = previous_admin_id,
+    previous_state_index = as.integer(previous_state_index)
+  )
+}
+
+## Score exactly one administration per patient: their latest ordered cycle.
+aide_phase12_multicycle_latest_admin_index <- function(history_data) {
+  if (is.null(history_data) || nrow(history_data) == 0L) return(integer(0))
+  if (!"patient_id" %in% names(history_data)) {
+    stop("history_data must contain patient_id for multicycle likelihood mapping.")
+  }
+  as.integer(which(!duplicated(history_data$patient_id, fromLast = TRUE)))
 }
 
 aide_phase12_dose_threshold_reached <- function(n_by_dose, threshold) {
@@ -200,7 +303,8 @@ aide_phase12_efficacy_posterior <- function(admin,
                                                "shared_carryover",
                                                "dose_specific_carryover",
                                                "previous_dose_additive",
-                                               "dose_specific_previous_dose_additive"
+                                               "dose_specific_previous_dose_additive",
+                                               "multicycle_additive"
                                              ),
                                              efficacy_additive_alpha_prior = c(1, 9),
                                              model_file = NULL,
@@ -225,6 +329,9 @@ aide_phase12_efficacy_posterior <- function(admin,
   is_dose_specific_additive <- identical(
     efficacy_model, "dose_specific_previous_dose_additive"
   )
+  is_multicycle_additive <- aide_phase12_is_multicycle_efficacy_model(
+    efficacy_model
+  )
   if (is.null(admin)) admin <- data.frame(dose = integer(0), eff = integer(0))
   if (nrow(admin) > 0L) {
     is_ipde <- if ("type" %in% names(admin)) {
@@ -242,8 +349,15 @@ aide_phase12_efficacy_posterior <- function(admin,
     efficacy = as.integer(admin$eff),
     stringsAsFactors = FALSE
   )
-  previous_dose_data <- if (is_additive) {
+  previous_dose_data <- if (is_multicycle_additive) {
+    aide_phase12_multicycle_history_data(admin, ndose)
+  } else if (is_additive) {
     aide_phase12_previous_dose_efficacy_data(admin, ndose)
+  } else {
+    NULL
+  }
+  latest_admin_index <- if (is_multicycle_additive) {
+    aide_phase12_multicycle_latest_admin_index(previous_dose_data)
   } else {
     NULL
   }
@@ -255,9 +369,17 @@ aide_phase12_efficacy_posterior <- function(admin,
     paste(c(efficacy_additive_alpha_prior), collapse = ","),
     model_key, n_chains, n_adapt, n_burnin, n_iter, thin,
     if (is_additive) {
+      if (is_multicycle_additive) {
+        paste(previous_dose_data$admin_id, previous_dose_data$patient_id,
+              previous_dose_data$cycle, previous_dose_data$dose,
+              previous_dose_data$efficacy,
+              previous_dose_data$previous_state_index,
+              sep = ":", collapse = ";")
+      } else {
       paste(previous_dose_data$dose, previous_dose_data$efficacy,
             previous_dose_data$ipde, previous_dose_data$previous_dose,
             sep = ":", collapse = ";")
+      }
     } else {
       paste(dose_data$dose, dose_data$group, dose_data$efficacy,
             sep = ":", collapse = ";")
@@ -313,7 +435,9 @@ aide_phase12_efficacy_posterior <- function(admin,
     } else {
       aide_phase12_load_efficacy_jags(require_standard_fitter = FALSE)
       model_path <- if (is.null(model_file)) {
-        if (is_dose_specific_additive) {
+        if (is_multicycle_additive) {
+          "multicycle_additive_beta_binomial_efficacy.jags"
+        } else if (is_dose_specific_additive) {
           "previous_dose_additive_dose_specific_beta_binomial_efficacy.jags"
         } else {
           "previous_dose_additive_beta_binomial_efficacy.jags"
@@ -325,30 +449,59 @@ aide_phase12_efficacy_posterior <- function(admin,
       ## JAGS cannot define an empty indexed loop; an unobserved sentinel row
       ## yields the beta priors unchanged when no administration is available.
       if (nrow(fit_data) == 0L) {
-        fit_data <- data.frame(
-          dose = 1L, efficacy = NA_integer_, ipde = 0L, previous_dose = 1L
+        fit_data <- if (is_multicycle_additive) {
+          data.frame(
+            admin_id = 1L, patient_id = 1L, cycle = 1L, dose = 1L,
+            efficacy = NA_integer_, ipde = 0L, previous_admin_id = 0L,
+            previous_state_index = 1L
+          )
+        } else {
+          data.frame(
+            dose = 1L, efficacy = NA_integer_, ipde = 0L, previous_dose = 1L
+          )
+        }
+      }
+      if (is_multicycle_additive) {
+        fit_latest_admin_index <- if (nrow(previous_dose_data) == 0L) {
+          1L
+        } else {
+          latest_admin_index
+        }
+        jags_data <- list(
+          N_admin = nrow(fit_data),
+          N_patient = length(fit_latest_admin_index),
+          eff_patient = as.integer(fit_data$efficacy[fit_latest_admin_index]),
+          dose = as.integer(fit_data$dose),
+          previous_state_index = as.integer(fit_data$previous_state_index),
+          latest_admin_index = as.integer(fit_latest_admin_index),
+          ndose = ndose,
+          a_regular = efficacy_prior[, "a"],
+          b_regular = efficacy_prior[, "b"],
+          a_alpha = as.numeric(efficacy_additive_alpha_prior[1L, "a"]),
+          b_alpha = as.numeric(efficacy_additive_alpha_prior[1L, "b"])
+        )
+      } else {
+        jags_data <- list(
+          N = nrow(fit_data),
+          ndose = ndose,
+          eff = as.integer(fit_data$efficacy),
+          dose = as.integer(fit_data$dose),
+          previous_dose = as.integer(fit_data$previous_dose),
+          ipde = as.integer(fit_data$ipde),
+          a_regular = efficacy_prior[, "a"],
+          b_regular = efficacy_prior[, "b"],
+          a_alpha = if (is_dose_specific_additive) {
+            efficacy_additive_alpha_prior[, "a"]
+          } else {
+            as.numeric(efficacy_additive_alpha_prior[1L, "a"])
+          },
+          b_alpha = if (is_dose_specific_additive) {
+            efficacy_additive_alpha_prior[, "b"]
+          } else {
+            as.numeric(efficacy_additive_alpha_prior[1L, "b"])
+          }
         )
       }
-      jags_data <- list(
-        N = nrow(fit_data),
-        ndose = ndose,
-        eff = as.integer(fit_data$efficacy),
-        dose = as.integer(fit_data$dose),
-        previous_dose = as.integer(fit_data$previous_dose),
-        ipde = as.integer(fit_data$ipde),
-        a_regular = efficacy_prior[, "a"],
-        b_regular = efficacy_prior[, "b"],
-        a_alpha = if (is_dose_specific_additive) {
-          efficacy_additive_alpha_prior[, "a"]
-        } else {
-          as.numeric(efficacy_additive_alpha_prior[1L, "a"])
-        },
-        b_alpha = if (is_dose_specific_additive) {
-          efficacy_additive_alpha_prior[, "b"]
-        } else {
-          as.numeric(efficacy_additive_alpha_prior[1L, "b"])
-        }
-      )
       jm <- rjags::jags.model(
         file = model_path, data = jags_data, n.chains = n_chains,
         n.adapt = n_adapt, quiet = TRUE
@@ -414,6 +567,8 @@ aide_phase12_efficacy_posterior <- function(admin,
         ## use the actual current/previous dose pair in the recycle gate.
         ipde_draws = ipde_draws,
         alpha_draws = alpha_draws,
+        history_data = if (is_multicycle_additive) previous_dose_data else NULL,
+        latest_admin_index = if (is_multicycle_additive) latest_admin_index else NULL,
         model_file = model_path
       )
     }
@@ -444,6 +599,8 @@ aide_phase12_efficacy_posterior <- function(admin,
     efficacy_additive_alpha_prior = efficacy_additive_alpha_prior,
     regular_draws = base$regular_draws,
     alpha_draws = base$alpha_draws,
+    history_data = base$history_data,
+    latest_admin_index = base$latest_admin_index,
     mcmc = list(
       model_file = base$model_file,
       n_chains = as.integer(n_chains),
@@ -453,6 +610,34 @@ aide_phase12_efficacy_posterior <- function(admin,
       thin = as.integer(thin)
     )
   )
+}
+
+## Reconstruct posterior uncapped states for patient-specific next-cycle
+## predictions. The likelihood itself remains terminal-cycle only.
+aide_phase12_multicycle_posterior_states <- function(posterior) {
+  if (!identical(posterior$efficacy_model, "multicycle_additive")) {
+    stop("posterior must come from the multicycle_additive efficacy model.")
+  }
+  history <- posterior$history_data
+  if (is.null(history) || nrow(history) == 0L) {
+    return(list(
+      history = history,
+      state_draws = matrix(0, nrow(posterior$regular_draws), 1L)
+    ))
+  }
+  alpha_draws <- as.numeric(posterior$alpha_draws)
+  if (length(alpha_draws) != nrow(posterior$regular_draws)) {
+    stop("Multicycle efficacy posterior alpha draws have an unexpected length.")
+  }
+  state_draws <- matrix(
+    0, nrow = nrow(posterior$regular_draws), ncol = nrow(history) + 1L
+  )
+  for (row in seq_len(nrow(history))) {
+    state_draws[, row + 1L] <-
+      posterior$regular_draws[, history$dose[row]] +
+      alpha_draws * state_draws[, history$previous_state_index[row]]
+  }
+  list(history = history, state_draws = state_draws)
 }
 
 ## Dose-specific IPDE efficacy gate using pi*_E,d2 - pi_E,d1 > delta.
@@ -466,7 +651,8 @@ aide_phase12_dose_specific_efficacy_recycle_gate <- function(admin,
                                                                  "shared_carryover",
                                                                  "dose_specific_carryover",
                                                                  "previous_dose_additive",
-                                                                 "dose_specific_previous_dose_additive"
+                                                                 "dose_specific_previous_dose_additive",
+                                                                 "multicycle_additive"
                                                                ),
                                                                efficacy_additive_alpha_prior = c(1, 9),
                                                                efficacy_model_file = NULL,
@@ -476,6 +662,7 @@ aide_phase12_dose_specific_efficacy_recycle_gate <- function(admin,
                                                               efficacy_n_iter = 4000L,
                                                               efficacy_thin = 2L,
                                                                cache = NULL,
+                                                               patient_id = NULL,
                                                                delta = 0.20) {
   efficacy_model <- match.arg(efficacy_model)
   posterior <- aide_phase12_efficacy_posterior(
@@ -493,7 +680,28 @@ aide_phase12_dose_specific_efficacy_recycle_gate <- function(admin,
     thin = efficacy_thin,
     cache = cache
   )
-  if (aide_phase12_is_additive_efficacy_model(efficacy_model)) {
+  if (identical(efficacy_model, "multicycle_additive")) {
+    if (length(patient_id) != 1L || is.na(patient_id)) {
+      stop("patient_id is required for multicycle_additive next-cycle predictions.")
+    }
+    state <- aide_phase12_multicycle_posterior_states(posterior)
+    history_rows <- which(state$history$patient_id == as.integer(patient_id))
+    if (length(history_rows) == 0L) {
+      stop("patient_id has no administration history in the multicycle posterior.")
+    }
+    current_row <- tail(history_rows, 1L)
+    if (state$history$dose[current_row] != as.integer(current_dose)) {
+      stop("current_dose does not match the patient's most recent administration.")
+    }
+    alpha_draws <- as.numeric(posterior$alpha_draws)
+    theta_ipde_next_draws <- pmin(
+      1,
+      posterior$regular_draws[, as.integer(next_dose)] +
+        alpha_draws * state$state_draws[, current_row + 1L]
+    )
+    theta_ipde_next <- mean(theta_ipde_next_draws)
+    r_next <- mean(alpha_draws)
+  } else if (aide_phase12_is_additive_efficacy_model(efficacy_model)) {
     alpha_draws <- if (is.matrix(posterior$alpha_draws)) {
       posterior$alpha_draws[, as.integer(next_dose)]
     } else {
@@ -574,7 +782,8 @@ aide_phase12_efficacy_summary <- function(admin,
                                              "shared_carryover",
                                              "dose_specific_carryover",
                                              "previous_dose_additive",
-                                             "dose_specific_previous_dose_additive"
+                                             "dose_specific_previous_dose_additive",
+                                             "multicycle_additive"
                                            ),
                                            efficacy_additive_alpha_prior = c(1, 9),
                                            efficacy_model_file = NULL,
@@ -673,7 +882,8 @@ aide_phase12_utility <- function(admin,
                                     "shared_carryover",
                                     "dose_specific_carryover",
                                     "previous_dose_additive",
-                                    "dose_specific_previous_dose_additive"
+                                    "dose_specific_previous_dose_additive",
+                                    "multicycle_additive"
                                   ),
                                   efficacy_additive_alpha_prior = c(1, 9),
                                   efficacy_model_file = NULL,
@@ -854,7 +1064,7 @@ simulate_AIDE_phase_I_II <- function(
     ## CRM settings, used only when model = "CRM".
     crm_r_model = c(
       "fixed", "random", "level", "alpha_crm", "cumu_crm", "ipcrm",
-      "previous_dose", "previous_dose_additive"
+      "previous_dose", "previous_dose_additive", "multicycle_additive"
     ),
     crm_skeleton = NULL,
     crm_alpha_sd = 2,
@@ -880,7 +1090,8 @@ simulate_AIDE_phase_I_II <- function(
     efficacy_carryover_prior = c(1, 9),
     efficacy_model = c(
       "shared_carryover", "dose_specific_carryover",
-      "previous_dose_additive", "dose_specific_previous_dose_additive"
+      "previous_dose_additive", "dose_specific_previous_dose_additive",
+      "multicycle_additive"
     ),
     efficacy_additive_alpha_prior = c(1, 9),
     efficacy_model_file = NULL,
@@ -934,7 +1145,7 @@ simulate_AIDE_phase_I_II <- function(
       carryover_model,
       c(
         "discount_shared", "discount_dose_specific",
-        "additive_shared", "additive_dose_specific"
+        "additive_shared", "additive_dose_specific", "multicycle_additive"
       )
     )
     carryover_settings <- aide_phase12_carryover_model_map(carryover_model)
@@ -943,6 +1154,11 @@ simulate_AIDE_phase_I_II <- function(
   }
   crm_r_model <- crm_normalize_r_model(match.arg(crm_r_model))
   efficacy_model <- match.arg(efficacy_model)
+  multicycle_toxicity_active <- model == "CRM" &&
+    identical(crm_r_model, "multicycle_additive")
+  multicycle_efficacy_active <- aide_phase12_is_multicycle_efficacy_model(
+    efficacy_model
+  )
   if (is.null(mtd_method)) mtd_method <- decision_method
   mtd_method <- match.arg(mtd_method, c("boin", "approx1", "approx2"))
 
@@ -1017,6 +1233,8 @@ simulate_AIDE_phase_I_II <- function(
     eff = integer(0),
     true_toxicity_probability = numeric(0),
     true_efficacy_probability = numeric(0),
+    true_toxicity_state = numeric(0),
+    true_efficacy_state = numeric(0),
     ncycle = integer(0),
     cohort = integer(0),
     stage = character(0),
@@ -1115,7 +1333,8 @@ simulate_AIDE_phase_I_II <- function(
       utility_scores = utility_scores
     )
   }
-  efficacy_recycle_gate_current <- function(current_dose, next_dose) {
+  efficacy_recycle_gate_current <- function(current_dose, next_dose,
+                                             patient_id = NULL) {
     aide_phase12_dose_specific_efficacy_recycle_gate(
       admin = admin,
       current_dose = current_dose,
@@ -1132,6 +1351,7 @@ simulate_AIDE_phase_I_II <- function(
       efficacy_n_iter = efficacy_n_iter,
       efficacy_thin = efficacy_thin,
       cache = efficacy_posterior_cache,
+      patient_id = patient_id,
       delta = ipde_efficacy_delta
     )
   }
@@ -1207,6 +1427,16 @@ simulate_AIDE_phase_I_II <- function(
     if (nrow(admin) == 0L) return(admin)
     z <- admin[order(admin$id, admin$t_eval, admin$row_id), , drop = FALSE]
     z[!duplicated(z$id, fromLast = TRUE), , drop = FALSE]
+  }
+
+  ## The arbitrary-cycle CRM reconstructs state from the complete
+  ## administration history; legacy CRM models retain their original view.
+  toxicity_model_data <- function() {
+    if (multicycle_toxicity_active) {
+      admin
+    } else {
+      admin[, c("id", "dose", "y", "type"), drop = FALSE]
+    }
   }
 
   cache_toxicity_recycle_fit <- function(model_fit) {
@@ -1318,21 +1548,31 @@ simulate_AIDE_phase_I_II <- function(
     }
     efficacy_gate_by_current_dose <- list()
     if (efficacy_rule_applied) {
-      efficacy_gate_by_current_dose <- lapply(
-        unique(as.integer(state$dose)),
-        function(current_dose_for_patient) {
-          efficacy_recycle_gate_current(current_dose_for_patient, next_dose)
-        }
-      )
-      names(efficacy_gate_by_current_dose) <- as.character(unique(as.integer(state$dose)))
-    }
-    efficacy_allowed <- if (efficacy_rule_applied) {
-      vapply(
-        as.character(as.integer(state$dose)),
-        function(current_dose_for_patient) {
-          efficacy_gate_by_current_dose[[current_dose_for_patient]]$allowed
-        },
-        logical(1)
+      if (multicycle_efficacy_active) {
+        efficacy_gate_for_patient <- lapply(seq_len(nrow(state)), function(i) {
+          efficacy_recycle_gate_current(
+            current_dose = state$dose[i], next_dose = next_dose,
+            patient_id = state$id[i]
+          )
+        })
+      } else {
+        efficacy_gate_by_current_dose <- lapply(
+          unique(as.integer(state$dose)),
+          function(current_dose_for_patient) {
+            efficacy_recycle_gate_current(current_dose_for_patient, next_dose)
+          }
+        )
+        names(efficacy_gate_by_current_dose) <-
+          as.character(unique(as.integer(state$dose)))
+        efficacy_gate_for_patient <- lapply(
+          as.character(as.integer(state$dose)),
+          function(current_dose_for_patient) {
+            efficacy_gate_by_current_dose[[current_dose_for_patient]]
+          }
+        )
+      }
+      efficacy_allowed <- vapply(
+        efficacy_gate_for_patient, function(x) x$allowed, logical(1)
       )
     } else {
       rep(TRUE, nrow(state))
@@ -1358,12 +1598,8 @@ simulate_AIDE_phase_I_II <- function(
       rep(list(NULL), nrow(state))
     }
 
-    efficacy_gate_for_patient <- if (efficacy_rule_applied) {
-      lapply(as.character(as.integer(state$dose)), function(current_dose_for_patient) {
-        efficacy_gate_by_current_dose[[current_dose_for_patient]]
-      })
-    } else {
-      rep(list(NULL), nrow(state))
+    if (!efficacy_rule_applied) {
+      efficacy_gate_for_patient <- rep(list(NULL), nrow(state))
     }
     recycling_decision_log <<- rbind(
       recycling_decision_log,
@@ -1513,7 +1749,8 @@ simulate_AIDE_phase_I_II <- function(
     state <- latest_patient_state()
 
     append_row <- function(id, arrival, assigned_dose,
-                           toxicity_probability, efficacy_probability, cycle, type) {
+                           toxicity_probability, efficacy_probability,
+                           toxicity_state, efficacy_state, cycle, type) {
       tox <- draw_tite_endpoint(
         probability = toxicity_probability,
         start_time = start_time,
@@ -1543,6 +1780,8 @@ simulate_AIDE_phase_I_II <- function(
           eff = eff$outcome,
           true_toxicity_probability = as.numeric(toxicity_probability),
           true_efficacy_probability = as.numeric(efficacy_probability),
+          true_toxicity_state = as.numeric(toxicity_state),
+          true_efficacy_state = as.numeric(efficacy_state),
           ncycle = as.integer(cycle),
           cohort = cohort_id,
           stage = stage,
@@ -1553,12 +1792,21 @@ simulate_AIDE_phase_I_II <- function(
     }
 
     for (i in seq_along(new_ids)) {
+      assigned_dose <- dose[new_positions[i]]
+      tox_state <- aide_phase12_multicycle_next_state(
+        p_true[assigned_dose], toxicity_ipde_alpha, previous_state = 0
+      )
+      eff_state <- aide_phase12_multicycle_next_state(
+        e_true[assigned_dose], efficacy_ipde_alpha, previous_state = 0
+      )
       append_row(
         id = new_ids[i],
         arrival = new_arrivals[i],
-        assigned_dose = dose[new_positions[i]],
-        toxicity_probability = p_true[dose[new_positions[i]]],
-        efficacy_probability = e_true[dose[new_positions[i]]],
+        assigned_dose = assigned_dose,
+        toxicity_probability = tox_state$probability,
+        efficacy_probability = eff_state$probability,
+        toxicity_state = tox_state$state,
+        efficacy_state = eff_state$state,
         cycle = 1L,
         type = "new"
       )
@@ -1567,22 +1815,40 @@ simulate_AIDE_phase_I_II <- function(
       id <- ret_ids[i]
       assigned_dose <- dose[ret_positions[i]]
       last <- state[state$id == id, , drop = FALSE]
+      tox_state <- aide_phase12_multicycle_next_state(
+        p_true[assigned_dose], toxicity_ipde_alpha,
+        previous_state = last$true_toxicity_state
+      )
+      eff_state <- aide_phase12_multicycle_next_state(
+        e_true[assigned_dose], efficacy_ipde_alpha,
+        previous_state = last$true_efficacy_state
+      )
       append_row(
         id = id,
         arrival = last$t_arrival,
         assigned_dose = assigned_dose,
-        toxicity_probability = aide_phase12_ipde_toxicity_probability(
-          p_regular = p_true,
-          previous_dose = last$dose,
-          current_dose = assigned_dose,
-          alpha = toxicity_ipde_alpha
-        ),
-        efficacy_probability = aide_phase12_ipde_efficacy_probability(
-          e_regular = e_true,
-          previous_dose = last$dose,
-          current_dose = assigned_dose,
-          alpha = efficacy_ipde_alpha
-        ),
+        toxicity_probability = if (multicycle_toxicity_active) {
+          tox_state$probability
+        } else {
+          aide_phase12_ipde_toxicity_probability(
+            p_regular = p_true,
+            previous_dose = last$dose,
+            current_dose = assigned_dose,
+            alpha = toxicity_ipde_alpha
+          )
+        },
+        efficacy_probability = if (multicycle_efficacy_active) {
+          eff_state$probability
+        } else {
+          aide_phase12_ipde_efficacy_probability(
+            e_regular = e_true,
+            previous_dose = last$dose,
+            current_dose = assigned_dose,
+            alpha = efficacy_ipde_alpha
+          )
+        },
+        toxicity_state = tox_state$state,
+        efficacy_state = eff_state$state,
         cycle = last$ncycle + 1L,
         type = "retreat"
       )
@@ -1679,7 +1945,7 @@ simulate_AIDE_phase_I_II <- function(
     crm_move(
       current_dose = dose,
       ndose = ndose,
-      dat = admin[, c("id", "dose", "y", "type"), drop = FALSE],
+      dat = toxicity_model_data(),
       target = target,
       cutoff = cutoff,
       skeleton = crm_skeleton,
@@ -1732,7 +1998,7 @@ simulate_AIDE_phase_I_II <- function(
     }
     select.mtd.crm(
       target = target,
-      dat = admin[, c("id", "dose", "y", "type"), drop = FALSE],
+      dat = toxicity_model_data(),
       ndose = ndose,
       skeleton = crm_skeleton,
       cutoff.eli = cutoff,
@@ -1783,7 +2049,7 @@ simulate_AIDE_phase_I_II <- function(
     }
     select.mtd.crm(
       target = target,
-      dat = admin[, c("id", "dose", "y", "type"), drop = FALSE],
+      dat = toxicity_model_data(),
       ndose = ndose,
       skeleton = crm_skeleton,
       cutoff.eli = cutoff,
@@ -2256,6 +2522,8 @@ simulate_AIDE_phase_I_II <- function(
         "discount_shared"
       } else if (crm_r_model == "previous_dose") {
         "additive_shared"
+      } else if (crm_r_model == "multicycle_additive") {
+        "multicycle_additive"
       } else {
         NA_character_
       },
