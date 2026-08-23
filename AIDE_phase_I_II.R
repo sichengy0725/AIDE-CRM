@@ -2390,8 +2390,7 @@ simulate_AIDE_phase_I_II <- function(
       }
       if (sum(admin$stage == "stage1") >= N_s1 &&
           isTRUE(tox_move_out$action == "stay") &&
-          tox_move_out$next_dose == current_dose &&
-          allocated_dose == current_dose) {
+          tox_move_out$next_dose == current_dose) {
         stage1_transition_dose <- as.integer(current_dose)
         break
       }
