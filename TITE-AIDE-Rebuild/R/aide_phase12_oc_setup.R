@@ -35,9 +35,7 @@ aide_tite_oc_settings <- function() list(
   futility_cutoff = .85,
   min_eff_n_for_futility = 3L,
   apply_individual_toxicity_risk = TRUE,
-  toxicity_ipde_overdose_cutoff = .95,
-  apply_individual_efficacy_benefit = FALSE,
-  efficacy_ipde_min_increment = 0
+  toxicity_ipde_overdose_cutoff = .95
 )
 
 aide_tite_read_truth <- function(file, scenario_ids) {
@@ -58,11 +56,14 @@ aide_tite_setting_grid <- function(settings) {
 }
 
 aide_tite_tag <- function(task) {
-  # Individual-risk details are included only when their corresponding rule is
-  # active.  n_eval is intentionally omitted to keep directory names short.
+  # The multicycle individual-toxicity cutoff is included only when active.
+  # n_eval is intentionally omitted to keep directory names short.
   individual_risk <- paste0(
-    if (isTRUE(task$apply_individual_toxicity_risk)) paste0("-itcut", aide_tite_fmt(task$toxicity_ipde_overdose_cutoff)) else "",
-    if (isTRUE(task$apply_individual_efficacy_benefit)) paste0("-iemin", aide_tite_fmt(task$efficacy_ipde_min_increment)) else ""
+    if (isTRUE(task$apply_individual_toxicity_risk)) {
+      paste0("-itcut", aide_tite_fmt(task$toxicity_ipde_overdose_cutoff))
+    } else {
+      ""
+    }
   )
   paste0(
     "P12TITE-a", if (task$allocation == "two_stage") "2s" else "1s",
@@ -98,8 +99,7 @@ aide_tite_make_tasks <- function(settings, truth, job_i, ntrial, root) {
       min_eff_n_for_futility = settings$min_eff_n_for_futility,
       apply_individual_toxicity_risk = settings$apply_individual_toxicity_risk,
       toxicity_ipde_overdose_cutoff = settings$toxicity_ipde_overdose_cutoff,
-      apply_individual_efficacy_benefit = settings$apply_individual_efficacy_benefit,
-      efficacy_ipde_min_increment = settings$efficacy_ipde_min_increment, root = root))
+      root = root))
   }
   tasks
 }
@@ -114,8 +114,6 @@ aide_tite_task_config <- function(task) aide_phase12_config(
     carryover_prior = c(task$carry_a, task$carry_b), threshold = task$efficacy_threshold,
     futility_cutoff = task$futility_cutoff, min_eff_n_for_futility = task$min_eff_n_for_futility),
   recycle = list(priority = "new_first", apply_individual_toxicity_risk = task$apply_individual_toxicity_risk,
-    toxicity_ipde_overdose_cutoff = task$toxicity_ipde_overdose_cutoff,
-    apply_individual_efficacy_benefit = task$apply_individual_efficacy_benefit,
-    efficacy_ipde_min_increment = task$efficacy_ipde_min_increment),
+    toxicity_ipde_overdose_cutoff = task$toxicity_ipde_overdose_cutoff),
   utility = list(type = task$utility_type, lambda_T = task$lambda_T, scores = task$utility_scores)
 )

@@ -79,7 +79,7 @@ aide_fit_toxicity_integral <- function(interim, config, ndose) {
     p_ipde_mean = colSums(ipde * posterior_r),
     prob_overtox_by_dose = prob_overtox,
     prob_ipde_overtox_by_dose = prob_ipde_overtox,
-    eliminated = prob_overtox > tx$cutoff,
+    eliminated = aide_toxicity_elimination(prob_overtox, tx$cutoff),
     skeleton = skeleton,
     posterior_carryover_mean = sum(r_grid * posterior_r)
   )

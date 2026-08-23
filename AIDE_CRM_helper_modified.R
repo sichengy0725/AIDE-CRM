@@ -326,15 +326,134 @@ crm_multicycle_previous_state_index <- function(dat) {
   as.integer(previous_state_index)
 }
 
-## The history rows are already ordered by patient and cycle.  Retain every
-## row for state construction, but identify one terminal likelihood row per
-## patient for the multicycle backend.
-crm_multicycle_latest_admin_index <- function(dat) {
-  if (is.null(dat) || nrow(dat) == 0L) return(integer(0))
-  if (!"id" %in% names(dat)) {
-    stop("dat must contain id to construct multicycle latest-administration indices.")
+## Construct the ordered administration history used to reconstruct the
+## arbitrary-cycle toxicity state from multicycle CRM posterior draws.
+crm_multicycle_history_data <- function(dat, ndose) {
+  history <- crm_prepare_dat(dat, ndose = ndose)
+  if (is.null(history) || nrow(history) == 0L) return(history)
+  history$previous_state_index <- crm_multicycle_previous_state_index(history)
+  history
+}
+
+## Reconstruct uncapped, patient-specific multicycle toxicity states for
+## every posterior draw. The probability is capped only after a state is used
+## for a particular administration or proposed next cycle.
+crm_multicycle_toxicity_posterior_states <- function(post, history) {
+  post <- as.matrix(post)
+  if (nrow(post) < 1L || !"alpha" %in% colnames(post)) {
+    stop("Multicycle CRM posterior samples must contain alpha and at least one draw.")
   }
-  as.integer(which(!duplicated(dat$id, fromLast = TRUE)))
+  p_columns <- grep("^p\\[[0-9]+\\]$", colnames(post), value = TRUE)
+  if (!length(p_columns)) {
+    stop("Multicycle CRM posterior samples must contain p[1], ..., p[J].")
+  }
+  dose_numbers <- as.integer(sub("^p\\[([0-9]+)\\]$", "\\1", p_columns))
+  p_columns <- p_columns[order(dose_numbers)]
+  p_draws <- post[, p_columns, drop = FALSE]
+  alpha_draws <- as.numeric(post[, "alpha"])
+  if (any(!is.finite(p_draws) | p_draws < 0 | p_draws > 1) ||
+      any(!is.finite(alpha_draws) | alpha_draws < 0)) {
+    stop("Multicycle CRM posterior samples contain invalid p or alpha draws.")
+  }
+  if (is.null(history) || nrow(history) == 0L) {
+    return(list(
+      history = history,
+      p_draws = p_draws,
+      alpha_draws = alpha_draws,
+      state_draws = matrix(0, nrow = nrow(p_draws), ncol = 1L)
+    ))
+  }
+  required <- c("id", "dose", "previous_state_index")
+  if (!all(required %in% names(history))) {
+    stop("Multicycle toxicity history must contain id, dose, and previous_state_index.")
+  }
+  if (any(is.na(history$id)) || any(is.na(history$dose)) ||
+      any(history$dose < 1L | history$dose > ncol(p_draws)) ||
+      any(is.na(history$previous_state_index)) ||
+      any(history$previous_state_index < 1L |
+          history$previous_state_index > nrow(history))) {
+    stop("Multicycle toxicity history contains invalid state references.")
+  }
+  state_draws <- matrix(0, nrow = nrow(p_draws), ncol = nrow(history) + 1L)
+  for (row in seq_len(nrow(history))) {
+    state_draws[, row + 1L] <-
+      p_draws[, as.integer(history$dose[row])] +
+      alpha_draws * state_draws[, as.integer(history$previous_state_index[row])]
+  }
+  list(
+    history = history,
+    p_draws = p_draws,
+    alpha_draws = alpha_draws,
+    state_draws = state_draws
+  )
+}
+
+## The individual recycled-patient toxicity gate is intentionally restricted
+## to the multicycle additive CRM.
+aide_phase12_multicycle_toxicity_gate_is_active <- function(model,
+                                                             crm_r_model,
+                                                             apply_ipde_toxicity_rule) {
+  identical(model, "CRM") &&
+    identical(crm_r_model, "multicycle_additive") &&
+    isTRUE(apply_ipde_toxicity_rule)
+}
+
+## Evaluate a proposed next administration using the candidate patient's full
+## uncapped posterior state, not only the immediately preceding dose.
+crm_multicycle_recycle_toxicity_gate <- function(fit,
+                                                  history,
+                                                  patient_id,
+                                                  next_dose,
+                                                  phi,
+                                                  cutoff) {
+  post <- if (is.matrix(fit)) {
+    fit
+  } else if (!is.null(fit$fit$post)) {
+    fit$fit$post
+  } else if (!is.null(fit$post)) {
+    fit$post
+  } else {
+    stop("The multicycle CRM fit does not contain posterior samples.")
+  }
+  if (length(patient_id) != 1L || is.na(patient_id)) {
+    stop("patient_id must identify one recycled patient.")
+  }
+  if (length(next_dose) != 1L || !is.finite(next_dose) ||
+      next_dose < 1L || next_dose != as.integer(next_dose)) {
+    stop("next_dose must be a positive integer.")
+  }
+  if (length(phi) != 1L || !is.finite(phi) || phi <= 0 || phi >= 1) {
+    stop("phi must be a scalar in (0, 1).")
+  }
+  if (length(cutoff) != 1L || !is.finite(cutoff) || cutoff <= 0 || cutoff >= 1) {
+    stop("cutoff must be a scalar in (0, 1).")
+  }
+  state <- crm_multicycle_toxicity_posterior_states(post, history)
+  if (next_dose > ncol(state$p_draws)) {
+    stop("next_dose is outside the fitted multicycle CRM dose range.")
+  }
+  patient_rows <- which(state$history$id == patient_id)
+  if (!length(patient_rows)) {
+    stop("patient_id is absent from the multicycle toxicity history.")
+  }
+  current_row <- tail(patient_rows, 1L)
+  q_next_draws <- pmin(
+    1,
+    state$p_draws[, as.integer(next_dose)] +
+      state$alpha_draws * state$state_draws[, current_row + 1L]
+  )
+  probability_over_phi <- mean(q_next_draws > phi)
+  list(
+    allowed = probability_over_phi < cutoff,
+    probability_over_phi = probability_over_phi,
+    theta_posterior_mean = mean(q_next_draws),
+    patient_id = as.integer(patient_id),
+    current_dose = as.integer(state$history$dose[current_row]),
+    next_dose = as.integer(next_dose),
+    phi = as.numeric(phi),
+    cutoff = as.numeric(cutoff),
+    q_next_draws = q_next_draws
+  )
 }
 
 crm_make_result <- function(p_hat,
@@ -596,20 +715,12 @@ crm_fit_discount <- function(dat,
   } else {
     NULL
   }
-  latest_admin_index_vec <- if (r_model == "multicycle_additive") {
-    crm_multicycle_latest_admin_index(dat2)
-  } else {
-    NULL
-  }
-  
   jags_data <- if (r_model == "multicycle_additive") {
     list(
-      N_admin = length(y_vec),
-      N_patient = length(latest_admin_index_vec),
-      y_patient = y_vec[latest_admin_index_vec],
+      N = length(y_vec),
+      y = y_vec,
       dose = dose_vec,
       previous_state_index = previous_state_index_vec,
-      latest_admin_index = latest_admin_index_vec,
       J = ndose,
       q = as.numeric(skeleton)
     )
@@ -740,16 +851,9 @@ crm_fit_discount <- function(dat,
       earlystop = stop_flag,
       eliminated = if (stop_flag == 1L) rep(1L, ndose) else rep(0L, ndose),
       model_file = model_file,
-      n_eff = if (r_model == "multicycle_additive") {
-        sum(w_vec[latest_admin_index_vec])
-      } else {
-        sum(w_vec)
-      },
+      n_eff = sum(w_vec),
        previous_dose = previous_dose_vec,
        previous_state_index = previous_state_index_vec,
-       latest_admin_index = latest_admin_index_vec,
-       n_admin = if (r_model == "multicycle_additive") length(y_vec) else NA_integer_,
-       n_patient = if (r_model == "multicycle_additive") length(latest_admin_index_vec) else NA_integer_,
        carryover_alpha_hat = if (r_model %in% c("previous_dose", "multicycle_additive")) r_hat else NA_real_
     )
   )

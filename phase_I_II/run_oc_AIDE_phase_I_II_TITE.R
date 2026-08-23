@@ -153,8 +153,6 @@ futility_cutoff <- .85
 min_eff_n_for_futility <- 0L
 apply_ipde_toxicity_rule <- TRUE
 ipde_toxicity_cutoff <- .95
-apply_ipde_efficacy_rule <- FALSE
-ipde_efficacy_delta <- .05
 
 ## ============================================================
 ## Command-line arguments
@@ -232,9 +230,7 @@ for (setting_row in seq_len(nrow(setting_grid))) {
       efficacy_threshold = efficacy_threshold, futility_cutoff = futility_cutoff,
       min_eff_n_for_futility = min_eff_n_for_futility,
       apply_ipde_toxicity_rule = apply_ipde_toxicity_rule,
-      ipde_toxicity_cutoff = ipde_toxicity_cutoff,
-      apply_ipde_efficacy_rule = apply_ipde_efficacy_rule,
-      ipde_efficacy_delta = ipde_efficacy_delta
+      ipde_toxicity_cutoff = ipde_toxicity_cutoff
     )
     tasks[[task_id]]$true_obd <- calculate_true_obd(
       p_true, e_true, tasks[[task_id]]$true_mtd,
@@ -273,9 +269,7 @@ run_one_phase12_tite_task <- function(task) {
     toxicity_ipde_alpha = task$toxicity_ipde_alpha,
     efficacy_ipde_alpha = task$efficacy_ipde_alpha,
     apply_ipde_toxicity_rule = task$apply_ipde_toxicity_rule,
-    ipde_toxicity_cutoff = task$ipde_toxicity_cutoff,
-    apply_ipde_efficacy_rule = task$apply_ipde_efficacy_rule,
-    ipde_efficacy_delta = task$ipde_efficacy_delta
+    ipde_toxicity_cutoff = task$ipde_toxicity_cutoff
   )
   result$task <- task
   result$truth <- list(p_true = task$p_true, e_true = task$e_true,

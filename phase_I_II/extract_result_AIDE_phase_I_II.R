@@ -108,7 +108,7 @@ efficacy_threshold <- 0.20
 futility_cutoff <- 0.85
 min_eff_n_for_futility <- 0L
 apply_ipde_toxicity_rule <- TRUE
-apply_ipde_efficacy_rule <- FALSE
+ipde_toxicity_cutoff <- 0.95
 
 if (!dir.exists(results_root)) stop("Results directory does not exist: ", results_root)
 dir.create(out_dir, recursive = TRUE, showWarnings = FALSE)
@@ -234,7 +234,7 @@ make_phase12_config_tag <- function(task) {
     "-ta", fmt_short(task$toxicity_ipde_alpha),
     "-ea", fmt_short(task$efficacy_ipde_alpha),
     "-tg", as.integer(isTRUE(apply_ipde_toxicity_rule)),
-    "-eg", as.integer(isTRUE(apply_ipde_efficacy_rule))
+    "-tc", fmt_short(ipde_toxicity_cutoff)
   )
 }
 
@@ -450,10 +450,9 @@ make_metadata <- function(result, task_id) {
     Efficacy_Threshold = as.numeric(efficacy_threshold),
     Futility_Cutoff = as.numeric(futility_cutoff),
     Min_Eff_N_for_Futility = as.integer(min_eff_n_for_futility),
-    Recycle_Toxicity_Rule =
+    Multicycle_Toxicity_Rule =
       as.integer(isTRUE(apply_ipde_toxicity_rule)),
-    Recycle_Efficacy_Rule =
-      as.integer(isTRUE(apply_ipde_efficacy_rule)),
+    Multicycle_Toxicity_Cutoff = as.numeric(ipde_toxicity_cutoff),
     
     stringsAsFactors = FALSE
   )

@@ -82,40 +82,25 @@ aide_retreat_individual_risk_screen <- function(state, queue_index, config,
   risk <- state$cohort$risk_context
   eligible <- candidate_doses
   source_admin_id <- state$queue$source_admin_id[queue_index]
-  source_row <- state$admin[match(source_admin_id, state$admin$admin_id), , drop = FALSE]
-  if (isTRUE(config$recycle$apply_individual_toxicity_risk)) {
-    prob <- if (identical(config$toxicity$model, "multicycle_additive")) {
-      vapply(eligible, function(dose) {
-        mean(aide_multicycle_next_probability_draws(
-          risk$toxicity_fit, source_admin_id, dose
-        ) > config$toxicity$target)
-      }, numeric(1))
-    } else {
-      risk$prob_toxicity_ipde_overdose[eligible]
-    }
-    eligible <- eligible[is.finite(prob) & prob <= config$recycle$toxicity_ipde_overdose_cutoff]
+  ## Match the non-TITE recycling rule: an individual toxicity gate is used
+  ## only by the multicycle additive CRM, and is based on the source
+  ## patient's full posterior administration history.
+  if (isTRUE(config$recycle$apply_individual_toxicity_risk) &&
+      identical(config$toxicity$model, "multicycle_additive")) {
+    prob <- vapply(eligible, function(dose) {
+      mean(aide_multicycle_next_probability_draws(
+        risk$toxicity_fit, source_admin_id, dose
+      ) > config$toxicity$target)
+    }, numeric(1))
+    eligible <- eligible[is.finite(prob) &
+      prob < config$recycle$toxicity_ipde_overdose_cutoff]
     if (!length(eligible)) {
       return(list(allowed = FALSE, reason = "blocked_individual_toxicity_risk",
                   eligible_doses = integer(0), toxicity_overdose_probability = prob))
     }
   }
-  if (isTRUE(config$recycle$apply_individual_efficacy_benefit)) {
-    benefit <- if (identical(config$efficacy$model, "multicycle_additive")) {
-      current_dose <- as.integer(source_row$dose)
-      vapply(eligible, function(dose) {
-        mean(aide_multicycle_next_probability_draws(
-          risk$efficacy_fit, source_admin_id, dose
-        ) - risk$efficacy_fit$regular_draws[, current_dose])
-      }, numeric(1))
-    } else {
-      risk$p_efficacy_ipde[eligible] - risk$p_efficacy[eligible]
-    }
-    eligible <- eligible[is.finite(benefit) & benefit > config$recycle$efficacy_ipde_min_increment]
-    if (!length(eligible)) {
-      return(list(allowed = FALSE, reason = "blocked_individual_efficacy_benefit",
-                  eligible_doses = integer(0), efficacy_increment = benefit))
-    }
-  }
+  ## There is no individual efficacy-benefit recycle screen. Efficacy
+  ## eligibility remains governed by completed nonresponse and dose futility.
   list(allowed = TRUE, reason = "eligible", eligible_doses = eligible)
 }
 

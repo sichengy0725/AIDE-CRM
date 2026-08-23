@@ -156,12 +156,10 @@ make_phase12_config_tag <- function(task) {
     "-c", fmt_short(task$C),
     "-cyc", fmt_short(task$cycle_max),
     "-rate", fmt_short(task$arrival_rate),
-    "-ip", task$ipde_design,
-    "-fx", as.integer(isTRUE(task$flexible_ipde)),
     "-ta", fmt_short(task$toxicity_ipde_alpha),
     "-ea", fmt_short(task$efficacy_ipde_alpha),
-    "-tg", as.integer(isTRUE(task$apply_random_crm_recycle_toxicity_rule)),
-    "-eg", as.integer(isTRUE(task$apply_random_crm_recycle_efficacy_rule))
+    "-tg", as.integer(isTRUE(task$apply_ipde_toxicity_rule)),
+    "-tc", fmt_short(task$ipde_toxicity_cutoff)
   )
 }
 
@@ -305,14 +303,6 @@ utility_grid <- rbind(
   data.frame(utility_type = 3L, lambda_T = 1, stringsAsFactors = FALSE)
 )
 arrival_grid <- data.frame(arrival_rate = 1 / 56, stringsAsFactors = FALSE)
-ipde_grid <- data.frame(
-  ## ipde_design = 1 with flexible_ipde = TRUE permits recycling from every
-  ## prior dose to every eligible destination: upward, downward, skipped, or
-  ## the same current dose.
-  ipde_design = 1L,
-  flexible_ipde = TRUE,
-  stringsAsFactors = FALSE
-)
 alpha_grid <- data.frame(
   toxicity_ipde_alpha = c(0, 0.3, 0.6, 0.9),
   efficacy_ipde_alpha = c(0, 0.3, 0.6, 0.9),
@@ -329,8 +319,8 @@ crm_alpha_sd <- sqrt(2)
 efficacy_threshold <- 0.20
 futility_cutoff <- 0.95
 min_eff_n_for_futility <- 0L
-apply_random_crm_recycle_toxicity_rule <- FALSE
-apply_random_crm_recycle_efficacy_rule <- FALSE
+apply_ipde_toxicity_rule <- TRUE
+ipde_toxicity_cutoff <- 0.95
 
 ## ============================================================
 ## Command-line arguments, matching run_oc_AIDE.R
@@ -376,7 +366,6 @@ setting_grid <- Reduce(
     enrollment_schemes,
     utility_grid,
     arrival_grid,
-    ipde_grid,
     alpha_grid
   )
 )
@@ -464,16 +453,14 @@ run_one_phase12_task <- function(task) {
       arrival_rate = task$arrival_rate,
       T_assess = task$T_assess,
 
-      ipde_design = task$ipde_design,
-      flexible_ipde = task$flexible_ipde,
       toxicity_ipde_alpha = task$toxicity_ipde_alpha,
       efficacy_ipde_alpha = task$efficacy_ipde_alpha,
 
       efficacy_threshold = task$efficacy_threshold,
       futility_cutoff = task$futility_cutoff,
       min_eff_n_for_futility = task$min_eff_n_for_futility,
-      apply_random_crm_recycle_toxicity_rule = task$apply_random_crm_recycle_toxicity_rule,
-      apply_random_crm_recycle_efficacy_rule = task$apply_random_crm_recycle_efficacy_rule
+      apply_ipde_toxicity_rule = task$apply_ipde_toxicity_rule,
+      ipde_toxicity_cutoff = task$ipde_toxicity_cutoff
   )
 
   result$task <- task
@@ -497,9 +484,9 @@ run_one_phase12_task <- function(task) {
     m_U = task$m_U,
     cycle_max = task$cycle_max,
     T_assess = task$T_assess,
-    optional_random_crm_ipde_gates = list(
-      toxicity = task$apply_random_crm_recycle_toxicity_rule,
-      efficacy = task$apply_random_crm_recycle_efficacy_rule
+    multicycle_ipde_toxicity_gate = list(
+      enabled = task$apply_ipde_toxicity_rule,
+      cutoff = task$ipde_toxicity_cutoff
     ),
     job_i = task$job_i,
     block_id = task$block_id,
@@ -583,8 +570,6 @@ for (setting_row in seq_len(nrow(setting_grid))) {
       lambda_T = lambda_T,
       enrollment_scheme = as.character(setting$enrollment_scheme),
       arrival_rate = as.numeric(setting$arrival_rate),
-      ipde_design = as.integer(setting$ipde_design),
-      flexible_ipde = as.logical(setting$flexible_ipde),
       toxicity_ipde_alpha = as.numeric(setting$toxicity_ipde_alpha),
       efficacy_ipde_alpha = as.numeric(setting$efficacy_ipde_alpha),
 
@@ -598,8 +583,8 @@ for (setting_row in seq_len(nrow(setting_grid))) {
       efficacy_threshold = efficacy_threshold,
       futility_cutoff = futility_cutoff,
       min_eff_n_for_futility = min_eff_n_for_futility,
-      apply_random_crm_recycle_toxicity_rule = apply_random_crm_recycle_toxicity_rule,
-      apply_random_crm_recycle_efficacy_rule = apply_random_crm_recycle_efficacy_rule
+      apply_ipde_toxicity_rule = apply_ipde_toxicity_rule,
+      ipde_toxicity_cutoff = ipde_toxicity_cutoff
     )
     task_id <- task_id + 1L
   }

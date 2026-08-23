@@ -104,13 +104,6 @@ utility_grid <- rbind(
   data.frame(utility_type = 3L, lambda_T = 1, stringsAsFactors = FALSE)
 )
 arrival_grid <- data.frame(arrival_rate = 1 / 56, stringsAsFactors = FALSE)
-ipde_grid <- data.frame(
-  ## Must match the runner: all-level IPDE recycling, including skipped and
-  ## same-dose recycling, is selected by ipde_design = 1 and flexible_ipde.
-  ipde_design = 1L,
-  flexible_ipde = TRUE,
-  stringsAsFactors = FALSE
-)
 alpha_grid <- data.frame(
   toxicity_ipde_alpha = c(0, 0.3, 0.6, 0.9),
   efficacy_ipde_alpha = c(0, 0.3, 0.6, 0.9),
@@ -129,8 +122,8 @@ crm_alpha_sd <- sqrt(2)
 efficacy_threshold <- 0.20
 futility_cutoff <- 0.95
 min_eff_n_for_futility <- 0L
-apply_random_crm_recycle_toxicity_rule <- FALSE
-apply_random_crm_recycle_efficacy_rule <- FALSE
+apply_ipde_toxicity_rule <- TRUE
+ipde_toxicity_cutoff <- 0.95
 
 if (!dir.exists(results_root)) stop("Results directory does not exist: ", results_root)
 dir.create(out_dir, recursive = TRUE, showWarnings = FALSE)
@@ -187,7 +180,6 @@ setting_grid <- Reduce(
     enrollment_schemes,
     utility_grid,
     arrival_grid,
-    ipde_grid,
     alpha_grid
   )
 )
@@ -254,12 +246,10 @@ make_phase12_config_tag <- function(task) {
     "-c", fmt_short(cohort_size),
     "-cyc", fmt_short(cycle_max),
     "-rate", fmt_short(task$arrival_rate),
-    "-ip", task$ipde_design,
-    "-fx", as.integer(isTRUE(task$flexible_ipde)),
     "-ta", fmt_short(task$toxicity_ipde_alpha),
     "-ea", fmt_short(task$efficacy_ipde_alpha),
-    "-tg", as.integer(isTRUE(apply_random_crm_recycle_toxicity_rule)),
-    "-eg", as.integer(isTRUE(apply_random_crm_recycle_efficacy_rule))
+    "-tg", as.integer(isTRUE(apply_ipde_toxicity_rule)),
+    "-tc", fmt_short(ipde_toxicity_cutoff)
   )
 }
 
@@ -469,8 +459,6 @@ make_metadata <- function(result, task_id) {
     Arrival_Rate = as.numeric(task_value(task, "arrival_rate")),
     T_assess = as.numeric(task_value(runner, "T_assess", 28)),
     Cycle_Max = as.integer(task_value(runner, "cycle_max", 1L)),
-    IPDE_Design = as.integer(task_value(task, "ipde_design")),
-    Flexible_IPDE = as.integer(isTRUE(task_value(task, "flexible_ipde", FALSE))),
     Toxicity_IPDE_Alpha = as.numeric(task_value(task, "toxicity_ipde_alpha")),
     Efficacy_IPDE_Alpha = as.numeric(task_value(task, "efficacy_ipde_alpha")),
     stringsAsFactors = FALSE
@@ -658,8 +646,6 @@ for (task_row in seq_len(nrow(expected_tasks))) {
   cat("Lambda T:", task$lambda_T, "\n")
   cat("Enrollment scheme:", task$enrollment_scheme, "\n")
   cat("Arrival rate:", task$arrival_rate, "\n")
-  cat("IPDE design:", task$ipde_design, "\n")
-  cat("Flexible IPDE:", task$flexible_ipde, "\n")
   cat("Folder:", folderpath, "\n")
   cat("Result file (raw preferred):", example_file, "\n")
   cat("Found", length(files.use), "files; missing", length(missing.jobs), "jobs.\n")

@@ -12,15 +12,12 @@ model {
     p_regular[j] <- g_regular_1[j] / (g_regular_1[j] + g_regular_2[j])
   }
 
-  # Earlier cycles construct state only; they have no separate likelihood.
+  # Every administration contributes to the uncapped state recursion and
+  # receives its own likelihood contribution.
   state_eff[1] <- 0
-  for (r in 1:N_admin) {
+  for (r in 1:N) {
     state_eff[r + 1] <- p_regular[dose[r]] + alpha * state_eff[previous_state_index[r]]
     theta_eff_admin[r] <- min(1, state_eff[r + 1])
-  }
-
-  for (i in 1:N_patient) {
-    theta_eff_patient[i] <- theta_eff_admin[latest_admin_index[i]]
-    eff_patient[i] ~ dbern(theta_eff_patient[i])
+    eff[r] ~ dbern(theta_eff_admin[r])
   }
 }

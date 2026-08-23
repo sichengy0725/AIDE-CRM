@@ -32,10 +32,9 @@ stopifnot(gate$blocked, gate$retreat_opportunity_retained,
 stopifnot(aide_apply_escalation_gate(state, list(action = "stay"), cfg, "new")$blocked)
 stopifnot(aide_apply_escalation_gate(state, list(action = "de_escalate"), cfg, "new")$blocked)
 
-# Optional individual-risk recycle screens use the open cohort's frozen dose.
+# Non-multicycle TITE models have no individual toxicity recycle screen.
 risk_cfg <- aide_phase12_config(recycle = list(
-  apply_individual_toxicity_risk = TRUE, toxicity_ipde_overdose_cutoff = .90,
-  apply_individual_efficacy_benefit = TRUE, efficacy_ipde_min_increment = .05
+  apply_individual_toxicity_risk = TRUE, toxicity_ipde_overdose_cutoff = .90
 ))
 risk_state <- aide_phase12_initialize_state(risk_cfg, sce, seed = 3L)
 risk_state$cohort$next_dose <- 1L
@@ -44,11 +43,6 @@ risk_state$cohort$risk_context <- list(
   p_efficacy = c(.20, .30, .40), p_efficacy_ipde = c(.22, .32, .50)
 )
 screen <- aide_retreat_individual_risk_screen(risk_state, 1L, risk_cfg)
-stopifnot(!screen$allowed, screen$reason == "blocked_individual_toxicity_risk")
-risk_state$cohort$risk_context$prob_toxicity_ipde_overdose[1L] <- .10
-screen <- aide_retreat_individual_risk_screen(risk_state, 1L, risk_cfg)
-stopifnot(!screen$allowed, screen$reason == "blocked_individual_efficacy_benefit")
-risk_state$cohort$risk_context$p_efficacy_ipde[1L] <- .30
-stopifnot(aide_retreat_individual_risk_screen(risk_state, 1L, risk_cfg)$allowed)
+stopifnot(screen$allowed, screen$reason == "eligible")
 
 message("event-engine tests passed")

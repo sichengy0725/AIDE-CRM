@@ -38,7 +38,6 @@ fit <- simulate_AIDE_phase_I_II_TITE(
   futility_cutoff = .85,
   min_eff_n_for_futility = 3L,
   apply_ipde_toxicity_rule = TRUE,
-  apply_ipde_efficacy_rule = FALSE,
   seed = 113L
 )
 

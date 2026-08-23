@@ -37,6 +37,55 @@ one_stage_config <- aide_phase12_config(
 )
 fits <- make_fits(c(.1, .2, .3, .35, .5), c(.2, .4, .9, .8, .1))
 
+## Toxicity never removes doses one by one. Only an excessive posterior risk
+## at dose 1 marks toxicity elimination and triggers trial termination.
+stopifnot(identical(
+  aide_toxicity_elimination(c(.20, .99, .98, .97, .96), cutoff = .95),
+  rep(FALSE, 5L)
+))
+dose1_overtoxic <- aide_toxicity_elimination(
+  c(.96, .99, .98, .97, .96), cutoff = .95
+)
+stopifnot(identical(dose1_overtoxic, c(TRUE, FALSE, FALSE, FALSE, FALSE)))
+
+## In particular, a high posterior overdose probability at the current
+## non-dose-1 level no longer forces an extra de-escalation.
+current_dose_fit <- list(
+  p_regular_mean = c(.05, .25, .45, .60, .75),
+  prob_overtox_by_dose = c(.10, .99, .99, .99, .99)
+)
+current_dose_rec <- aide_toxicity_recommendation(
+  current_dose = 2L, toxicity_fit = current_dose_fit,
+  config = one_stage_config, eliminated = rep(FALSE, 5L)
+)
+stopifnot(
+  identical(current_dose_rec$action, "stay"),
+  identical(current_dose_rec$recommended_dose, 2L),
+  !current_dose_rec$stop,
+  is.na(aide_current_mtd(current_dose_fit, dose1_overtoxic, .30))
+)
+dose1_stop <- aide_one_stage_decision(
+  list(),
+  aide_toxicity_recommendation(
+    1L, current_dose_fit, one_stage_config, dose1_overtoxic
+  ),
+  list(), list(), list(), one_stage_config
+)
+stopifnot(
+  dose1_stop$stop_trial,
+  identical(dose1_stop$stop_reason, "dose_1_overtoxicity")
+)
+
+## Interim MTD is model based over all non-eliminated doses; an untried
+## closest dose can guide allocation, while final selection filters to tried.
+model_based_fit <- list(p_regular_mean = c(.10, .30, .28, .55, .70))
+stopifnot(identical(
+  aide_current_mtd(
+    model_based_fit, rep(FALSE, 5L), target = .30
+  ),
+  2L
+))
+
 ## No OBD is always represented by the shared integer sentinel, including a
 ## trial that terminates before any administration.
 empty_scenario <- aide_phase12_scenario(rep(.2, 5L), rep(.4, 5L))

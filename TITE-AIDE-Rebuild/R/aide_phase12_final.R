@@ -24,7 +24,21 @@ aide_final_analysis <- function(state, config, scenario) {
   tox <- aide_fit_toxicity(interim$toxicity, config, scenario$ndose)
   eff <- aide_fit_efficacy(interim$efficacy, config, scenario$ndose)
   eliminated <- state$eliminated | tox$eliminated; futile <- state$futile | eff$futile
-  tried <- sort(unique(state$admin$dose)); tox_candidates <- which(!eliminated)
+  if (isTRUE(eliminated[1L])) {
+    return(list(
+      MTD = NA_integer_, OBD = aide_phase12_no_obd,
+      no_selection_reason = "dose_1_overtoxicity",
+      elimination = eliminated, futility = futile,
+      utilities = aide_compute_utility(
+        eff$p_regular_mean, tox$p_regular_mean, config$utility
+      ),
+      toxicity = tox, efficacy = eff, final_time = t_final
+    ))
+  }
+  ## As in the non-TITE design, the final MTD is selected only from tried
+  ## doses; the OBD has the additional response and efficacy requirements.
+  tried <- sort(unique(as.integer(state$admin$dose)))
+  tox_candidates <- intersect(which(!eliminated), tried)
   if (!length(tox_candidates)) return(list(MTD = NA_integer_, OBD = aide_phase12_no_obd, no_selection_reason = "no_safe_dose",
     elimination = eliminated, futility = futile, utilities = aide_compute_utility(eff$p_regular_mean, tox$p_regular_mean, config$utility),
     toxicity = tox, efficacy = eff))

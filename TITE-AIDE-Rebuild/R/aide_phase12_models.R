@@ -50,16 +50,6 @@ aide_multicycle_history_data <- function(dat) {
   out
 }
 
-## The ordered history is retained for state construction. Only the final
-## administration of each patient is a likelihood row at the current refit.
-aide_multicycle_latest_admin_index <- function(dat) {
-  if (is.null(dat) || !nrow(dat)) return(integer(0))
-  if (!"patient_id" %in% names(dat)) {
-    stop("Multicycle interim data are missing patient_id for likelihood mapping.")
-  }
-  as.integer(which(!duplicated(dat$patient_id, fromLast = TRUE)))
-}
-
 aide_multicycle_state_draws <- function(p_draws, alpha_draws, dat) {
   if (!nrow(dat)) return(matrix(0, nrow = nrow(p_draws), ncol = 1L))
   alpha_draws <- as.numeric(alpha_draws)
@@ -155,6 +145,23 @@ aide_beta_binomial_futility <- function(interim, efficacy, ndose) {
   )
 }
 
+## TITE AIDE has a single toxicity stopping rule: stop the whole trial when
+## dose 1 is overly toxic.  Higher doses are never toxicity-eliminated one by
+## one; dose-specific removal is reserved for efficacy futility.
+aide_toxicity_elimination <- function(prob_overtox_by_dose, cutoff) {
+  prob_overtox_by_dose <- as.numeric(prob_overtox_by_dose)
+  if (!length(prob_overtox_by_dose) || any(!is.finite(prob_overtox_by_dose)) ||
+      any(prob_overtox_by_dose < 0 | prob_overtox_by_dose > 1)) {
+    stop("prob_overtox_by_dose must be a nonempty probability vector.")
+  }
+  if (length(cutoff) != 1L || !is.finite(cutoff) || cutoff <= 0 || cutoff >= 1) {
+    stop("cutoff must be a scalar in (0, 1).")
+  }
+  eliminated <- rep(FALSE, length(prob_overtox_by_dose))
+  eliminated[1L] <- prob_overtox_by_dose[1L] > cutoff
+  eliminated
+}
+
 aide_fit_toxicity <- function(interim, config, ndose) {
   # Skeleton TITE-CRM fit.  All MCMC draws are transient and immediately
   # reduced to posterior means/probabilities returned to the event engine.
@@ -176,16 +183,13 @@ aide_fit_toxicity <- function(interim, config, ndose) {
   }
   if (multicycle) dat <- aide_multicycle_history_data(dat)
   dat$y <- ifelse(is.na(dat$y), 0L, as.integer(dat$y)); dat$weight[dat$y == 1L] <- 1
-  latest_admin_index <- if (multicycle) aide_multicycle_latest_admin_index(dat) else NULL
   jags_data <- if (multicycle) {
     list(
-      N_admin = nrow(dat),
-      N_patient = length(latest_admin_index),
-      y_patient = as.integer(dat$y[latest_admin_index]),
-      w_patient = as.numeric(dat$weight[latest_admin_index]),
+      N = nrow(dat),
+      y = as.integer(dat$y),
+      w = as.numeric(dat$weight),
       dose = as.integer(dat$dose),
       previous_state_index = as.integer(dat$previous_state_index),
-      latest_admin_index = latest_admin_index,
       J = ndose,
       q = as.numeric(skeleton),
       beta_mean = tx$beta_prior_mean,
@@ -238,11 +242,10 @@ aide_fit_toxicity <- function(interim, config, ndose) {
   list(model = tx$model, p_regular_mean = colMeans(p_draws),
        carryover_mean = rep(mean(carry_draws), ndose), p_ipde_mean = colMeans(draws[, ipde_cols, drop = FALSE]),
        prob_overtox_by_dose = prob_overtox, prob_ipde_overtox_by_dose = prob_ipde_overtox,
-        eliminated = prob_overtox > tx$cutoff,
+        eliminated = aide_toxicity_elimination(prob_overtox, tx$cutoff),
         skeleton = skeleton, posterior_carryover_mean = mean(carry_draws),
         regular_draws = p_draws, carryover_draws = as.numeric(carry_draws),
         history_data = if (multicycle) dat else NULL,
-        latest_admin_index = latest_admin_index,
         state_draws = state_draws)
 }
 
@@ -265,7 +268,6 @@ aide_fit_efficacy <- function(interim, config, ndose) {
   }
   if (multicycle) dat <- aide_multicycle_history_data(dat)
   dat$y <- ifelse(is.na(dat$y), 0L, as.integer(dat$y)); dat$ascertained <- as.integer(dat$ascertained)
-  latest_admin_index <- if (multicycle) aide_multicycle_latest_admin_index(dat) else NULL
   additive <- model %in% c("previous_dose_additive", "dose_specific_previous_dose_additive", "multicycle_additive")
   model_file <- switch(model,
     dose_specific_carryover = "beta_binomial_tite_dose_specific_carryover.jags",
@@ -275,15 +277,13 @@ aide_fit_efficacy <- function(interim, config, ndose) {
     multicycle_additive = "multicycle_additive_tite_beta_binomial_efficacy.jags")
   jags_data <- if (multicycle) {
     list(
-      N_admin = nrow(dat),
-      N_patient = length(latest_admin_index),
-      eff_patient = as.integer(dat$y[latest_admin_index]),
-      eff_ascertained_patient = as.integer(dat$ascertained[latest_admin_index]),
-      eff_weight_patient = as.numeric(dat$weight[latest_admin_index]),
-      zeros = rep.int(0L, length(latest_admin_index)),
+      N = nrow(dat),
+      eff = as.integer(dat$y),
+      eff_ascertained = as.integer(dat$ascertained),
+      eff_weight = as.numeric(dat$weight),
+      zeros = rep.int(0L, nrow(dat)),
       dose = as.integer(dat$dose),
       previous_state_index = as.integer(dat$previous_state_index),
-      latest_admin_index = latest_admin_index,
       ndose = ndose,
       eps = 1e-12,
       zero_trick_constant = 1,
@@ -332,7 +332,6 @@ aide_fit_efficacy <- function(interim, config, ndose) {
         regular_draws = p_draws,
         carryover_draws = if (multicycle) as.numeric(draws[, "alpha"]) else NULL,
         history_data = if (multicycle) dat else NULL,
-        latest_admin_index = latest_admin_index,
         state_draws = state_draws)
 }
 
@@ -363,12 +362,10 @@ aide_compute_utility <- function(p_e, p_t, settings) {
 
 aide_toxicity_recommendation <- function(current_dose, toxicity_fit, config, eliminated) {
   ndose <- length(toxicity_fit$p_regular_mean)
+  ## The only toxicity termination is dose 1 over-toxicity. Do not apply an
+  ## additional current-dose posterior-cutoff de-escalation rule.
   if (eliminated[1L]) return(list(action = "stop", recommended_dose = NA_integer_, stop = TRUE))
-  if (eliminated[current_dose] || toxicity_fit$prob_overtox_by_dose[current_dose] > config$toxicity$cutoff)
-    return(list(action = "de_escalate", recommended_dose = max(1L, current_dose - 1L), stop = FALSE))
   local <- seq.int(max(1L, current_dose - 1L), min(ndose, current_dose + 1L))
-  local <- local[!eliminated[local]]
-  if (!length(local)) return(list(action = "stop", recommended_dose = NA_integer_, stop = TRUE))
   recommended <- aide_select_lowest_tied(-abs(toxicity_fit$p_regular_mean - config$toxicity$target), local)
   list(action = aide_action_from_next(recommended, current_dose), recommended_dose = recommended, stop = FALSE)
 }

@@ -35,8 +35,6 @@ fit <- simulate_AIDE_phase_I_II(
   Nmax = 60L,
   C = 3L,
   cycle_max = 2L,
-  ipde_design = 2L,
-  flexible_ipde = TRUE,
   ## IPDE-first recruitment fills cohort positions with eligible recycled
   ## patients before recruiting the remaining number of new patients.
   enrollment_scheme = "ipde_first",

@@ -166,7 +166,7 @@ make_phase12_config_tag <- function(task) {
     "-ta", fmt_short(task$toxicity_ipde_alpha),
     "-ea", fmt_short(task$efficacy_ipde_alpha),
     "-tg", as.integer(isTRUE(task$apply_ipde_toxicity_rule)),
-    "-eg", as.integer(isTRUE(task$apply_ipde_efficacy_rule))
+    "-tc", fmt_short(task$ipde_toxicity_cutoff)
   )
 }
 
@@ -313,7 +313,7 @@ efficacy_threshold <- 0.20
 futility_cutoff <- 0.85
 min_eff_n_for_futility <- 0L
 apply_ipde_toxicity_rule <- TRUE
-apply_ipde_efficacy_rule <- FALSE
+ipde_toxicity_cutoff <- 0.95
 
 ## ============================================================
 ## Command-line arguments, matching run_oc_AIDE.R
@@ -452,7 +452,7 @@ run_one_phase12_task <- function(task) {
       futility_cutoff = task$futility_cutoff,
       min_eff_n_for_futility = task$min_eff_n_for_futility,
       apply_ipde_toxicity_rule = task$apply_ipde_toxicity_rule,
-      apply_ipde_efficacy_rule = task$apply_ipde_efficacy_rule
+      ipde_toxicity_cutoff = task$ipde_toxicity_cutoff
   )
 
   result$task <- task
@@ -476,9 +476,9 @@ run_one_phase12_task <- function(task) {
     stage2_allocation = "one_stage",
     cycle_max = task$cycle_max,
     T_assess = task$T_assess,
-    optional_ipde_gates = list(
-      toxicity = task$apply_ipde_toxicity_rule,
-      efficacy = task$apply_ipde_efficacy_rule
+    multicycle_ipde_toxicity_gate = list(
+      enabled = task$apply_ipde_toxicity_rule,
+      cutoff = task$ipde_toxicity_cutoff
     ),
     job_i = task$job_i,
     block_id = task$block_id,
@@ -575,7 +575,7 @@ for (setting_row in seq_len(nrow(setting_grid))) {
       futility_cutoff = futility_cutoff,
       min_eff_n_for_futility = min_eff_n_for_futility,
       apply_ipde_toxicity_rule = apply_ipde_toxicity_rule,
-      apply_ipde_efficacy_rule = apply_ipde_efficacy_rule
+      ipde_toxicity_cutoff = ipde_toxicity_cutoff
     )
     task_id <- task_id + 1L
   }

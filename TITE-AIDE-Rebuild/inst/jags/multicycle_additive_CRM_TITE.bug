@@ -1,7 +1,7 @@
 model {
   # Arbitrary-cycle additive TITE-CRM. State index one is an explicit
-  # zero-state sentinel. The state is uncapped; only the latest-cycle
-  # q_tox_patient is capped before its TITE contribution.
+  # zero-state sentinel. The state is uncapped; each administration-level
+  # toxicity probability is capped before its TITE contribution.
   beta ~ dnorm(beta_mean, tau_beta)
   g_alpha_1 ~ dgamma(a_r, 1)
   g_alpha_2 ~ dgamma(b_r, 1)
@@ -12,16 +12,13 @@ model {
     theta_ipde[j] <- min(1, p[j] + alpha * p[j])
   }
 
-  # Build all administration states, but score only each patient's latest one.
+  # Every administration contributes to the uncapped state recursion and its
+  # own TITE likelihood contribution.
   state_tox[1] <- 0
-  for (r in 1:N_admin) {
+  for (r in 1:N) {
     state_tox[r + 1] <- p[dose[r]] + alpha * state_tox[previous_state_index[r]]
     q_tox_admin[r] <- min(1, state_tox[r + 1])
-  }
-
-  for (i in 1:N_patient) {
-    q_tox_patient[i] <- q_tox_admin[latest_admin_index[i]]
-    theta_patient[i] <- w_patient[i] * q_tox_patient[i]
-    y_patient[i] ~ dbern(theta_patient[i])
+    theta_admin[r] <- w[r] * q_tox_admin[r]
+    y[r] ~ dbern(theta_admin[r])
   }
 }

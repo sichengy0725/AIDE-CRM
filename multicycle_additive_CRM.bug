@@ -14,16 +14,12 @@ model {
     theta_ipde[j] <- min(1, p[j] + alpha * p[j])
   }
 
-  # Every administration contributes to the uncapped state recursion.
+  # Every administration contributes to both the uncapped state recursion
+  # and the likelihood.
   state_tox[1] <- 0
-  for (r in 1:N_admin) {
+  for (r in 1:N) {
     state_tox[r + 1] <- p[dose[r]] + alpha * state_tox[previous_state_index[r]]
     theta_admin[r] <- min(1, state_tox[r + 1])
-  }
-
-  # Each patient contributes exactly one likelihood term: the latest cycle.
-  for (i in 1:N_patient) {
-    theta_patient[i] <- theta_admin[latest_admin_index[i]]
-    y_patient[i] ~ dbern(theta_patient[i])
+    y[r] ~ dbern(theta_admin[r])
   }
 }

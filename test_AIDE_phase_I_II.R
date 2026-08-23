@@ -35,6 +35,137 @@ stopifnot(
     "previous_dose_additive", "dose_specific_previous_dose_additive"
   ) %in% eval(phase12_formals$efficacy_model))
 )
+stopifnot(
+  all(c("apply_ipde_toxicity_rule", "ipde_toxicity_cutoff") %in%
+        names(phase12_formals)),
+  !any(c(
+    "apply_random_crm_recycle_toxicity_rule",
+    "random_crm_recycle_toxicity_cutoff",
+    "apply_random_crm_recycle_efficacy_rule",
+    "random_crm_recycle_efficacy_delta",
+    "ipde_design",
+    "flexible_ipde"
+  ) %in% names(phase12_formals))
+)
+
+## A--F: arithmetic checks for the multicycle patient-level toxicity gate.
+## The posterior has one deterministic draw to make the target quantities
+## directly auditable.
+multicycle_post <- cbind(
+  "p[1]" = 0.10,
+  "p[2]" = 0.20,
+  "p[3]" = 0.30,
+  alpha = 0.50
+)
+three_cycle_history <- crm_multicycle_history_data(
+  data.frame(
+    id = rep(1L, 3L), ncycle = 1:3, dose = 1:3,
+    y = c(0L, 0L, 0L), type = c("new", "retreat", "retreat")
+  ),
+  ndose = 3L
+)
+three_cycle_states <- crm_multicycle_toxicity_posterior_states(
+  multicycle_post, three_cycle_history
+)
+## A. 0.10, 0.25, and 0.425 are the full uncapped states.
+stopifnot(isTRUE(all.equal(
+  as.numeric(three_cycle_states$state_draws[1L, 2:4]),
+  c(0.10, 0.25, 0.425)
+)))
+
+## B. No intermediate state cap: 0.80 + 0.50 * 0.80 = 1.20.
+uncapped_post <- cbind("p[1]" = 0.80, alpha = 0.50)
+uncapped_history <- crm_multicycle_history_data(
+  data.frame(
+    id = c(1L, 1L), ncycle = c(1L, 2L), dose = c(1L, 1L),
+    y = c(0L, 0L), type = c("new", "retreat")
+  ),
+  ndose = 1L
+)
+uncapped_state <- crm_multicycle_toxicity_posterior_states(
+  uncapped_post, uncapped_history
+)
+uncapped_gate <- crm_multicycle_recycle_toxicity_gate(
+  uncapped_post, uncapped_history, 1L, 1L, phi = 0.90, cutoff = 0.95
+)
+stopifnot(
+  isTRUE(all.equal(uncapped_state$state_draws[1L, 3L], 1.20)),
+  isTRUE(all.equal(uncapped_gate$q_next_draws, 1.00))
+)
+
+## C. A D1 -> D2 history and proposed D3 administration use
+## p[D3] + alpha * S[D2] = 0.425.
+two_cycle_history <- crm_multicycle_history_data(
+  data.frame(
+    id = c(1L, 1L), ncycle = c(1L, 2L), dose = c(1L, 2L),
+    y = c(0L, 0L), type = c("new", "retreat")
+  ),
+  ndose = 3L
+)
+two_cycle_gate <- crm_multicycle_recycle_toxicity_gate(
+  fit = multicycle_post, history = two_cycle_history, patient_id = 1L,
+  next_dose = 3L, phi = 0.50, cutoff = 0.95
+)
+stopifnot(
+  isTRUE(all.equal(two_cycle_gate$theta_posterior_mean, 0.425)),
+  isTRUE(all.equal(two_cycle_gate$q_next_draws, 0.425)),
+  isTRUE(all.equal(two_cycle_gate$q_next_draws, 0.30 + 0.50 * 0.25))
+)
+
+## E. With only a D1 history, the gate reduces to the two-cycle formula
+## p[D2] + alpha * p[D1] = 0.25.
+one_cycle_history <- crm_multicycle_history_data(
+  data.frame(id = 1L, ncycle = 1L, dose = 1L, y = 0L, type = "new"),
+  ndose = 3L
+)
+one_cycle_gate <- crm_multicycle_recycle_toxicity_gate(
+  multicycle_post, one_cycle_history, 1L, 2L, phi = 0.50, cutoff = 0.95
+)
+stopifnot(isTRUE(all.equal(one_cycle_gate$q_next_draws, 0.20 + 0.50 * 0.10)))
+
+## D. Patients at current D2 can have different full histories and gates.
+two_patient_history <- crm_multicycle_history_data(
+  data.frame(
+    id = c(1L, 1L, 2L, 2L),
+    ncycle = c(1L, 2L, 1L, 2L),
+    dose = c(1L, 2L, 3L, 2L),
+    y = c(0L, 0L, 0L, 0L),
+    type = c("new", "retreat", "new", "retreat")
+  ),
+  ndose = 3L
+)
+patient_one_gate <- crm_multicycle_recycle_toxicity_gate(
+  multicycle_post, two_patient_history, 1L, 3L, phi = 0.45, cutoff = 0.95
+)
+patient_two_gate <- crm_multicycle_recycle_toxicity_gate(
+  multicycle_post, two_patient_history, 2L, 3L, phi = 0.45, cutoff = 0.95
+)
+stopifnot(
+  patient_one_gate$current_dose == 2L,
+  patient_two_gate$current_dose == 2L,
+  isTRUE(all.equal(patient_one_gate$theta_posterior_mean, 0.425)),
+  isTRUE(all.equal(patient_two_gate$theta_posterior_mean, 0.475)),
+  patient_one_gate$probability_over_phi == 0,
+  patient_two_gate$probability_over_phi == 1
+)
+
+## F. alpha = 0 removes all history from the proposed-cycle probability.
+zero_alpha_post <- multicycle_post
+zero_alpha_post[, "alpha"] <- 0
+zero_alpha_gate <- crm_multicycle_recycle_toxicity_gate(
+  zero_alpha_post, two_patient_history, 2L, 3L, phi = 0.50, cutoff = 0.95
+)
+stopifnot(isTRUE(all.equal(zero_alpha_gate$q_next_draws, 0.30)))
+
+## G. The individual toxicity gate is never active for non-multicycle CRM,
+## BOIN, or disabled multicycle configurations.
+stopifnot(
+  aide_phase12_multicycle_toxicity_gate_is_active("CRM", "multicycle_additive", TRUE),
+  !aide_phase12_multicycle_toxicity_gate_is_active("CRM", "random", TRUE),
+  !aide_phase12_multicycle_toxicity_gate_is_active("BOIN", "multicycle_additive", TRUE),
+  !aide_phase12_multicycle_toxicity_gate_is_active("CRM", "multicycle_additive", FALSE)
+)
+cat("Multicycle toxicity gate checks A-G passed.\n")
 
 ## The common one-stage rule first uses the lowest response-producing dose as
 ## the candidate-interval floor, and otherwise uses the MTD as its target.
@@ -83,21 +214,6 @@ stopifnot(
   !aide_phase12_dose_threshold_reached(c(3L, 3L, 3L), 6L),
   aide_phase12_dose_threshold_reached(c(3L, 6L, 3L), 6L)
 )
-stopifnot(
-  ## Same-dose recycling is eligible under both IPDE designs.
-  aide_phase12_recycle_dose_eligible(1L, 1L, 1L, FALSE),
-  aide_phase12_recycle_dose_eligible(1L, 1L, 2L, FALSE),
-  aide_phase12_recycle_dose_eligible(2L, 2L, 1L, TRUE),
-  aide_phase12_recycle_dose_eligible(2L, 2L, 2L, TRUE),
-  aide_phase12_recycle_dose_eligible(1L, 3L, 1L, TRUE),
-  aide_phase12_recycle_dose_eligible(3L, 1L, 1L, TRUE),
-  ## Existing movement restrictions remain in force.
-  !aide_phase12_recycle_dose_eligible(3L, 2L, 1L, FALSE),
-  !aide_phase12_recycle_dose_eligible(3L, 1L, 2L, FALSE),
-  aide_phase12_recycle_dose_eligible(1L, 2L, 2L, FALSE),
-  aide_phase12_recycle_dose_eligible(3L, 2L, 2L, TRUE)
-)
-
 ## The additive previous-dose models must pair a recycled administration with
 ## that same patient's immediately preceding dose, not the last global dose.
 previous_dose_admin <- data.frame(
@@ -277,31 +393,6 @@ assert_true(
   "IPDE toxicity was not generated as p2 + alpha * p1."
 )
 
-## Random-CRM recycling toxicity gate: reject a proposed recycled dose when
-## its posterior Pr{r + (1-r)p_d > phi} reaches the supplied cutoff.
-safe_post <- cbind(
-  r = rep(0.10, 20L),
-  "p[1]" = rep(0.10, 20L),
-  "p[2]" = rep(0.20, 20L)
-)
-unsafe_post <- cbind(
-  r = rep(0.90, 20L),
-  "p[1]" = rep(0.10, 20L),
-  "p[2]" = rep(0.20, 20L)
-)
-assert_true(
-  (safe_tox_gate <- aide_phase12_random_crm_recycle_toxicity_gate(
-    safe_post, next_dose = 2L, phi = 0.30, cutoff = 0.95
-  ))$allowed,
-  "Random-CRM recycling toxicity gate rejected a safe proposed dose."
-)
-assert_true(
-  !(unsafe_tox_gate <- aide_phase12_random_crm_recycle_toxicity_gate(
-    unsafe_post, next_dose = 2L, phi = 0.30, cutoff = 0.95
-  ))$allowed,
-  "Random-CRM recycling toxicity gate did not reject an unsafe proposed dose."
-)
-
 ## The dose-specific beta-binomial efficacy gate treats the recycled efficacy
 ## at d2 as r_d2 + (1-r_d2)p_d2 and compares it with regular efficacy at d1.
 recycle_eff_admin <- rbind(
@@ -361,32 +452,6 @@ assert_true(
     negative_increment_gate$posterior_mean_increment < 0,
   "A negative IPDE efficacy increment was incorrectly allowed."
 )
-cat("\nRandom-CRM IPDE gate calculation report\n")
-print(data.frame(
-  case = c("toxicity_safe", "toxicity_unsafe", "efficacy_increment"),
-  toxicity_probability_over_phi = c(
-    safe_tox_gate$probability_over_phi,
-    unsafe_tox_gate$probability_over_phi,
-    NA_real_
-  ),
-  toxicity_cutoff = c(safe_tox_gate$cutoff, unsafe_tox_gate$cutoff, NA_real_),
-  efficacy_p_regular_current = c(
-    NA_real_, NA_real_, eligible_eff_gate$p_regular_current
-  ),
-  efficacy_theta_ipde_next = c(
-    NA_real_, NA_real_, eligible_eff_gate$theta_ipde_next
-  ),
-  efficacy_posterior_mean_increment = c(
-    NA_real_, NA_real_, eligible_eff_gate$posterior_mean_increment
-  ),
-  efficacy_delta = c(NA_real_, NA_real_, eligible_eff_gate$delta),
-  allowed = c(
-    safe_tox_gate$allowed,
-    unsafe_tox_gate$allowed,
-    eligible_eff_gate$allowed
-  )
-), row.names = FALSE)
-
 common_args <- list(
   p_true = c(0, 0, 0),
   e_true = c(0.20, 0.60, 0.40),
@@ -520,7 +585,7 @@ assert_true(
 
 ## A recycling-enabled BOIN run exercises the decision log. Recycling-gate
 ## quantities are NA because those gates are intentionally inactive outside
-## random CRM; efficacy itself is nevertheless fitted with JAGS.
+## multicycle CRM; efficacy itself is nevertheless fitted with JAGS.
 recycling_report_trial <- simulate_AIDE_phase_I_II(
   p_true = c(0, 0, 0),
   e_true = c(0.20, 0.40, 0.50),
@@ -536,76 +601,6 @@ assert_true(
   nrow(recycling_report_trial$recycling_decision_log) > 0L &&
     any(recycling_report_trial$recycling_decision_log$selected_for_recycling),
   "Recycling-enabled test did not record its IPDE decisions."
-)
-
-## flexible_ipde permits a patient to recycle downward, including to dose 1.
-## In this fixed-seed scenario, patients treated at dose 2 are reused at dose 1.
-flexible_ipde_trial <- simulate_AIDE_phase_I_II(
-  p_true = c(0, 0.65, 0.65),
-  e_true = c(0.20, 0.40, 0.50),
-  allocation = "two_stage",
-  N_s1 = 9L,
-  Nmax = 12L,
-  C = 3L,
-  cycle_max = 2L,
-  ipde_design = 2L,
-  flexible_ipde = TRUE,
-  toxicity_ipde_alpha = 0.10,
-  efficacy_ipde_alpha = 0.50,
-  T_assess = 1,
-  seed = 18L
-)
-downward_recycle <- with(
-  flexible_ipde_trial$recycling_decision_log,
-  selected_for_recycling & current_dose > 1L & next_dose == 1L
-)
-assert_true(
-  any(downward_recycle),
-  "flexible_ipde did not permit a patient to recycle to dose 1."
-)
-assert_true(
-  isTRUE(flexible_ipde_trial$final$recycling_rules$flexible_ipde),
-  "The flexible IPDE option was not retained in the trial output."
-)
-recycled_admin <- flexible_ipde_trial$admin[
-  flexible_ipde_trial$admin$type == "retreat",
-  , drop = FALSE
-]
-expected_recycled_efficacy <- vapply(seq_len(nrow(recycled_admin)), function(i) {
-  one <- recycled_admin[i, , drop = FALSE]
-  previous_rows <- flexible_ipde_trial$admin[
-    flexible_ipde_trial$admin$id == one$id &
-      flexible_ipde_trial$admin$row_id < one$row_id,
-    , drop = FALSE
-  ]
-  previous <- previous_rows[which.max(previous_rows$row_id), , drop = FALSE]
-  min(1, c(0.20, 0.40, 0.50)[one$dose] +
-        0.50 * c(0.20, 0.40, 0.50)[previous$dose])
-}, numeric(1))
-expected_recycled_toxicity <- vapply(seq_len(nrow(recycled_admin)), function(i) {
-  one <- recycled_admin[i, , drop = FALSE]
-  previous_rows <- flexible_ipde_trial$admin[
-    flexible_ipde_trial$admin$id == one$id &
-      flexible_ipde_trial$admin$row_id < one$row_id,
-    , drop = FALSE
-  ]
-  previous <- previous_rows[which.max(previous_rows$row_id), , drop = FALSE]
-  min(1, c(0.00, 0.65, 0.65)[one$dose] +
-        0.10 * c(0.00, 0.65, 0.65)[previous$dose])
-}, numeric(1))
-assert_true(
-  isTRUE(all.equal(
-    recycled_admin$true_efficacy_probability,
-    expected_recycled_efficacy
-  )),
-  "Simulated recycled efficacy did not use p2 + alpha * p1."
-)
-assert_true(
-  isTRUE(all.equal(
-    recycled_admin$true_toxicity_probability,
-    expected_recycled_toxicity
-  )),
-  "Simulated recycled toxicity did not use p2 + alpha * p1."
 )
 
 oc <- get_oc_sim_AIDE_phase_I_II(
@@ -627,6 +622,5 @@ assert_true(
 report_trial_decisions("Two-stage test", two_stage)
 report_trial_decisions("One-stage test", one_stage)
 report_trial_decisions("Recycling-log test", recycling_report_trial)
-report_trial_decisions("Flexible-IPDE test", flexible_ipde_trial)
 
 cat("AIDE Phase I/II regression checks passed.\n")

@@ -165,59 +165,12 @@ aide_phase12_multicycle_history_data <- function(admin, ndose) {
   )
 }
 
-## The multicycle likelihood uses only the terminal administration for each
-## patient. The history is ordered by patient and cycle before this map is
-## constructed, so the selected row is the current/latest cycle.
-aide_phase12_multicycle_latest_admin_index <- function(history_data) {
-  if (is.null(history_data) || nrow(history_data) == 0L) return(integer(0))
-  if (!"patient_id" %in% names(history_data)) {
-    stop("history_data must contain patient_id for multicycle likelihood mapping.")
-  }
-  as.integer(which(!duplicated(history_data$patient_id, fromLast = TRUE)))
-}
-
 aide_phase12_dose_threshold_reached <- function(n_by_dose, threshold) {
   n_by_dose <- as.numeric(n_by_dose)
   if (length(threshold) != 1L || !is.finite(threshold) || threshold < 1L) {
     stop("threshold must be a positive finite value.")
   }
   any(is.finite(n_by_dose) & n_by_dose >= threshold)
-}
-
-## Determine whether a patient most recently treated at previous_dose can be
-## recycled at next_dose.  A same-dose recycle is permitted for both IPDE
-## designs.  Without flexible_ipde, movement remains upward-only; with it,
-## downward recycling follows the selected any-dose/adjacent-dose rule.
-aide_phase12_recycle_dose_eligible <- function(previous_dose,
-                                                next_dose,
-                                                ipde_design,
-                                                flexible_ipde) {
-  previous_dose <- as.numeric(previous_dose)
-  if (length(next_dose) != 1L || !is.finite(next_dose) ||
-      next_dose < 1L || next_dose != as.integer(next_dose)) {
-    stop("next_dose must be a positive integer.")
-  }
-  if (length(ipde_design) != 1L || !ipde_design %in% c(1L, 2L)) {
-    stop("ipde_design must be 1 (any dose) or 2 (adjacent dose).")
-  }
-  flexible_ipde <- aide_phase12_validate_logical_flag(
-    flexible_ipde, "flexible_ipde"
-  )
-  if (any(!is.finite(previous_dose)) || any(previous_dose < 1L) ||
-      any(previous_dose != as.integer(previous_dose))) {
-    stop("previous_dose must contain positive integer dose indices.")
-  }
-  previous_dose <- as.integer(previous_dose)
-  next_dose <- as.integer(next_dose)
-  if (flexible_ipde && ipde_design == 1L) {
-    rep(TRUE, length(previous_dose))
-  } else if (flexible_ipde && ipde_design == 2L) {
-    abs(previous_dose - next_dose) <= 1L
-  } else if (ipde_design == 1L) {
-    previous_dose <= next_dose
-  } else {
-    previous_dose >= next_dose - 1L & previous_dose <= next_dose
-  }
 }
 
 ## True recycled-patient efficacy. At a proposed dose d2 for a patient most
@@ -285,50 +238,6 @@ aide_phase12_ipde_toxicity_probability <- function(p_regular,
     1,
     p_ipde_base[as.integer(current_dose)] +
       as.numeric(alpha) * p_regular[as.integer(previous_dose)]
-  )
-}
-
-## Posterior safety gate for a recycled assignment under the random-r CRM.
-## The CRM JAGS model supplies p_j and r, so this is evaluated draw by draw
-## as Pr{r + (1-r) p_j > phi}.
-aide_phase12_random_crm_recycle_toxicity_gate <- function(post,
-                                                           next_dose,
-                                                           phi,
-                                                           cutoff) {
-  post <- as.matrix(post)
-  if (nrow(post) < 1L || !"r" %in% colnames(post)) {
-    stop("Random-CRM posterior samples must contain at least one draw of r.")
-  }
-  if (length(next_dose) != 1L || !is.finite(next_dose) ||
-      next_dose < 1L || next_dose != as.integer(next_dose)) {
-    stop("next_dose must be a positive integer.")
-  }
-  if (length(phi) != 1L || !is.finite(phi) || phi <= 0 || phi >= 1) {
-    stop("phi must be a scalar in (0, 1).")
-  }
-  if (length(cutoff) != 1L || !is.finite(cutoff) || cutoff <= 0 || cutoff >= 1) {
-    stop("cutoff must be a scalar in (0, 1).")
-  }
-
-  p_column <- paste0("p[", as.integer(next_dose), "]")
-  if (!p_column %in% colnames(post)) {
-    stop("Random-CRM posterior samples do not contain ", p_column, ".")
-  }
-  r_draw <- as.numeric(post[, "r"])
-  p_draw <- as.numeric(post[, p_column])
-  if (any(!is.finite(r_draw) | r_draw < 0 | r_draw > 1) ||
-      any(!is.finite(p_draw) | p_draw < 0 | p_draw > 1)) {
-    stop("Random-CRM posterior samples contain invalid probability draws.")
-  }
-  theta_draw <- r_draw + (1 - r_draw) * p_draw
-  probability_over_phi <- mean(theta_draw > phi)
-  list(
-    allowed = probability_over_phi < cutoff,
-    probability_over_phi = probability_over_phi,
-    theta_posterior_mean = mean(theta_draw),
-    phi = phi,
-    cutoff = cutoff,
-    next_dose = as.integer(next_dose)
   )
 }
 
@@ -539,11 +448,6 @@ aide_phase12_efficacy_posterior <- function(admin,
   } else {
     NULL
   }
-  latest_admin_index <- if (is_multicycle_additive) {
-    aide_phase12_multicycle_latest_admin_index(previous_dose_data)
-  } else {
-    NULL
-  }
   model_key <- if (is.null(model_file)) "<default>" else as.character(model_file)
   cache_key <- paste(
     efficacy_model, ndose,
@@ -655,18 +559,11 @@ aide_phase12_efficacy_posterior <- function(admin,
         }
       }
       if (is_multicycle_additive) {
-        fit_latest_admin_index <- if (nrow(previous_dose_data) == 0L) {
-          1L
-        } else {
-          latest_admin_index
-        }
         jags_data <- list(
-          N_admin = nrow(fit_data),
-          N_patient = length(fit_latest_admin_index),
-          eff_patient = as.integer(fit_data$efficacy[fit_latest_admin_index]),
+          N = nrow(fit_data),
+          eff = as.integer(fit_data$efficacy),
           dose = as.integer(fit_data$dose),
           previous_state_index = as.integer(fit_data$previous_state_index),
-          latest_admin_index = as.integer(fit_latest_admin_index),
           ndose = ndose,
           a_regular = efficacy_prior[, "a"],
           b_regular = efficacy_prior[, "b"],
@@ -764,7 +661,6 @@ aide_phase12_efficacy_posterior <- function(admin,
         ipde_draws = ipde_draws,
         alpha_draws = alpha_draws,
         history_data = if (is_multicycle_additive) previous_dose_data else NULL,
-        latest_admin_index = if (is_multicycle_additive) latest_admin_index else NULL,
         model_file = model_path
       )
     }
@@ -796,7 +692,6 @@ aide_phase12_efficacy_posterior <- function(admin,
     regular_draws = base$regular_draws,
     alpha_draws = base$alpha_draws,
     history_data = base$history_data,
-    latest_admin_index = base$latest_admin_index,
     mcmc = list(
       model_file = base$model_file,
       n_chains = as.integer(n_chains),
@@ -1324,10 +1219,6 @@ simulate_AIDE_phase_I_II <- function(
     cycle_max = 1L,
     ## One-stage threshold for switching from {d-1,d,d+1} to {d-1,d}.
     m_U = 6L,
-    ## ipde_design = 1 allows any eligible dose; 2 allows only an adjacent
-    ## dose. flexible_ipde additionally permits recycling downward.
-    ipde_design = 2L,
-    flexible_ipde = FALSE,
     ## "continuous" keeps enrollment open and gives new patients priority.
     ## "ipde_first" closes recruitment while eligible IPDE patients fill the
     ## next cohort, enrolling only the remaining number of new patients.
@@ -1405,12 +1296,10 @@ simulate_AIDE_phase_I_II <- function(
     ## Deprecated alias for lambda_T, retained for existing scripts.
     utility_weight = NULL,
 
-    ## Recycling gates. They are used only for model = "CRM" with
-    ## crm_r_model = "random"; the switches make each gate optional.
-    apply_random_crm_recycle_toxicity_rule = TRUE,
-    random_crm_recycle_toxicity_cutoff = cutoff,
-    apply_random_crm_recycle_efficacy_rule = TRUE,
-    random_crm_recycle_efficacy_delta = 0.05,
+    ## Patient-specific IPDE safety gate. It is evaluated only for the
+    ## multicycle additive CRM; all other designs retain their prior logic.
+    apply_ipde_toxicity_rule = TRUE,
+    ipde_toxicity_cutoff = cutoff,
     seed = NULL,
     verbose = FALSE
 ) {
@@ -1504,13 +1393,6 @@ simulate_AIDE_phase_I_II <- function(
     stop("m_U must be a positive integer.")
   }
   m_U <- as.integer(m_U)
-  if (!ipde_design %in% c(1L, 2L)) {
-    stop("ipde_design must be 1 (any dose) or 2 (adjacent dose).")
-  }
-  flexible_ipde <- aide_phase12_validate_logical_flag(
-    flexible_ipde,
-    "flexible_ipde"
-  )
   if (length(arrival_rate) != 1L || !is.finite(arrival_rate) || arrival_rate <= 0) {
     stop("arrival_rate must be a positive finite value.")
   }
@@ -1588,25 +1470,15 @@ simulate_AIDE_phase_I_II <- function(
       "dose_specific_carryover", "shared_carryover"
     )
   )
-  apply_random_crm_recycle_toxicity_rule <- aide_phase12_validate_logical_flag(
-    apply_random_crm_recycle_toxicity_rule,
-    "apply_random_crm_recycle_toxicity_rule"
+  apply_ipde_toxicity_rule <- aide_phase12_validate_logical_flag(
+    apply_ipde_toxicity_rule,
+    "apply_ipde_toxicity_rule"
   )
-  apply_random_crm_recycle_efficacy_rule <- aide_phase12_validate_logical_flag(
-    apply_random_crm_recycle_efficacy_rule,
-    "apply_random_crm_recycle_efficacy_rule"
-  )
-  if (length(random_crm_recycle_toxicity_cutoff) != 1L ||
-      !is.finite(random_crm_recycle_toxicity_cutoff) ||
-      random_crm_recycle_toxicity_cutoff <= 0 ||
-      random_crm_recycle_toxicity_cutoff >= 1) {
-    stop("random_crm_recycle_toxicity_cutoff must be a scalar in (0, 1).")
-  }
-  if (length(random_crm_recycle_efficacy_delta) != 1L ||
-      !is.finite(random_crm_recycle_efficacy_delta) ||
-      random_crm_recycle_efficacy_delta < 0 ||
-      random_crm_recycle_efficacy_delta > 1) {
-    stop("random_crm_recycle_efficacy_delta must be a scalar in [0, 1].")
+  if (length(ipde_toxicity_cutoff) != 1L ||
+      !is.finite(ipde_toxicity_cutoff) ||
+      ipde_toxicity_cutoff <= 0 ||
+      ipde_toxicity_cutoff >= 1) {
+    stop("ipde_toxicity_cutoff must be a scalar in (0, 1).")
   }
   if (model == "CRM" && is.null(crm_skeleton)) {
     stop("For model = 'CRM', provide crm_skeleton.")
@@ -1664,8 +1536,8 @@ simulate_AIDE_phase_I_II <- function(
     stringsAsFactors = FALSE
   )
   ## One row per patient considered for a recycled/IPDE administration.  This
-  ## preserves the exact posterior quantities used by the two random-CRM
-  ## recycling gates, including candidates that are rejected.
+  ## preserves the exact posterior quantities used by the patient-specific
+  ## multicycle toxicity gate, including candidates that are rejected.
   recycling_decision_log <- data.frame(
     cohort = integer(0),
     stage = character(0),
@@ -1736,27 +1608,6 @@ simulate_AIDE_phase_I_II <- function(
       utility_scores = utility_scores
     )
   }
-  efficacy_recycle_gate_current <- function(current_dose, next_dose) {
-    aide_phase12_dose_specific_efficacy_recycle_gate(
-      admin = admin,
-      current_dose = current_dose,
-      next_dose = next_dose,
-      ndose = ndose,
-      efficacy_prior = efficacy_prior,
-      efficacy_carryover_prior = efficacy_carryover_prior,
-      efficacy_model = efficacy_model,
-      efficacy_additive_alpha_prior = efficacy_additive_alpha_prior,
-      efficacy_model_file = efficacy_model_file,
-      efficacy_n_chains = efficacy_n_chains,
-      efficacy_n_adapt = efficacy_n_adapt,
-      efficacy_n_burnin = efficacy_n_burnin,
-      efficacy_n_iter = efficacy_n_iter,
-      efficacy_thin = efficacy_thin,
-      cache = efficacy_posterior_cache,
-      delta = random_crm_recycle_efficacy_delta
-    )
-  }
-
   toxicity_eliminated <- rep(0L, ndose)
   efficacy_futility_eliminated <- rep(0L, ndose)
   futility_state <- function() {
@@ -1815,49 +1666,11 @@ simulate_AIDE_phase_I_II <- function(
   current_dose <- 1L
   earlystop <- FALSE
   stop_reason <- NA_character_
-  random_crm_recycle_rules_active <- model == "CRM" && crm_r_model == "random"
-  random_crm_recycle_post_cache <- list(
-    n_admin = NA_integer_,
-    post = NULL
-  )
 
   latest_patient_state <- function() {
     if (nrow(admin) == 0L) return(admin)
     z <- admin[order(admin$id, admin$t_eval, admin$row_id), , drop = FALSE]
     z[!duplicated(z$id, fromLast = TRUE), , drop = FALSE]
-  }
-
-  cache_random_crm_recycle_post <- function(model_fit) {
-    if (!random_crm_recycle_rules_active || is.null(model_fit)) return(invisible(NULL))
-    post <- if (!is.null(model_fit$fit$post)) model_fit$fit$post else model_fit$post
-    if (is.null(post)) return(invisible(NULL))
-    post <- as.matrix(post)
-    p_columns <- paste0("p[", seq_len(ndose), "]")
-    if (nrow(post) > 0L && "r" %in% colnames(post) &&
-        all(p_columns %in% colnames(post))) {
-      random_crm_recycle_post_cache <<- list(
-        n_admin = nrow(admin),
-        post = post
-      )
-    }
-    invisible(NULL)
-  }
-
-  random_crm_recycle_post <- function() {
-    if (!random_crm_recycle_rules_active) return(NULL)
-    if (identical(random_crm_recycle_post_cache$n_admin, nrow(admin)) &&
-        !is.null(random_crm_recycle_post_cache$post)) {
-      return(random_crm_recycle_post_cache$post)
-    }
-
-    ## Reuse the same user-selected random CRM and MCMC controls as AIDE's
-    ## toxicity decisions whenever a new posterior is required for recycling.
-    fitted <- toxicity_utility_fit()
-    cache_random_crm_recycle_post(fitted)
-    if (is.null(random_crm_recycle_post_cache$post)) {
-      stop("The random CRM fit did not return posterior samples needed for the recycling safety rule.")
-    }
-    random_crm_recycle_post_cache$post
   }
 
   enrolled_new_ids <- function() {
@@ -1933,74 +1746,50 @@ simulate_AIDE_phase_I_II <- function(
     }
     state <- latest_patient_state()
     if (nrow(state) == 0L) return(integer(0))
-    dose_ok <- aide_phase12_recycle_dose_eligible(
-      previous_dose = state$dose,
-      next_dose = next_dose,
-      ipde_design = ipde_design,
-      flexible_ipde = flexible_ipde
-    )
     ## An IPDE administration requires completion of a cycle with neither a
     ## DLT nor an efficacy response, as specified for the efficacy-enabled
     ## design.  t_eval is set only after both endpoint times are observed.
     state <- state[
-      state$y == 0L & state$eff == 0L & state$ncycle < cycle_max & dose_ok,
+      state$y == 0L & state$eff == 0L & state$ncycle < cycle_max,
       , drop = FALSE
     ]
     if (nrow(state) == 0L) return(integer(0))
 
-    ## These two constraints are deliberately limited to the random-r CRM.
-    ## They protect the proposed recycled administration, not the regular
-    ## allocation decision or the selected AIDE toxicity model itself.
-    toxicity_rule_applied <- random_crm_recycle_rules_active &&
-      apply_random_crm_recycle_toxicity_rule
-    efficacy_rule_applied <- random_crm_recycle_rules_active &&
-      apply_random_crm_recycle_efficacy_rule
-    toxicity_gate <- list(
-      allowed = TRUE,
-      probability_over_phi = NA_real_,
-      phi = target,
-      cutoff = random_crm_recycle_toxicity_cutoff
+    ## This safety gate is specific to the multicycle additive CRM.  It
+    ## reconstructs each candidate's complete administration history, so two
+    ## patients at the same current dose can receive different decisions.
+    toxicity_rule_applied <- aide_phase12_multicycle_toxicity_gate_is_active(
+      model = model,
+      crm_r_model = crm_r_model,
+      apply_ipde_toxicity_rule = apply_ipde_toxicity_rule
     )
-    if (random_crm_recycle_rules_active &&
-        apply_random_crm_recycle_toxicity_rule) {
-      toxicity_gate <- aide_phase12_random_crm_recycle_toxicity_gate(
-        post = random_crm_recycle_post(),
-        next_dose = next_dose,
-        phi = target,
-        cutoff = random_crm_recycle_toxicity_cutoff
-      )
-    }
-    efficacy_gate_by_current_dose <- list()
-    if (efficacy_rule_applied) {
-      efficacy_gate_by_current_dose <- lapply(
-        unique(as.integer(state$dose)),
-        function(current_dose_for_patient) {
-          efficacy_recycle_gate_current(current_dose_for_patient, next_dose)
-        }
-      )
-      names(efficacy_gate_by_current_dose) <- as.character(unique(as.integer(state$dose)))
-    }
-    efficacy_allowed <- if (efficacy_rule_applied) {
-      vapply(
-        as.character(as.integer(state$dose)),
-        function(current_dose_for_patient) {
-          efficacy_gate_by_current_dose[[current_dose_for_patient]]$allowed
-        },
-        logical(1)
-      )
-    } else {
-      rep(TRUE, nrow(state))
-    }
-    toxicity_allowed <- rep(isTRUE(toxicity_gate$allowed), nrow(state))
-    eligible_for_recycling <- toxicity_allowed & efficacy_allowed
-
-    efficacy_gate_for_patient <- if (efficacy_rule_applied) {
-      lapply(as.character(as.integer(state$dose)), function(current_dose_for_patient) {
-        efficacy_gate_by_current_dose[[current_dose_for_patient]]
+    toxicity_gate_for_patient <- if (toxicity_rule_applied) {
+      toxicity_fit <- toxicity_utility_fit()
+      toxicity_history <- crm_multicycle_history_data(admin, ndose = ndose)
+      lapply(seq_len(nrow(state)), function(i) {
+        crm_multicycle_recycle_toxicity_gate(
+          fit = toxicity_fit,
+          history = toxicity_history,
+          patient_id = state$id[i],
+          next_dose = next_dose,
+          phi = target,
+          cutoff = ipde_toxicity_cutoff
+        )
       })
     } else {
       rep(list(NULL), nrow(state))
     }
+    toxicity_allowed <- vapply(
+      toxicity_gate_for_patient,
+      function(x) if (is.null(x)) TRUE else isTRUE(x$allowed),
+      logical(1)
+    )
+    ## No new efficacy IPDE benefit gate is introduced. Existing efficacy
+    ## eligibility and futility rules remain the allocation constraints.
+    efficacy_rule_applied <- FALSE
+    efficacy_gate_for_patient <- rep(list(NULL), nrow(state))
+    efficacy_allowed <- rep(TRUE, nrow(state))
+    eligible_for_recycling <- toxicity_allowed & efficacy_allowed
     recycling_decision_log <<- rbind(
       recycling_decision_log,
       data.frame(
@@ -2010,9 +1799,21 @@ simulate_AIDE_phase_I_II <- function(
         current_dose = as.integer(state$dose),
         next_dose = rep.int(as.integer(next_dose), nrow(state)),
         toxicity_rule_applied = rep(toxicity_rule_applied, nrow(state)),
-        toxicity_probability_over_phi = rep(toxicity_gate$probability_over_phi, nrow(state)),
-        toxicity_phi = rep(toxicity_gate$phi, nrow(state)),
-        toxicity_cutoff = rep(toxicity_gate$cutoff, nrow(state)),
+        toxicity_probability_over_phi = vapply(
+          toxicity_gate_for_patient,
+          function(x) if (is.null(x)) NA_real_ else x$probability_over_phi,
+          numeric(1)
+        ),
+        toxicity_phi = vapply(
+          toxicity_gate_for_patient,
+          function(x) if (is.null(x)) NA_real_ else x$phi,
+          numeric(1)
+        ),
+        toxicity_cutoff = vapply(
+          toxicity_gate_for_patient,
+          function(x) if (is.null(x)) NA_real_ else x$cutoff,
+          numeric(1)
+        ),
         toxicity_allowed = toxicity_allowed,
         efficacy_rule_applied = rep(efficacy_rule_applied, nrow(state)),
         efficacy_p_regular_current = vapply(
@@ -2257,7 +2058,6 @@ simulate_AIDE_phase_I_II <- function(
   update_toxicity_elimination <- function() {
     model_fit <- toxicity_utility_fit()
     absorb_toxicity_model_elimination(model_fit)
-    cache_random_crm_recycle_post(model_fit)
     model_fit
   }
 
@@ -2835,15 +2635,17 @@ simulate_AIDE_phase_I_II <- function(
       lambda_T = lambda_T,
       utility_scores = utility_scores,
       recycling_rules = list(
-        ipde_design = as.integer(ipde_design),
-        flexible_ipde = flexible_ipde,
         enrollment_scheme = enrollment_scheme,
         enrollment_priority = enrollment_priority,
-        active = random_crm_recycle_rules_active,
+        active = aide_phase12_multicycle_toxicity_gate_is_active(
+          model, crm_r_model, apply_ipde_toxicity_rule
+        ),
         toxicity = list(
-          enabled = apply_random_crm_recycle_toxicity_rule,
+          enabled = aide_phase12_multicycle_toxicity_gate_is_active(
+            model, crm_r_model, apply_ipde_toxicity_rule
+          ),
           phi = target,
-          cutoff = random_crm_recycle_toxicity_cutoff,
+          cutoff = ipde_toxicity_cutoff,
           true_generation = if (multicycle_toxicity_active) {
             "min(1, p_true[d_current] + toxicity_ipde_alpha * prior_uncapped_toxicity_state)"
           } else {
@@ -2857,8 +2659,7 @@ simulate_AIDE_phase_I_II <- function(
           assessment_window = T_assess
         ),
         efficacy = list(
-          enabled = apply_random_crm_recycle_efficacy_rule,
-          delta = random_crm_recycle_efficacy_delta,
+          enabled = FALSE,
           model = efficacy_model,
           regular_prior = efficacy_prior,
           carryover_prior = efficacy_carryover_prior,

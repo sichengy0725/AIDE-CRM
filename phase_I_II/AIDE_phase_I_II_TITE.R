@@ -216,8 +216,6 @@ simulate_AIDE_phase_I_II_TITE <- function(
     utility_scores = c(u00 = 0, u01 = 40, u10 = 60, u11 = 100),
     apply_ipde_toxicity_rule = TRUE,
     ipde_toxicity_cutoff = cutoff,
-    apply_ipde_efficacy_rule = FALSE,
-    ipde_efficacy_delta = .05,
     seed = NULL,
     verbose = FALSE) {
   aide_phase12_tite_require_jags()
@@ -269,9 +267,7 @@ simulate_AIDE_phase_I_II_TITE <- function(
     recycle = list(
       priority = "new_first",
       apply_individual_toxicity_risk = isTRUE(apply_ipde_toxicity_rule),
-      toxicity_ipde_overdose_cutoff = ipde_toxicity_cutoff,
-      apply_individual_efficacy_benefit = isTRUE(apply_ipde_efficacy_rule),
-      efficacy_ipde_min_increment = ipde_efficacy_delta
+      toxicity_ipde_overdose_cutoff = ipde_toxicity_cutoff
     ),
     reporting = list(verbose = isTRUE(verbose))
   )

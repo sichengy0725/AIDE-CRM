@@ -41,7 +41,7 @@ fit <- simulate_AIDE_phase_I_II(
   ## the remaining cohort positions with eligible recycled patients.
   enrollment_scheme = "continuous",
   apply_ipde_toxicity_rule = TRUE,
-  apply_ipde_efficacy_rule = FALSE,
+  ipde_toxicity_cutoff = 0.95,
   efficacy_threshold = 0.05,
   T_assess = 28,
   seed = 113L

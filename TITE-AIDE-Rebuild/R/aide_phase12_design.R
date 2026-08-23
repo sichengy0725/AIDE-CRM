@@ -4,6 +4,9 @@ aide_select_lowest_tied <- function(score, candidates) {
 }
 
 aide_current_mtd <- function(toxicity_fit, eliminated, target) {
+  ## A dose-1 toxicity finding stops the trial rather than creating a
+  ## dose-specific toxicity admissibility set.
+  if (isTRUE(eliminated[1L])) return(NA_integer_)
   candidates <- which(!eliminated)
   if (!length(candidates)) return(NA_integer_)
   aide_select_lowest_tied(
@@ -170,6 +173,8 @@ aide_two_stage_decision <- function(state, toxicity_recommendation, admissible, 
 }
 
 aide_make_design_decision <- function(state, toxicity_fit, efficacy_fit, config, scenario) {
+  ## toxicity_fit$eliminated can mark dose 1 only. Efficacy futility remains
+  ## the sole dose-by-dose elimination mechanism.
   state$eliminated <- state$eliminated | toxicity_fit$eliminated
   futility <- aide_update_futility(efficacy_fit, state$futile); state$futile <- futility$futile
   adm <- aide_build_admissible_set(state, toxicity_fit, efficacy_fit, config, scenario)
