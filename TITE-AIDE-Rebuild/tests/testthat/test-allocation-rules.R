@@ -124,7 +124,7 @@ stopifnot(decision$provisional_obd == 4L, decision$next_dose == 3L,
           decision$candidate_doses[1L] == 1L)
 
 ## After Stage I, two-stage allocation is exactly the one-stage rule. It has
-## one allocation dose and cannot top-two randomize.
+## one frozen allocation dose.
 two_stage_config <- aide_phase12_config(
   allocation = "two_stage", Nmax = 18L, cohort_size = 3L, s1_Max = 3L
 )

@@ -152,8 +152,7 @@ aide_two_stage_decision <- function(state, toxicity_recommendation, admissible, 
   ## Stage II is deliberately not a separate allocation design.  After the
   ## toxicity-driven Stage I transition, it uses the one-stage rule above,
   ## including the response floor, MTD fallback, and path-based no-skipping
-  ## constraint.  Top-two randomization and Stage-II-specific utility modes
-  ## are not part of this design.
+  ## constraint.  No Stage-II-specific randomization or utility mode is used.
   stage2 <- aide_one_stage_decision(
     state, toxicity_recommendation, admissible, toxicity_fit, efficacy_fit,
     config

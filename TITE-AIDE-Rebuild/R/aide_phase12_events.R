@@ -71,9 +71,49 @@ aide_cohort_allocation <- function(state) {
   list(doses = doses, probabilities = probabilities)
 }
 
+aide_refresh_open_cohort_recycle_risk <- function(state, config) {
+  ## This is a risk-only update.  It deliberately does not make a new design
+  ## decision or alter the frozen cohort allocation.
+  if (!isTRUE(state$cohort$open) ||
+      !isTRUE(config$recycle$apply_individual_toxicity_risk) ||
+      !identical(config$toxicity$model, "multicycle_additive")) {
+    return(state)
+  }
+  waiting <- which(state$queue$type == "retreat" & state$queue$status == "waiting")
+  if (!length(waiting)) return(state)
+
+  risk <- state$cohort$risk_context %||% list()
+  fit <- risk$toxicity_fit
+  current_admin_ids <- as.integer(state$admin$admin_id)
+  history_admin_ids <- if (!is.null(fit) && !is.null(fit$history_data) &&
+      "admin_id" %in% names(fit$history_data)) {
+    as.integer(fit$history_data$admin_id)
+  } else {
+    integer(0)
+  }
+  fit_has_current_history <- length(history_admin_ids) == length(current_admin_ids) &&
+    setequal(history_admin_ids, current_admin_ids)
+  fit_has_current_metadata <-
+    length(risk$toxicity_fit_time) == 1L &&
+    isTRUE(all.equal(as.numeric(risk$toxicity_fit_time), as.numeric(state$t_now))) &&
+    length(risk$toxicity_fit_n_admin) == 1L &&
+    !is.na(risk$toxicity_fit_n_admin) &&
+    as.integer(risk$toxicity_fit_n_admin) == nrow(state$admin)
+  if (fit_has_current_history && fit_has_current_metadata) return(state)
+
+  interim <- aide_build_interim_data(state, state$t_now, config)
+  risk$toxicity_fit <- aide_fit_toxicity(
+    interim$toxicity, config, ndose = length(state$eliminated)
+  )
+  risk$toxicity_fit_time <- state$t_now
+  risk$toxicity_fit_n_admin <- nrow(state$admin)
+  state$cohort$risk_context <- risk
+  state
+}
+
 aide_retreat_individual_risk_screen <- function(state, queue_index, config,
                                                  candidate_doses = NULL) {
-  if (is.null(candidate_doses)) candidate_doses <- aide_cohort_allocation(state)$doses
+  if (is.null(candidate_doses)) candidate_doses <- state$cohort$next_dose
   candidate_doses <- as.integer(candidate_doses)
   if (!isTRUE(state$cohort$open) || is.null(state$cohort$risk_context)) {
     return(list(allowed = length(candidate_doses) > 0L, reason = "eligible",
@@ -87,6 +127,14 @@ aide_retreat_individual_risk_screen <- function(state, queue_index, config,
   ## patient's full posterior administration history.
   if (isTRUE(config$recycle$apply_individual_toxicity_risk) &&
       identical(config$toxicity$model, "multicycle_additive")) {
+    if (is.null(risk$toxicity_fit) || is.null(risk$toxicity_fit$history_data) ||
+        !(as.integer(source_admin_id) %in%
+          as.integer(risk$toxicity_fit$history_data$admin_id))) {
+      stop(
+        "Internal error: refreshed multicycle toxicity history ",
+        "does not contain the retreat source administration."
+      )
+    }
     prob <- vapply(eligible, function(dose) {
       mean(aide_multicycle_next_probability_draws(
         risk$toxicity_fit, source_admin_id, dose
@@ -137,6 +185,9 @@ aide_assignment_dose <- function(state, queue_index, config) {
   probabilities <- allocation$probabilities
   if (!length(doses)) stop("Open cohort has no allocation dose.")
   if (state$queue$type[queue_index] == "retreat") {
+    ## Recycle screening is only for the dose frozen for this open cohort.
+    doses <- as.integer(state$cohort$next_dose)
+    probabilities <- 1
     risk <- aide_retreat_individual_risk_screen(state, queue_index, config, doses)
     if (!risk$allowed) stop("Attempted to assign a retreat patient without an eligible cohort dose.")
     keep <- match(risk$eligible_doses, doses)
@@ -152,8 +203,7 @@ aide_append_administration <- function(state, queue_index, config, scenario) {
   q <- state$queue[queue_index, , drop = FALSE]; is_retreat <- q$type == "retreat"
   previous <- NA_integer_; cycle <- 1L; arrival <- q$time
   if (is_retreat) { prev <- state$admin[match(q$source_admin_id, state$admin$admin_id), , drop = FALSE]; previous <- prev$dose; cycle <- prev$cycle + 1L; arrival <- prev$t_arrival }
-  ## For Stage II top-two allocation, this draw is made for this individual
-  ## only. The candidate set and probabilities remain frozen for the cohort.
+  ## The allocation dose is frozen when the cohort opens.
   dose <- aide_assignment_dose(state, queue_index, config)
   if (isTRUE(state$cohort$individual_randomization)) {
     state$cohort$randomization_draws <- state$cohort$randomization_draws + 1L
@@ -201,6 +251,9 @@ aide_append_administration <- function(state, queue_index, config, scenario) {
 }
 
 aide_fill_open_cohort <- function(state, config, scenario) {
+  ## Reuse one posterior based on D(t_now) for every recycle screen in this
+  ## fill event.  The helper changes only the individual-risk fit.
+  state <- aide_refresh_open_cohort_recycle_risk(state, config)
   while (state$cohort$open && state$cohort$filled < state$cohort$capacity && nrow(state$admin) < config$design$Nmax) {
     selected <- aide_select_assignment_opportunity(state, config); state <- selected$state; i <- selected$index; if (!length(i)) break
     state <- aide_append_administration(state, i, config, scenario)
@@ -235,7 +288,8 @@ aide_open_cohort <- function(state, decision) {
     individual_randomization = isTRUE(decision$individual_randomization), randomization_draws = 0L)
   state$cohort$risk_context <- list(p_efficacy = decision$p_efficacy, p_efficacy_ipde = decision$p_efficacy_ipde,
     prob_toxicity_ipde_overdose = decision$prob_toxicity_ipde_overdose,
-    toxicity_fit = decision$toxicity_fit, efficacy_fit = decision$efficacy_fit)
+    toxicity_fit = decision$toxicity_fit, efficacy_fit = decision$efficacy_fit,
+    toxicity_fit_time = state$t_now, toxicity_fit_n_admin = nrow(state$admin))
   state$current_dose <- decision$next_dose; state$stage$active <- decision$stage; state$stage$transitioned <- state$stage$transitioned || isTRUE(decision$stage_transition)
   state
 }
