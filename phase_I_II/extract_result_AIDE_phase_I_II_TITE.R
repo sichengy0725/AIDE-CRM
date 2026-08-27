@@ -37,6 +37,11 @@ one_stage_sizes <- data.frame(
   stringsAsFactors = FALSE
 )
 design_size_grid <- rbind(two_stage_sizes, one_stage_sizes)
+allocation_mode_grid <- data.frame(
+  allocation_mode_id = c(1L, 2L),
+  allocation_mode = c("upward_no_skipping", "one_level_toward_obd"),
+  stringsAsFactors = FALSE
+)
 model_grid <- data.frame(
   model_id = "multicycle_additive",
   carryover_model = "multicycle_additive",
@@ -54,9 +59,58 @@ utility_grid <- rbind(
   data.frame(utility_type = 3L, lambda_T = 1)
 )
 arrival_grid <- data.frame(arrival_rate = 1 / 56)
+fmt_truth_setting <- function(x) {
+  out <- format(round(as.numeric(x), 4L), scientific = FALSE, trim = TRUE)
+  out <- sub("(\\.[0-9]*?)0+$", "\\1", out)
+  out <- sub("\\.$", "", out)
+  gsub("\\.", "p", gsub("-", "m", out))
+}
 alpha_grid <- data.frame(
   toxicity_ipde_alpha = c(0, .3, .6, .9),
   efficacy_ipde_alpha = c(0, .3, .6, .9)
+)
+
+## Must match the TITE runner's model-specific truth settings exactly.
+true_dose_specific_alpha <- c(0.2, 0.3, 0.4, 0.5, 0.6)
+true_random_effect_eta <- 1
+true_effective_dose_values <- c(15, 20, 30, 35, 45)
+true_effective_dose_alpha_grid <- c(0.3, 0.6, 0.9)
+true_generation_grid <- rbind(
+  data.frame(
+    true_generation_id = 1L, true_generation = "legacy", alpha_grid,
+    true_random_effect_eta = true_random_effect_eta,
+    true_random_effect_eta_tag = "na",
+    true_effective_dose_alpha = 0,
+    true_effective_dose_alpha_tag = "na",
+    stringsAsFactors = FALSE
+  ),
+  data.frame(
+    true_generation_id = 2L, true_generation = "dose_specific_geometric",
+    toxicity_ipde_alpha = 0, efficacy_ipde_alpha = 0,
+    true_random_effect_eta = true_random_effect_eta,
+    true_random_effect_eta_tag = "na",
+    true_effective_dose_alpha = 0,
+    true_effective_dose_alpha_tag = "na",
+    stringsAsFactors = FALSE
+  ),
+  data.frame(
+    true_generation_id = 3L, true_generation = "shared_patient_logistic",
+    toxicity_ipde_alpha = 0, efficacy_ipde_alpha = 0,
+    true_random_effect_eta = true_random_effect_eta,
+    true_random_effect_eta_tag = fmt_truth_setting(true_random_effect_eta),
+    true_effective_dose_alpha = 0,
+    true_effective_dose_alpha_tag = "na",
+    stringsAsFactors = FALSE
+  ),
+  data.frame(
+    true_generation_id = 4L, true_generation = "effective_dose_geometric",
+    toxicity_ipde_alpha = 0, efficacy_ipde_alpha = 0,
+    true_random_effect_eta = true_random_effect_eta,
+    true_random_effect_eta_tag = "na",
+    true_effective_dose_alpha = true_effective_dose_alpha_grid,
+    true_effective_dose_alpha_tag = fmt_truth_setting(true_effective_dose_alpha_grid),
+    stringsAsFactors = FALSE
+  )
 )
 
 utility_scores <- c(u00 = 0, u01 = 40, u10 = 60, u11 = 100)
@@ -110,6 +164,7 @@ calculate_true_obd <- function(p_true, e_true, true_mtd, utility_type,
 make_phase12_tite_config_tag <- function(task) {
   paste0(
     "P12TITE-a", if (task$allocation == "two_stage") "2s" else "1s",
+    "-om", task$allocation_mode_id,
     "-N", task$Nmax, "-s1", task$N_s1,
     "-u", task$utility_type, "-l", fmt_short(task$lambda_T),
     "-cm", task$carryover_model, "-tm", task$crm_r_model,
@@ -123,7 +178,10 @@ make_phase12_tite_config_tag <- function(task) {
     "-cyc", task$cycle_max, "-ne", task$n_eval,
     "-rate", fmt_short(task$arrival_rate),
     "-ta", fmt_short(task$toxicity_ipde_alpha),
-    "-ea", fmt_short(task$efficacy_ipde_alpha)
+    "-ea", fmt_short(task$efficacy_ipde_alpha),
+    "-gm", task$true_generation_id,
+    "-ge", task$true_random_effect_eta_tag,
+    "-ga", task$true_effective_dose_alpha_tag
   )
 }
 
@@ -138,8 +196,8 @@ if (!is.null(scenario_id_list)) {
   truth <- truth[truth$Scenario %in% scenario_id_list, , drop = FALSE]
 }
 setting_grid <- Reduce(cross_join, list(
-  design_size_grid, model_grid, crm_prior_grid, efficacy_prior_grid,
-  utility_grid, arrival_grid, alpha_grid
+  design_size_grid, allocation_mode_grid, model_grid, crm_prior_grid,
+  efficacy_prior_grid, utility_grid, arrival_grid, true_generation_grid
 ))
 setting_grid$setting_id <- seq_len(nrow(setting_grid))
 
@@ -159,7 +217,10 @@ for (setting_row in seq_len(nrow(setting_grid))) {
       true_mtd = as.integer(truth$True_MTD_Level[scenario_row]),
       target = as.numeric(truth$Target_Toxicity[scenario_row]),
       p_true = p_true, e_true = e_true,
-      allocation = as.character(setting$allocation), Nmax = as.integer(setting$Nmax),
+      allocation = as.character(setting$allocation),
+      allocation_mode_id = as.integer(setting$allocation_mode_id),
+      allocation_mode = as.character(setting$allocation_mode),
+      Nmax = as.integer(setting$Nmax),
       N_s1 = as.integer(setting$N_s1), N_s2 = as.integer(setting$N_s2),
       model_id = as.character(setting$model_id),
       carryover_model = as.character(setting$carryover_model),
@@ -172,6 +233,14 @@ for (setting_row in seq_len(nrow(setting_grid))) {
       arrival_rate = as.numeric(setting$arrival_rate),
       toxicity_ipde_alpha = as.numeric(setting$toxicity_ipde_alpha),
       efficacy_ipde_alpha = as.numeric(setting$efficacy_ipde_alpha),
+      true_generation_id = as.integer(setting$true_generation_id),
+      true_generation = as.character(setting$true_generation),
+      true_dose_specific_alpha = true_dose_specific_alpha,
+      true_random_effect_eta = as.numeric(setting$true_random_effect_eta),
+      true_random_effect_eta_tag = as.character(setting$true_random_effect_eta_tag),
+      true_effective_dose_values = true_effective_dose_values,
+      true_effective_dose_alpha = as.numeric(setting$true_effective_dose_alpha),
+      true_effective_dose_alpha_tag = as.character(setting$true_effective_dose_alpha_tag),
       C = cohort_size, cycle_max = cycle_max, T_assess = T_assess,
       n_eval = n_eval, m_U = m_U, dlt_dist = dlt_dist, efficacy_dist = efficacy_dist,
       crm_skeleton = crm_skeleton, utility_scores = utility_scores,
@@ -228,6 +297,8 @@ summarize_task <- function(results, task) {
     Task_ID = task$task_id, Scenario = task$Scenario,
     Source_Scenario = task$Source_Scenario, Scenario_Group = task$Scenario_Group,
     Attempt = task$Attempt, Allocation = task$allocation,
+    Allocation_Mode_ID = task$allocation_mode_id,
+    Allocation_Mode = task$allocation_mode,
     Stage2_Allocation = "one_stage", Model_ID = task$model_id,
     Carryover_Model = task$carryover_model, Efficacy_Model = task$efficacy_model,
     Nmax = task$Nmax, N_s1 = task$N_s1, N_s2 = task$N_s2,
@@ -238,6 +309,12 @@ summarize_task <- function(results, task) {
     Lambda_T = task$lambda_T, Dose = seq_len(ndose),
     Toxicity_IPDE_Alpha = task$toxicity_ipde_alpha,
     Efficacy_IPDE_Alpha = task$efficacy_ipde_alpha,
+    True_Generation_ID = task$true_generation_id,
+    True_Generation = task$true_generation,
+    True_Dose_Specific_Alpha = paste(task$true_dose_specific_alpha, collapse = ","),
+    True_Random_Effect_Eta = task$true_random_effect_eta,
+    True_Effective_Dose_Values = paste(task$true_effective_dose_values, collapse = ","),
+    True_Effective_Dose_Alpha = task$true_effective_dose_alpha,
     True_DLT_rate = task$p_true, True_Efficacy_rate = task$e_true,
     Estimated_CRM_pj = tox, Estimated_Efficacy = eff,
     Estimated_Utility = utility, Carryover_Mean = carry,
@@ -269,7 +346,23 @@ if (!length(summaries)) stop("No TITE result files were found.")
 
 dose_summary <- do.call(rbind, summaries)
 missing_summary <- do.call(rbind, missing_jobs)
-tag <- paste0("TITE_AIDE_phase_I_II_IDX_", sprintf("%04d", min(jobs_expected)),
+model3_alpha_tags <- unique(
+  true_generation_grid$true_effective_dose_alpha_tag[
+    true_generation_grid$true_generation_id == 4L
+  ]
+)
+model2_eta_tags <- unique(
+  true_generation_grid$true_random_effect_eta_tag[
+    true_generation_grid$true_generation_id == 3L
+  ]
+)
+tag <- paste0(
+  "TITE_AIDE_phase_I_II",
+  "_allocmode", paste(unique(allocation_mode_grid$allocation_mode_id), collapse = "_"),
+  "_generation_model", paste(unique(true_generation_grid$true_generation_id), collapse = "_"),
+  "_model3alpha", paste(model3_alpha_tags, collapse = "_"),
+  "_model2eta", paste(model2_eta_tags, collapse = "_"),
+  "_IDX_", sprintf("%04d", min(jobs_expected)),
               "_to_", sprintf("%04d", max(jobs_expected)))
 utils::write.csv(dose_summary, file.path(out_dir, paste0(tag, "_dose_summary.csv")), row.names = FALSE)
 utils::write.csv(missing_summary, file.path(out_dir, paste0(tag, "_missing_jobs.csv")), row.names = FALSE)

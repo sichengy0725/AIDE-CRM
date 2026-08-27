@@ -161,6 +161,8 @@ make_phase12_config_tag <- function(task) {
     "-ea", fmt_short(task$efficacy_ipde_alpha),
     ## Generation-model codes: 1 = default, 2--4 = PDF Models 1--3.
     "-gm", task$true_generation_id,
+    "-ge", task$true_random_effect_eta_tag,
+    "-ga", task$true_effective_dose_alpha_tag,
     "-tg", as.integer(isTRUE(task$apply_ipde_toxicity_rule)),
     "-tc", fmt_short(task$ipde_toxicity_cutoff)
   )
@@ -260,21 +262,6 @@ allocation_mode_grid <- data.frame(
   stringsAsFactors = FALSE
 )
 
-## Truth-generation codes in output names:
-## 1 = default legacy generator, 2 = PDF Model 1, 3 = PDF Model 2,
-## 4 = PDF Model 3.  The numerical settings below remain editable, but the
-## stable four-level code keeps result folders and final summaries unambiguous.
-true_generation_grid <- data.frame(
-  true_generation_id = 1:4,
-  true_generation = c(
-    "legacy",
-    "dose_specific_geometric",
-    "shared_patient_logistic",
-    "effective_dose_geometric"
-  ),
-  stringsAsFactors = FALSE
-)
-
 ## The existing four paired options plus the shared arbitrary-cycle additive
 ## model. The latter propagates each patient's uncapped state across cycles.
 model_grid <- data.frame(
@@ -335,13 +322,63 @@ alpha_grid <- data.frame(
   stringsAsFactors = FALSE
 )
 
-## Alternative-truth parameters from the August 31 specification.  Model 1
-## uses the five-dose alpha vector; Model 2 uses eta = 1; Model 3 uses the
-## stated dose scale and a non-zero geometric carryover coefficient.
+## Alternative-truth parameters from the August 31 specification. Model 1
+## has its specified fixed source-dose alpha vector; Model 2 has an editable
+## eta; Model 3 alpha is an explicitly user-controlled grid.
 true_dose_specific_alpha <- c(0.2, 0.3, 0.4, 0.5, 0.6)
 true_random_effect_eta <- 1
 true_effective_dose_values <- c(15, 20, 30, 35, 45)
-true_effective_dose_alpha <- 0.5
+true_effective_dose_alpha_grid <- c(0.3, 0.6, 0.9)
+
+## Truth-generation codes: 1 = legacy default; 2 = PDF Model 1;
+## 3 = PDF Model 2; 4 = PDF Model 3. The legacy generator is evaluated over
+## the old endpoint-alpha grid. Models 1--3 receive one task per relevant DGM
+## setting only, so they are not duplicated over that legacy grid.
+true_generation_grid <- rbind(
+  data.frame(
+    true_generation_id = 1L,
+    true_generation = "legacy",
+    alpha_grid,
+    true_random_effect_eta = true_random_effect_eta,
+    true_random_effect_eta_tag = "na",
+    true_effective_dose_alpha = 0,
+    true_effective_dose_alpha_tag = "na",
+    stringsAsFactors = FALSE
+  ),
+  data.frame(
+    true_generation_id = 2L,
+    true_generation = "dose_specific_geometric",
+    toxicity_ipde_alpha = 0,
+    efficacy_ipde_alpha = 0,
+    true_random_effect_eta = true_random_effect_eta,
+    true_random_effect_eta_tag = "na",
+    true_effective_dose_alpha = 0,
+    true_effective_dose_alpha_tag = "na",
+    stringsAsFactors = FALSE
+  ),
+  data.frame(
+    true_generation_id = 3L,
+    true_generation = "shared_patient_logistic",
+    toxicity_ipde_alpha = 0,
+    efficacy_ipde_alpha = 0,
+    true_random_effect_eta = true_random_effect_eta,
+    true_random_effect_eta_tag = fmt_short(true_random_effect_eta),
+    true_effective_dose_alpha = 0,
+    true_effective_dose_alpha_tag = "na",
+    stringsAsFactors = FALSE
+  ),
+  data.frame(
+    true_generation_id = 4L,
+    true_generation = "effective_dose_geometric",
+    toxicity_ipde_alpha = 0,
+    efficacy_ipde_alpha = 0,
+    true_random_effect_eta = true_random_effect_eta,
+    true_random_effect_eta_tag = "na",
+    true_effective_dose_alpha = true_effective_dose_alpha_grid,
+    true_effective_dose_alpha_tag = fmt_short(true_effective_dose_alpha_grid),
+    stringsAsFactors = FALSE
+  )
+)
 
 utility_scores <- c(u00 = 40, u01 = 100, u10 = 0, u11 = 60)
 cohort_size <- 3L
@@ -401,7 +438,6 @@ setting_grid <- Reduce(
     enrollment_schemes,
     utility_grid,
     arrival_grid,
-    alpha_grid,
     true_generation_grid
   )
 )
@@ -523,6 +559,8 @@ run_one_phase12_task <- function(task) {
     allocation_mode = task$allocation_mode,
     true_generation_id = task$true_generation_id,
     true_generation = task$true_generation,
+    true_random_effect_eta_tag = task$true_random_effect_eta_tag,
+    true_effective_dose_alpha_tag = task$true_effective_dose_alpha_tag,
     true_generation_parameters = list(
       dose_specific_alpha = task$true_dose_specific_alpha,
       random_effect_eta = task$true_random_effect_eta,
@@ -629,9 +667,11 @@ for (setting_row in seq_len(nrow(setting_grid))) {
       true_generation_id = as.integer(setting$true_generation_id),
       true_generation = as.character(setting$true_generation),
       true_dose_specific_alpha = true_dose_specific_alpha,
-      true_random_effect_eta = true_random_effect_eta,
+      true_random_effect_eta = as.numeric(setting$true_random_effect_eta),
+      true_random_effect_eta_tag = as.character(setting$true_random_effect_eta_tag),
       true_effective_dose_values = true_effective_dose_values,
-      true_effective_dose_alpha = true_effective_dose_alpha,
+      true_effective_dose_alpha = as.numeric(setting$true_effective_dose_alpha),
+      true_effective_dose_alpha_tag = as.character(setting$true_effective_dose_alpha_tag),
 
       C = cohort_size,
       cycle_max = cycle_max,

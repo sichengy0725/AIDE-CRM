@@ -53,19 +53,6 @@ allocation_mode_grid <- data.frame(
   stringsAsFactors = FALSE
 )
 
-## Match the runner's truth-generation codes used in result-folder and final
-## output names: 1 = default; 2, 3, and 4 = PDF Models 1, 2, and 3.
-true_generation_grid <- data.frame(
-  true_generation_id = 1:4,
-  true_generation = c(
-    "legacy",
-    "dose_specific_geometric",
-    "shared_patient_logistic",
-    "effective_dose_geometric"
-  ),
-  stringsAsFactors = FALSE
-)
-
 ## Keep this paired model grid synchronized with the arbitrary-cycle runner.
 model_grid <- data.frame(
    model_id = c("multicycle_additive"),
@@ -100,7 +87,7 @@ efficacy_prior_grid <- data.frame(
 )
 
 enrollment_schemes <- data.frame(
-  enrollment_scheme = c("ipde_first"),
+  enrollment_scheme = c("continuous"),
   stringsAsFactors = FALSE
 )
 lambda_T_grid <- 0.3
@@ -109,11 +96,61 @@ utility_grid <- rbind(
   data.frame(utility_type = 2L, lambda_T = lambda_T_grid, stringsAsFactors = FALSE),
   data.frame(utility_type = 3L, lambda_T = 1, stringsAsFactors = FALSE)
 )
-arrival_grid <- data.frame(arrival_rate = c(1 / 56, 1 / 28, 1/ 14), stringsAsFactors = FALSE)
+arrival_grid <- data.frame(arrival_rate = c(1 / 56), stringsAsFactors = FALSE)
+fmt_truth_setting <- function(x) {
+  out <- format(round(as.numeric(x), 2L), scientific = FALSE, trim = TRUE)
+  out <- sub("(\\.[0-9]*?)0+$", "\\1", out)
+  out <- sub("\\.$", "", out)
+  gsub("\\.", "p", gsub("-", "m", out))
+}
 alpha_grid <- data.frame(
   toxicity_ipde_alpha = c(0, 0.3, 0.6, 0.9),
   efficacy_ipde_alpha = c(0, 0.3, 0.6, 0.9),
   stringsAsFactors = FALSE
+)
+
+## Mirror the runner's model-specific true-generation settings. Model 3 alpha
+## is intentionally an editable grid, not an internal fixed value.
+true_dose_specific_alpha <- c(0.2, 0.3, 0.4, 0.5, 0.6)
+true_random_effect_eta <- 1
+true_effective_dose_values <- c(15, 20, 30, 35, 45)
+true_effective_dose_alpha_grid <- c(0.3, 0.6, 0.9)
+true_generation_grid <- rbind(
+  data.frame(
+    true_generation_id = 1L, true_generation = "legacy", alpha_grid,
+    true_random_effect_eta = true_random_effect_eta,
+    true_random_effect_eta_tag = "na",
+    true_effective_dose_alpha = 0,
+    true_effective_dose_alpha_tag = "na",
+    stringsAsFactors = FALSE
+  ),
+  data.frame(
+    true_generation_id = 2L, true_generation = "dose_specific_geometric",
+    toxicity_ipde_alpha = 0, efficacy_ipde_alpha = 0,
+    true_random_effect_eta = true_random_effect_eta,
+    true_random_effect_eta_tag = "na",
+    true_effective_dose_alpha = 0,
+    true_effective_dose_alpha_tag = "na",
+    stringsAsFactors = FALSE
+  ),
+  data.frame(
+    true_generation_id = 3L, true_generation = "shared_patient_logistic",
+    toxicity_ipde_alpha = 0, efficacy_ipde_alpha = 0,
+    true_random_effect_eta = true_random_effect_eta,
+    true_random_effect_eta_tag = fmt_truth_setting(true_random_effect_eta),
+    true_effective_dose_alpha = 0,
+    true_effective_dose_alpha_tag = "na",
+    stringsAsFactors = FALSE
+  ),
+  data.frame(
+    true_generation_id = 4L, true_generation = "effective_dose_geometric",
+    toxicity_ipde_alpha = 0, efficacy_ipde_alpha = 0,
+    true_random_effect_eta = true_random_effect_eta,
+    true_random_effect_eta_tag = "na",
+    true_effective_dose_alpha = true_effective_dose_alpha_grid,
+    true_effective_dose_alpha_tag = fmt_truth_setting(true_effective_dose_alpha_grid),
+    stringsAsFactors = FALSE
+  )
 )
 
 ## Fixed design settings, retained here as a compact record of the matching
@@ -186,7 +223,6 @@ setting_grid <- Reduce(
     enrollment_schemes,
     utility_grid,
     arrival_grid,
-    alpha_grid,
     true_generation_grid
   )
 )
@@ -257,6 +293,8 @@ make_phase12_config_tag <- function(task) {
     "-ta", fmt_short(task$toxicity_ipde_alpha),
     "-ea", fmt_short(task$efficacy_ipde_alpha),
     "-gm", task$true_generation_id,
+    "-ge", task$true_random_effect_eta_tag,
+    "-ga", task$true_effective_dose_alpha_tag,
     "-tg", as.integer(isTRUE(apply_ipde_toxicity_rule)),
     "-tc", fmt_short(ipde_toxicity_cutoff)
   )
@@ -331,6 +369,12 @@ task_value <- function(task, name, default = NA) {
   value <- task[[name]]
   if (is.null(value) || length(value) == 0L) return(default)
   value[[1L]]
+}
+
+format_numeric_setting <- function(value) {
+  value <- as.numeric(unlist(value, recursive = TRUE, use.names = FALSE))
+  if (!length(value) || all(is.na(value))) return(NA_character_)
+  paste(fmt_param(value), collapse = ",")
 }
 
 result_truth <- function(result) {
@@ -462,6 +506,18 @@ make_metadata <- function(result, task_id) {
     )),
     True_Generation = as.character(task_value(
       task, "true_generation", task_value(runner, "true_generation")
+    )),
+    True_Dose_Specific_Alpha = format_numeric_setting(
+      task$true_dose_specific_alpha
+    ),
+    True_Random_Effect_Eta = as.numeric(task_value(
+      task, "true_random_effect_eta", task_value(runner, "true_random_effect_eta")
+    )),
+    True_Effective_Dose_Values = format_numeric_setting(
+      task$true_effective_dose_values
+    ),
+    True_Effective_Dose_Alpha = as.numeric(task_value(
+      task, "true_effective_dose_alpha", task_value(runner, "true_effective_dose_alpha")
     )),
     Efficacy_Prior_a = as.numeric(task_value(task, "efficacy_a")),
     Efficacy_Prior_b = as.numeric(task_value(task, "efficacy_b")),
@@ -756,6 +812,16 @@ make_phase12_output_tag <- function() {
     fmt_param(efficacy_prior_grid$efficacy_additive_alpha_a), "x",
     fmt_param(efficacy_prior_grid$efficacy_additive_alpha_b)
   ))
+  model3_alpha_tags <- unique(
+    true_generation_grid$true_effective_dose_alpha_tag[
+      true_generation_grid$true_generation_id == 4L
+    ]
+  )
+  model2_eta_tags <- unique(
+    true_generation_grid$true_random_effect_eta_tag[
+      true_generation_grid$true_generation_id == 3L
+    ]
+  )
 
   paste0(
     "AIDE_phase_I_II",
@@ -764,6 +830,8 @@ make_phase12_output_tag <- function() {
     "_generation_model", paste(
       unique(true_generation_grid$true_generation_id), collapse = "_"
     ),
+    "_model3alpha", paste(model3_alpha_tags, collapse = "_"),
+    "_model2eta", paste(model2_eta_tags, collapse = "_"),
     "_N", paste(fmt_short(unique(design_size_grid$Nmax)), collapse = "_"),
     "_ncycle", fmt_short(cycle_max),
     "_rp", paste(crm_priors, collapse = "_"),
