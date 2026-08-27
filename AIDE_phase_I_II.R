@@ -101,8 +101,8 @@ aide_phase12_is_multicycle_efficacy_model <- function(efficacy_model) {
 ## The arbitrary-cycle state is deliberately uncapped. Only the probability
 ## used to generate or score the current administration is capped at one.
 aide_phase12_multicycle_next_state <- function(regular_probability,
-                                                alpha,
-                                                previous_state = 0) {
+                                                 alpha,
+                                                 previous_state = 0) {
   if (length(regular_probability) != 1L || !is.finite(regular_probability) ||
       regular_probability < 0 || regular_probability > 1 ||
       length(alpha) != 1L || !is.finite(alpha) || alpha < 0 ||
@@ -112,6 +112,195 @@ aide_phase12_multicycle_next_state <- function(regular_probability,
   }
   state <- as.numeric(regular_probability) + as.numeric(alpha) * as.numeric(previous_state)
   list(state = state, probability = min(1, state))
+}
+
+## True-data generators used by the simulator.  "legacy" preserves the
+## historical model-dependent behavior, while the other choices implement the
+## three alternative mechanisms in the August 31 design specification.
+aide_phase12_true_generation_choices <- function() {
+  c(
+    "legacy",
+    "shared_multicycle",
+    "dose_specific_geometric",
+    "shared_patient_logistic",
+    "effective_dose_geometric"
+  )
+}
+
+aide_phase12_true_generation_settings <- function(
+    model,
+    ndose,
+    dose_specific_alpha = NULL,
+    random_effect_eta = 1,
+    effective_dose_values = NULL,
+    effective_dose_alpha = 0) {
+  model <- match.arg(model, aide_phase12_true_generation_choices())
+  if (length(ndose) != 1L || !is.finite(ndose) || ndose < 1L ||
+      ndose != as.integer(ndose)) {
+    stop("ndose must be one positive integer.")
+  }
+  ndose <- as.integer(ndose)
+
+  if (is.null(dose_specific_alpha)) {
+    ## This reproduces the PDF's (0.2, 0.3, ..., 0.6) example for five doses
+    ## and extends it linearly when a scenario uses another number of doses.
+    dose_specific_alpha <- seq(0.2, 0.6, length.out = ndose)
+  }
+  dose_specific_alpha <- as.numeric(dose_specific_alpha)
+  if (length(dose_specific_alpha) != ndose ||
+      any(!is.finite(dose_specific_alpha)) || any(dose_specific_alpha < 0)) {
+    stop("dose_specific_alpha must be a non-negative vector with one value per dose.")
+  }
+  if (length(random_effect_eta) != 1L || !is.finite(random_effect_eta) ||
+      random_effect_eta <= 0) {
+    stop("random_effect_eta must be one positive finite value.")
+  }
+  if (is.null(effective_dose_values)) {
+    effective_dose_values <- if (ndose == 5L) {
+      c(15, 20, 30, 35, 45)
+    } else {
+      seq_len(ndose)
+    }
+  }
+  effective_dose_values <- as.numeric(effective_dose_values)
+  if (length(effective_dose_values) != ndose ||
+      any(!is.finite(effective_dose_values)) ||
+      any(diff(effective_dose_values) <= 0)) {
+    stop("effective_dose_values must be a strictly increasing numeric vector with one value per dose.")
+  }
+  if (length(effective_dose_alpha) != 1L ||
+      !is.finite(effective_dose_alpha) || effective_dose_alpha < 0) {
+    stop("effective_dose_alpha must be one non-negative finite value.")
+  }
+  list(
+    model = model,
+    dose_specific_alpha = dose_specific_alpha,
+    random_effect_eta = as.numeric(random_effect_eta),
+    effective_dose_values = effective_dose_values,
+    effective_dose_alpha = as.numeric(effective_dose_alpha)
+  )
+}
+
+aide_phase12_dose_specific_geometric_probability <- function(
+    regular_probability,
+    current_dose,
+    history_doses,
+    source_alpha) {
+  history_doses <- as.integer(history_doses)
+  if (!length(history_doses)) {
+    raw_probability <- regular_probability[current_dose]
+  } else {
+    lag <- rev(seq_along(history_doses))
+    raw_probability <- regular_probability[current_dose] + sum(
+      source_alpha[history_doses] ^ lag * regular_probability[history_doses]
+    )
+  }
+  list(state = raw_probability, probability = min(1, raw_probability))
+}
+
+aide_phase12_effective_dose_probability <- function(
+    regular_probability,
+    current_dose,
+    history_doses,
+    dose_values,
+    alpha) {
+  history_doses <- as.integer(history_doses)
+  effective_dose <- dose_values[current_dose]
+  if (length(history_doses)) {
+    lag <- rev(seq_along(history_doses))
+    effective_dose <- effective_dose + sum(
+      alpha ^ lag * dose_values[history_doses]
+    )
+  }
+  ndose <- length(dose_values)
+  if (ndose == 1L || effective_dose <= dose_values[1L]) {
+    raw_probability <- regular_probability[1L]
+  } else if (effective_dose >= dose_values[ndose]) {
+    k <- ndose - 1L
+    raw_probability <- regular_probability[k] +
+      (effective_dose - dose_values[k]) /
+        (dose_values[ndose] - dose_values[k]) *
+        (regular_probability[ndose] - regular_probability[k])
+  } else {
+    k <- max(which(dose_values <= effective_dose))
+    raw_probability <- regular_probability[k] +
+      (effective_dose - dose_values[k]) /
+        (dose_values[k + 1L] - dose_values[k]) *
+        (regular_probability[k + 1L] - regular_probability[k])
+  }
+  list(
+    state = effective_dose,
+    effective_dose = effective_dose,
+    probability = min(1, max(0, raw_probability))
+  )
+}
+
+## Return the true probability for one endpoint at an administration.  The
+## explicit non-legacy models intentionally do not depend on the fitted model.
+aide_phase12_true_endpoint_probability <- function(
+    settings,
+    regular_probability,
+    current_dose,
+    history_doses = integer(0),
+    patient_random_effect = 0,
+    legacy_base = regular_probability,
+    legacy_alpha = 0,
+    legacy_multicycle = FALSE,
+    previous_state = 0) {
+  current_dose <- as.integer(current_dose)
+  history_doses <- as.integer(history_doses)
+  if (settings$model == "legacy") {
+    state <- aide_phase12_multicycle_next_state(
+      regular_probability[current_dose], legacy_alpha, previous_state
+    )
+    if (!length(history_doses)) {
+      return(c(state, list(effective_dose = NA_real_)))
+    }
+    probability <- if (isTRUE(legacy_multicycle)) {
+      state$probability
+    } else {
+      aide_phase12_ipde_toxicity_probability(
+        p_regular = regular_probability,
+        p_ipde_base = legacy_base,
+        previous_dose = tail(history_doses, 1L),
+        current_dose = current_dose,
+        alpha = legacy_alpha
+      )
+    }
+    return(list(
+      state = state$state,
+      probability = probability,
+      effective_dose = NA_real_
+    ))
+  }
+  if (settings$model == "shared_multicycle") {
+    state <- aide_phase12_multicycle_next_state(
+      regular_probability[current_dose], legacy_alpha, previous_state
+    )
+    return(c(state, list(effective_dose = NA_real_)))
+  }
+  if (settings$model == "dose_specific_geometric") {
+    return(c(
+      aide_phase12_dose_specific_geometric_probability(
+        regular_probability, current_dose, history_doses,
+        settings$dose_specific_alpha
+      ),
+      list(effective_dose = NA_real_)
+    ))
+  }
+  if (settings$model == "shared_patient_logistic") {
+    probability <- stats::plogis(stats::qlogis(regular_probability[current_dose]) +
+      patient_random_effect)
+    return(list(
+      state = probability,
+      probability = probability,
+      effective_dose = NA_real_
+    ))
+  }
+  aide_phase12_effective_dose_probability(
+    regular_probability, current_dose, history_doses,
+    settings$effective_dose_values, settings$effective_dose_alpha
+  )
 }
 
 ## Build the JAGS-oriented full-history representation. The returned rows are
@@ -1135,7 +1324,12 @@ aide_phase12_one_stage_allocation <- function(current_dose,
                                                admissible_doses,
                                                utility,
                                                response_observed,
-                                               tried_doses = integer(0)) {
+                                               tried_doses = integer(0),
+                                               allocation_mode = c(
+                                                 "upward_no_skipping",
+                                                 "one_level_toward_obd"
+                                               )) {
+  allocation_mode <- match.arg(allocation_mode)
   current_dose <- as.integer(current_dose)
   mtd <- as.integer(mtd)
   admissible_doses <- sort(unique(as.integer(admissible_doses)))
@@ -1152,7 +1346,7 @@ aide_phase12_one_stage_allocation <- function(current_dose,
   if (!length(below_mtd)) {
     return(list(dose = 99L, target = NA_integer_, candidates = integer(0),
                 action = "no_admissible_one_stage_dose",
-                response_floor = NA_integer_))
+                response_floor = NA_integer_, allocation_mode = allocation_mode))
   }
 
   response_doses <- below_mtd[as.logical(response_observed[below_mtd])]
@@ -1171,9 +1365,47 @@ aide_phase12_one_stage_allocation <- function(current_dose,
     target_action <- "mtd_no_response_fallback"
   }
 
-  if (target <= current_dose) {
+  if (allocation_mode == "upward_no_skipping" && target <= current_dose) {
     return(list(dose = target, target = target, candidates = candidates,
-                action = target_action, response_floor = response_floor))
+                action = target_action, response_floor = response_floor,
+                allocation_mode = allocation_mode))
+  }
+
+  if (allocation_mode == "one_level_toward_obd") {
+    if (target == current_dose) {
+      return(list(
+        dose = target, target = target, candidates = candidates,
+        action = target_action, response_floor = response_floor,
+        allocation_mode = allocation_mode
+      ))
+    }
+    path <- if (target > current_dose) {
+      seq.int(current_dose + 1L, target)
+    } else {
+      seq.int(current_dose - 1L, target, by = -1L)
+    }
+    eligible_path <- path[path %in% admissible_doses]
+    ## target is an admissible candidate, so this should be unreachable unless
+    ## the caller supplies internally inconsistent allocation inputs.
+    if (!length(eligible_path)) {
+      return(list(
+        dose = 99L, target = target, candidates = candidates,
+        action = "no_admissible_path_to_one_stage_target",
+        response_floor = response_floor, allocation_mode = allocation_mode
+      ))
+    }
+    assigned <- eligible_path[1L]
+    bypassed <- assigned != path[1L]
+    action <- if (target > current_dose) {
+      if (bypassed) "one_level_escalate_bypass_excluded" else "one_level_escalate"
+    } else {
+      if (bypassed) "one_level_deescalate_bypass_excluded" else "one_level_deescalate"
+    }
+    return(list(
+      dose = assigned, target = target, candidates = candidates,
+      action = action, response_floor = response_floor,
+      allocation_mode = allocation_mode
+    ))
   }
 
   ## Upward movement is governed by the path from the current dose, not by
@@ -1189,7 +1421,8 @@ aide_phase12_one_stage_allocation <- function(current_dose,
     target = target,
     candidates = candidates,
     action = if (assigned == target) target_action else "no_skip_untried_dose",
-    response_floor = response_floor
+    response_floor = response_floor,
+    allocation_mode = allocation_mode
   )
 }
 
@@ -1204,7 +1437,28 @@ simulate_AIDE_phase_I_II <- function(
     ## capped at one, where d1 is the patient's immediately previous dose.
     e_ipde = e_true,
     efficacy_ipde_alpha = 0,
+    ## "legacy" retains the historical generator above. The remaining choices
+    ## implement the August 31 alternative true mechanisms for both endpoints.
+    true_generation = c(
+      "legacy",
+      "shared_multicycle",
+      "dose_specific_geometric",
+      "shared_patient_logistic",
+      "effective_dose_geometric"
+    ),
+    ## Model 1: source-dose alpha values; the five-dose default is
+    ## c(0.2, 0.3, 0.4, 0.5, 0.6).
+    true_dose_specific_alpha = NULL,
+    ## Model 2: sigma^2 ~ InvGamma(eta, eta), with the same patient effect
+    ## used for toxicity and efficacy over every cycle.
+    true_random_effect_eta = 1,
+    ## Model 3: numerical dose scale and shared effective-dose decay.
+    true_effective_dose_values = NULL,
+    true_effective_dose_alpha = 0,
     allocation = c("two_stage", "one_stage"),
+    ## Option A is the existing upward no-skipping rule. Option B moves one
+    ## non-futile level toward the selected interim OBD.
+    allocation_mode = c("upward_no_skipping", "one_level_toward_obd"),
 
     ## Stage I ends when the cumulative Stage I sample reaches N_s1 and the
     ## toxicity recommendation is stay. Stage II continues to Nmax using the
@@ -1306,6 +1560,8 @@ simulate_AIDE_phase_I_II <- function(
   if (!is.null(seed)) set.seed(seed)
 
   allocation <- match.arg(allocation)
+  allocation_mode <- match.arg(allocation_mode)
+  true_generation <- match.arg(true_generation)
   model <- match.arg(model)
   enrollment_scheme <- match.arg(enrollment_scheme)
   if (!is.null(enrollment_priority)) {
@@ -1367,6 +1623,14 @@ simulate_AIDE_phase_I_II <- function(
     stop("efficacy_ipde_alpha must be a single finite non-negative value.")
   }
   efficacy_ipde_alpha <- as.numeric(efficacy_ipde_alpha)
+  true_generation_settings <- aide_phase12_true_generation_settings(
+    model = true_generation,
+    ndose = ndose,
+    dose_specific_alpha = true_dose_specific_alpha,
+    random_effect_eta = true_random_effect_eta,
+    effective_dose_values = true_effective_dose_values,
+    effective_dose_alpha = true_effective_dose_alpha
+  )
   if (length(N_s1) != 1L || N_s1 < 1L || N_s1 != as.integer(N_s1)) {
     stop("N_s1 must be a positive integer.")
   }
@@ -1510,6 +1774,8 @@ simulate_AIDE_phase_I_II <- function(
     eff = integer(0),
     true_toxicity_probability = numeric(0),
     true_efficacy_probability = numeric(0),
+    true_patient_random_effect = numeric(0),
+    true_effective_dose = numeric(0),
     ## These state fields are used only by the multicycle model. They retain
     ## the uncapped deterministic state needed for the next administration.
     previous_admin_id = integer(0),
@@ -1521,6 +1787,32 @@ simulate_AIDE_phase_I_II <- function(
     type = character(0),
     stringsAsFactors = FALSE
   )
+  ## The PDF's Model 2 draws one variance per simulated trial and one shared
+  ## patient effect per unique patient.  Other true generators leave both at
+  ## their neutral values without consuming random-number draws.
+  true_random_effect_variance <- if (
+      true_generation_settings$model == "shared_patient_logistic") {
+    1 / stats::rgamma(
+      1L,
+      shape = true_generation_settings$random_effect_eta,
+      rate = true_generation_settings$random_effect_eta
+    )
+  } else {
+    NA_real_
+  }
+  true_patient_random_effects <- numeric(0)
+  patient_random_effect <- function(id) {
+    if (true_generation_settings$model != "shared_patient_logistic") {
+      return(0)
+    }
+    key <- as.character(as.integer(id))
+    if (!(key %in% names(true_patient_random_effects))) {
+      true_patient_random_effects[key] <<- stats::rnorm(
+        1L, mean = 0, sd = sqrt(true_random_effect_variance)
+      )
+    }
+    unname(true_patient_random_effects[key])
+  }
   decision_log <- data.frame(
     cohort = integer(0),
     stage = character(0),
@@ -1910,8 +2202,8 @@ simulate_AIDE_phase_I_II <- function(
     state <- latest_patient_state()
 
     append_row <- function(id, arrival, toxicity_probability, efficacy_probability,
-                           toxicity_state, efficacy_state, previous_admin_id,
-                           cycle, type) {
+                           toxicity_state, efficacy_state, patient_effect,
+                           effective_dose, previous_admin_id, cycle, type) {
       tox <- draw_tite_endpoint(
         probability = toxicity_probability,
         start_time = start_time,
@@ -1941,6 +2233,8 @@ simulate_AIDE_phase_I_II <- function(
           eff = eff$outcome,
           true_toxicity_probability = as.numeric(toxicity_probability),
           true_efficacy_probability = as.numeric(efficacy_probability),
+          true_patient_random_effect = as.numeric(patient_effect),
+          true_effective_dose = as.numeric(effective_dose),
           previous_admin_id = as.integer(previous_admin_id),
           true_toxicity_state = as.numeric(toxicity_state),
           true_efficacy_state = as.numeric(efficacy_state),
@@ -1954,19 +2248,36 @@ simulate_AIDE_phase_I_II <- function(
     }
 
     for (i in seq_along(new_ids)) {
-      tox_state <- aide_phase12_multicycle_next_state(
-        p_true[dose], toxicity_ipde_alpha, previous_state = 0
+      patient_effect <- patient_random_effect(new_ids[i])
+      tox_generation <- aide_phase12_true_endpoint_probability(
+        settings = true_generation_settings,
+        regular_probability = p_true,
+        current_dose = dose,
+        patient_random_effect = patient_effect,
+        legacy_base = p_ipde,
+        legacy_alpha = toxicity_ipde_alpha,
+        legacy_multicycle = multicycle_toxicity_active,
+        previous_state = 0
       )
-      eff_state <- aide_phase12_multicycle_next_state(
-        e_true[dose], efficacy_ipde_alpha, previous_state = 0
+      eff_generation <- aide_phase12_true_endpoint_probability(
+        settings = true_generation_settings,
+        regular_probability = e_true,
+        current_dose = dose,
+        patient_random_effect = patient_effect,
+        legacy_base = e_ipde,
+        legacy_alpha = efficacy_ipde_alpha,
+        legacy_multicycle = multicycle_efficacy_active,
+        previous_state = 0
       )
       append_row(
         id = new_ids[i],
         arrival = new_arrivals[i],
-        toxicity_probability = p_true[dose],
-        efficacy_probability = e_true[dose],
-        toxicity_state = tox_state$state,
-        efficacy_state = eff_state$state,
+        toxicity_probability = tox_generation$probability,
+        efficacy_probability = eff_generation$probability,
+        toxicity_state = tox_generation$state,
+        efficacy_state = eff_generation$state,
+        patient_effect = patient_effect,
+        effective_dose = tox_generation$effective_dose,
         previous_admin_id = 0L,
         cycle = 1L,
         type = "new"
@@ -1974,35 +2285,43 @@ simulate_AIDE_phase_I_II <- function(
     }
     for (id in ret_ids) {
       last <- state[state$id == id, , drop = FALSE]
-      tox_state <- aide_phase12_multicycle_next_state(
-        p_true[dose], toxicity_ipde_alpha, last$true_toxicity_state
+      patient_history <- admin[admin$id == id, , drop = FALSE]
+      patient_history <- patient_history[order(
+        patient_history$ncycle, patient_history$row_id
+      ), , drop = FALSE]
+      history_doses <- as.integer(patient_history$dose)
+      patient_effect <- patient_random_effect(id)
+      tox_generation <- aide_phase12_true_endpoint_probability(
+        settings = true_generation_settings,
+        regular_probability = p_true,
+        current_dose = dose,
+        history_doses = history_doses,
+        patient_random_effect = patient_effect,
+        legacy_base = p_ipde,
+        legacy_alpha = toxicity_ipde_alpha,
+        legacy_multicycle = multicycle_toxicity_active,
+        previous_state = last$true_toxicity_state
       )
-      eff_state <- aide_phase12_multicycle_next_state(
-        e_true[dose], efficacy_ipde_alpha, last$true_efficacy_state
+      eff_generation <- aide_phase12_true_endpoint_probability(
+        settings = true_generation_settings,
+        regular_probability = e_true,
+        current_dose = dose,
+        history_doses = history_doses,
+        patient_random_effect = patient_effect,
+        legacy_base = e_ipde,
+        legacy_alpha = efficacy_ipde_alpha,
+        legacy_multicycle = multicycle_efficacy_active,
+        previous_state = last$true_efficacy_state
       )
       append_row(
         id = id,
         arrival = last$t_arrival,
-        toxicity_probability = if (multicycle_toxicity_active) {
-          tox_state$probability
-        } else {
-          aide_phase12_ipde_toxicity_probability(
-            p_regular = p_true, p_ipde_base = p_ipde,
-            previous_dose = last$dose, current_dose = dose,
-            alpha = toxicity_ipde_alpha
-          )
-        },
-        efficacy_probability = if (multicycle_efficacy_active) {
-          eff_state$probability
-        } else {
-          aide_phase12_ipde_efficacy_probability(
-            e_regular = e_true, e_ipde_base = e_ipde,
-            previous_dose = last$dose, current_dose = dose,
-            alpha = efficacy_ipde_alpha
-          )
-        },
-        toxicity_state = tox_state$state,
-        efficacy_state = eff_state$state,
+        toxicity_probability = tox_generation$probability,
+        efficacy_probability = eff_generation$probability,
+        toxicity_state = tox_generation$state,
+        efficacy_state = eff_generation$state,
+        patient_effect = patient_effect,
+        effective_dose = tox_generation$effective_dose,
         previous_admin_id = last$row_id,
         cycle = last$ncycle + 1L,
         type = "retreat"
@@ -2294,7 +2613,8 @@ simulate_AIDE_phase_I_II <- function(
       admissible_doses = which(admissible),
       utility = utility,
       response_observed = observed_efficacy_response(),
-      tried_doses = unique(as.integer(admin$dose))
+      tried_doses = unique(as.integer(admin$dose)),
+      allocation_mode = allocation_mode
     )
     list(
       MTD = MTD,
@@ -2596,6 +2916,14 @@ simulate_AIDE_phase_I_II <- function(
     ),
     final = list(
       allocation = allocation,
+      allocation_mode = allocation_mode,
+      true_generation = c(
+        true_generation_settings,
+        list(
+          random_effect_variance = true_random_effect_variance,
+          patient_random_effects = true_patient_random_effects
+        )
+      ),
       MTD = as.integer(final_mtd),
       OBD = as.integer(final_obd),
       admissible = final_admissible,
@@ -2645,11 +2973,18 @@ simulate_AIDE_phase_I_II <- function(
           ),
           phi = target,
           cutoff = ipde_toxicity_cutoff,
-          true_generation = if (multicycle_toxicity_active) {
-            "min(1, p_true[d_current] + toxicity_ipde_alpha * prior_uncapped_toxicity_state)"
-          } else {
-            "min(1, p_ipde[d2] + toxicity_ipde_alpha * p_true[d1])"
-          },
+          true_generation = switch(
+            true_generation,
+            legacy = if (multicycle_toxicity_active) {
+              "min(1, p_true[d_current] + toxicity_ipde_alpha * prior_uncapped_toxicity_state)"
+            } else {
+              "min(1, p_ipde[d2] + toxicity_ipde_alpha * p_true[d1])"
+            },
+            shared_multicycle = "min(1, p_true[d_current] + toxicity_ipde_alpha * prior_uncapped_toxicity_state)",
+            dose_specific_geometric = "min(1, p_true[d_current] + sum_r(alpha_true[d_source,r]^lag_r * p_true[d_source,r]))",
+            shared_patient_logistic = "plogis(qlogis(p_true[d_current]) + shared_patient_random_effect)",
+            effective_dose_geometric = "interpolate(p_true, x_current + sum_r(true_effective_dose_alpha^lag_r * x_source,r))"
+          ),
           ipde_alpha = toxicity_ipde_alpha,
           ipde_base = p_ipde,
           event_generator = "gen.tite",
@@ -2669,11 +3004,18 @@ simulate_AIDE_phase_I_II <- function(
           jags_n_burnin = efficacy_n_burnin,
           jags_n_iter = efficacy_n_iter,
           jags_thin = efficacy_thin,
-          true_generation = if (multicycle_efficacy_active) {
-            "min(1, e_true[d_current] + efficacy_ipde_alpha * prior_uncapped_efficacy_state)"
-          } else {
-            "min(1, e_ipde[d2] + efficacy_ipde_alpha * e_true[d1])"
-          },
+          true_generation = switch(
+            true_generation,
+            legacy = if (multicycle_efficacy_active) {
+              "min(1, e_true[d_current] + efficacy_ipde_alpha * prior_uncapped_efficacy_state)"
+            } else {
+              "min(1, e_ipde[d2] + efficacy_ipde_alpha * e_true[d1])"
+            },
+            shared_multicycle = "min(1, e_true[d_current] + efficacy_ipde_alpha * prior_uncapped_efficacy_state)",
+            dose_specific_geometric = "min(1, e_true[d_current] + sum_r(alpha_true[d_source,r]^lag_r * e_true[d_source,r]))",
+            shared_patient_logistic = "plogis(qlogis(e_true[d_current]) + shared_patient_random_effect)",
+            effective_dose_geometric = "interpolate(e_true, x_current + sum_r(true_effective_dose_alpha^lag_r * x_source,r))"
+          ),
           ipde_alpha = efficacy_ipde_alpha,
           ipde_base = e_ipde,
           event_generator = "gen.tite",

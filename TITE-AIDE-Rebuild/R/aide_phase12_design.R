@@ -83,9 +83,34 @@ aide_one_stage_rule <- function(state, admissible, toxicity_fit, efficacy_fit, c
     target_action <- "mtd_no_response_fallback"
   }
 
-  if (target <= d) {
+  allocation_mode <- config$design$allocation_mode
+  if (allocation_mode == "upward_no_skipping" && target <= d) {
     next_dose <- target
     action <- target_action
+  } else if (allocation_mode == "one_level_toward_obd") {
+    if (target == d) {
+      next_dose <- target
+      action <- target_action
+    } else {
+      path <- if (target > d) {
+        seq.int(d + 1L, target)
+      } else {
+        seq.int(d - 1L, target, by = -1L)
+      }
+      eligible_path <- path[path %in% admissible$doses]
+      if (!length(eligible_path)) {
+        return(list(stop_trial = TRUE,
+                    stop_reason = "no_admissible_path_to_one_stage_target",
+                    next_dose = NA_integer_))
+      }
+      next_dose <- eligible_path[1L]
+      bypassed <- next_dose != path[1L]
+      action <- if (target > d) {
+        if (bypassed) "one_level_escalate_bypass_excluded" else "one_level_escalate"
+      } else {
+        if (bypassed) "one_level_deescalate_bypass_excluded" else "one_level_deescalate"
+      }
+    }
   } else {
     ## Inspect every dose on the upward path.  Using the highest tried dose
     ## here would incorrectly allow a previously tried high dose to bypass an
@@ -105,6 +130,7 @@ aide_one_stage_rule <- function(state, admissible, toxicity_fit, efficacy_fit, c
     utility = utility,
     provisional_obd = target,
     response_floor = response_floor,
+    allocation_mode = allocation_mode,
     allocation_action = action
   )
 }
@@ -151,8 +177,8 @@ aide_two_stage_decision <- function(state, toxicity_recommendation, admissible, 
 
   ## Stage II is deliberately not a separate allocation design.  After the
   ## toxicity-driven Stage I transition, it uses the one-stage rule above,
-  ## including the response floor, MTD fallback, and path-based no-skipping
-  ## constraint.  No Stage-II-specific randomization or utility mode is used.
+  ## including the response floor, MTD fallback, and selected allocation mode.
+  ## No Stage-II-specific randomization or utility mode is used.
   stage2 <- aide_one_stage_decision(
     state, toxicity_recommendation, admissible, toxicity_fit, efficacy_fit,
     config

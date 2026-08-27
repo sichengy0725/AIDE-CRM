@@ -8,7 +8,7 @@ aide_phase12_initialize_state <- function(config, scenario, seed = NULL) {
     t_now = config$time$t0, active = TRUE, stop_reason = NA_character_,
     events = aide_empty_df(c("event_id", "time", "seq", "event_type", "patient_id", "admin_id")),
     queue = aide_empty_df(c("queue_id", "time", "seq", "type", "patient_id", "source_admin_id", "status", "last_reason")),
-    admin = aide_empty_df(c("admin_id", "patient_id", "cohort_id", "decision_id", "stage", "assignment_type", "dose", "decision_next_dose", "previous_dose", "previous_admin_id", "cycle", "t_arrival", "t_start", "t_dlt", "t_response", "assessment_end", "dlt_final", "eff_final", "true_p_tox", "true_p_eff", "true_toxicity_state", "true_efficacy_state")),
+    admin = aide_empty_df(c("admin_id", "patient_id", "cohort_id", "decision_id", "stage", "assignment_type", "dose", "decision_next_dose", "previous_dose", "previous_admin_id", "cycle", "t_arrival", "t_start", "t_dlt", "t_response", "assessment_end", "dlt_final", "eff_final", "true_p_tox", "true_p_eff", "true_patient_random_effect", "true_effective_dose", "true_toxicity_state", "true_efficacy_state")),
     cohort = list(open = TRUE, cohort_id = 1L, opened_time = config$time$t0,
                   next_dose = config$design$start_dose, decision_action = "initial",
                   stage = if (config$design$allocation == "two_stage") "stage1" else "one_stage",
@@ -25,7 +25,20 @@ aide_phase12_initialize_state <- function(config, scenario, seed = NULL) {
                 cohort_log = aide_empty_df(c("cohort_id", "time", "decision_id", "stage", "action", "next_dose", "filled", "closed_time")),
                 n_eval_log = aide_empty_df(c("decision_id", "time", "current_dose", "n_eval_required", "n_eval_observed", "evaluated_admin_ids", "blocked", "trigger_type", "trigger_disposition")),
                 retreat_log = aide_empty_df(c("queue_id", "time", "patient_id", "source_admin_id", "eligible", "reason", "status", "cohort_id", "assigned_dose"))),
-    counters = list(event = 0L, seq = 0L, queue = 0L, admin = 0L, patient = 0L, decision = 0L, cohort = 1L, arrivals = 0L)
+    counters = list(event = 0L, seq = 0L, queue = 0L, admin = 0L, patient = 0L, decision = 0L, cohort = 1L, arrivals = 0L),
+    true_generation = list(
+      random_effect_variance = if (
+          scenario$true_generation$model == "shared_patient_logistic") {
+        1 / stats::rgamma(
+          1L,
+          shape = scenario$true_generation$random_effect_eta,
+          rate = scenario$true_generation$random_effect_eta
+        )
+      } else {
+        NA_real_
+      },
+      patient_random_effects = numeric(0)
+    )
   )
   state
 }

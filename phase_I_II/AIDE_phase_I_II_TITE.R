@@ -15,8 +15,8 @@
 ##   * a closed cohort requires the prescribed number of fully evaluated DLT
 ##     outcomes before a new model-based decision; and
 ##   * every opened cohort has one model-assigned regular dose.
-## Stage II reuses the one-stage response-floor, MTD-fallback, and no-skipping
-## allocation rule; it has no separate top-two or highest-utility mode.
+## Stage II reuses the one-stage response-floor and MTD-fallback rule with the
+## selected allocation mode; it has no separate top-two or highest-utility mode.
 ## ============================================================
 
 `%||%` <- function(x, y) if (is.null(x)) y else x
@@ -128,6 +128,8 @@ aide_phase12_tite_admin_view <- function(admin) {
     eff = admin$eff_final,
     true_toxicity_probability = admin$true_p_tox,
     true_efficacy_probability = admin$true_p_eff,
+    true_patient_random_effect = admin$true_patient_random_effect,
+    true_effective_dose = admin$true_effective_dose,
     true_toxicity_state = admin$true_toxicity_state,
     true_efficacy_state = admin$true_efficacy_state,
     ncycle = admin$cycle,
@@ -171,7 +173,19 @@ simulate_AIDE_phase_I_II_TITE <- function(
     e_true,
     toxicity_ipde_alpha = 0,
     efficacy_ipde_alpha = 0,
+    true_generation = c(
+      "legacy",
+      "shared_multicycle",
+      "dose_specific_geometric",
+      "shared_patient_logistic",
+      "effective_dose_geometric"
+    ),
+    true_dose_specific_alpha = NULL,
+    true_random_effect_eta = 1,
+    true_effective_dose_values = NULL,
+    true_effective_dose_alpha = 0,
     allocation = c("two_stage", "one_stage"),
+    allocation_mode = c("upward_no_skipping", "one_level_toward_obd"),
     Nmax = 30L,
     N_s1 = 15L,
     N_s2 = Nmax,
@@ -220,6 +234,8 @@ simulate_AIDE_phase_I_II_TITE <- function(
     verbose = FALSE) {
   aide_phase12_tite_require_jags()
   allocation <- match.arg(allocation)
+  allocation_mode <- match.arg(allocation_mode)
+  true_generation <- match.arg(true_generation)
   dlt_dist <- match.arg(dlt_dist)
   efficacy_dist <- match.arg(efficacy_dist, c("uniform", "front_loaded"))
   if (!is.null(stage2_allocation)) {
@@ -236,6 +252,7 @@ simulate_AIDE_phase_I_II_TITE <- function(
   )
   config <- aide_phase12_config(
     allocation = allocation,
+    allocation_mode = allocation_mode,
     cohort_size = as.integer(C),
     Nmax = as.integer(Nmax),
     s1_Max = as.integer(N_s1),
@@ -275,7 +292,12 @@ simulate_AIDE_phase_I_II_TITE <- function(
     p_true = p_true,
     e_true = e_true,
     toxicity_ipde_dgm = list(alpha_true = toxicity_ipde_alpha),
-    efficacy_ipde_dgm = list(alpha_true = efficacy_ipde_alpha)
+    efficacy_ipde_dgm = list(alpha_true = efficacy_ipde_alpha),
+    true_generation = true_generation,
+    true_dose_specific_alpha = true_dose_specific_alpha,
+    true_random_effect_eta = true_random_effect_eta,
+    true_effective_dose_values = true_effective_dose_values,
+    true_effective_dose_alpha = true_effective_dose_alpha
   )
   aide_phase12_tite_attach_phase12_fields(
     simulate_AIDE_phase_I_II_event(config, scenario, seed = seed %||% 1L)

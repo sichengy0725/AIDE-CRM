@@ -14,7 +14,9 @@ aide_phase12_merge <- function(x, defaults) modifyList(defaults, x %||% list())
 `%||%` <- function(x, y) if (is.null(x)) y else x
 
 aide_phase12_config <- function(
-    allocation = c("one_stage", "two_stage"), cohort_size = 3L, Nmax = 30L,
+    allocation = c("one_stage", "two_stage"),
+    allocation_mode = c("upward_no_skipping", "one_level_toward_obd"),
+    cohort_size = 3L, Nmax = 30L,
     ## N_s2 is retained for compatibility only.  Stage II has no per-dose
     ## cap in the revised design.
     s1_Max = 15L, N_s2 = Nmax, n_eval = cohort_size, m_U = 6L,
@@ -38,8 +40,10 @@ aide_phase12_config <- function(
                    toxicity_ipde_overdose_cutoff = .95),
     reporting = list(verbose = FALSE, store_raw_tables = TRUE), ...) {
   allocation <- match.arg(allocation)
+  allocation_mode <- match.arg(allocation_mode)
   config <- list(
     design = list(allocation = allocation, cohort_size = as.integer(cohort_size),
+                   allocation_mode = allocation_mode,
                   Nmax = as.integer(Nmax), s1_Max = as.integer(s1_Max),
                   N_s2 = as.integer(N_s2), n_eval = as.integer(n_eval),
                   m_U = as.integer(m_U), cycle_max = as.integer(cycle_max),
@@ -74,10 +78,23 @@ aide_phase12_config <- function(
   config
 }
 
-aide_phase12_scenario <- function(p_true, e_true,
-                                  toxicity_ipde_dgm = list(alpha_true = 0),
-                                  efficacy_ipde_dgm = list(alpha_true = 0),
-                                  endpoint_time_dgm = list()) {
+aide_phase12_scenario <- function(
+    p_true,
+    e_true,
+    toxicity_ipde_dgm = list(alpha_true = 0),
+    efficacy_ipde_dgm = list(alpha_true = 0),
+    endpoint_time_dgm = list(),
+    true_generation = c(
+      "legacy",
+      "shared_multicycle",
+      "dose_specific_geometric",
+      "shared_patient_logistic",
+      "effective_dose_geometric"
+    ),
+    true_dose_specific_alpha = NULL,
+    true_random_effect_eta = 1,
+    true_effective_dose_values = NULL,
+    true_effective_dose_alpha = 0) {
   p_true <- as.numeric(p_true); e_true <- as.numeric(e_true)
   if (!length(p_true) || length(p_true) != length(e_true) ||
       any(!is.finite(c(p_true, e_true))) || any(c(p_true, e_true) < 0 | c(p_true, e_true) > 1))
@@ -86,8 +103,18 @@ aide_phase12_scenario <- function(p_true, e_true,
   ef <- aide_phase12_merge(efficacy_ipde_dgm, list(alpha_true = 0))
   if (any(!is.finite(c(tx$alpha_true, ef$alpha_true))) || any(c(tx$alpha_true, ef$alpha_true) < 0))
     stop("IPDE DGM alpha_true values must be finite and non-negative.")
+  true_generation <- match.arg(true_generation)
+  truth <- aide_phase12_tite_true_generation_settings(
+    model = true_generation,
+    ndose = length(p_true),
+    dose_specific_alpha = true_dose_specific_alpha,
+    random_effect_eta = true_random_effect_eta,
+    effective_dose_values = true_effective_dose_values,
+    effective_dose_alpha = true_effective_dose_alpha
+  )
   list(p_true = p_true, e_true = e_true, toxicity_ipde_dgm = tx,
-       efficacy_ipde_dgm = ef, endpoint_time_dgm = endpoint_time_dgm, ndose = length(p_true))
+       efficacy_ipde_dgm = ef, endpoint_time_dgm = endpoint_time_dgm,
+       true_generation = truth, ndose = length(p_true))
 }
 
 aide_phase12_validate_config <- function(config, scenario = NULL) {
@@ -96,6 +123,9 @@ aide_phase12_validate_config <- function(config, scenario = NULL) {
   if (!d$allocation %in% c("one_stage", "two_stage") ||
       any(!is.finite(numeric_design)) || any(unlist(d[c("cohort_size", "Nmax", "n_eval", "cycle_max", "start_dose")]) < 1))
     stop("Invalid design configuration.")
+  if (!d$allocation_mode %in% c("upward_no_skipping", "one_level_toward_obd")) {
+    stop("design$allocation_mode must be 'upward_no_skipping' or 'one_level_toward_obd'.")
+  }
   if (d$N_s2 < 1L ||
       (d$allocation == "two_stage" && (d$s1_Max < 1L || d$s1_Max > d$Nmax)))
     stop("For two-stage designs, s1_Max must be no greater than Nmax; N_s2 must be positive when supplied for compatibility.")

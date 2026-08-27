@@ -191,6 +191,84 @@ no_response_rule <- aide_phase12_one_stage_allocation(
 )
 stopifnot(no_response_rule$target == 4L, no_response_rule$dose == 3L,
           identical(no_response_rule$action, "no_skip_untried_dose"))
+
+## Option B moves one level toward the interim OBD.  A standing futility
+## exclusion at the adjacent dose is bypassed, but the move cannot go beyond
+## the selected OBD.
+one_level_rule <- aide_phase12_one_stage_allocation(
+  current_dose = 2L,
+  mtd = 5L,
+  admissible_doses = c(1L, 2L, 4L, 5L),
+  utility = c(.1, .2, .3, .9, .8),
+  response_observed = rep(FALSE, 5L),
+  tried_doses = 1:5,
+  allocation_mode = "one_level_toward_obd"
+)
+stopifnot(
+  one_level_rule$target == 5L,
+  one_level_rule$dose == 4L,
+  identical(one_level_rule$action, "one_level_escalate_bypass_excluded")
+)
+one_level_down_rule <- aide_phase12_one_stage_allocation(
+  current_dose = 5L,
+  mtd = 5L,
+  admissible_doses = c(1L, 2L, 3L, 5L),
+  utility = c(.1, .9, .4, .2, .3),
+  response_observed = c(TRUE, FALSE, FALSE, FALSE, FALSE),
+  tried_doses = 1:5,
+  allocation_mode = "one_level_toward_obd"
+)
+stopifnot(
+  one_level_down_rule$target == 2L,
+  one_level_down_rule$dose == 3L,
+  identical(one_level_down_rule$action, "one_level_deescalate_bypass_excluded")
+)
+
+## Alternative true generators in the August 31 specification.
+truth_probability <- c(.10, .20, .30, .40, .50)
+dose_specific_truth <- aide_phase12_true_generation_settings(
+  model = "dose_specific_geometric", ndose = 5L,
+  dose_specific_alpha = c(.2, .3, .4, .5, .6)
+)
+dose_specific_cycle3 <- aide_phase12_true_endpoint_probability(
+  settings = dose_specific_truth,
+  regular_probability = truth_probability,
+  current_dose = 3L,
+  history_doses = c(1L, 2L)
+)
+stopifnot(isTRUE(all.equal(
+  dose_specific_cycle3$probability,
+  .30 + .3 * .20 + .2^2 * .10
+)))
+
+logistic_truth <- aide_phase12_true_generation_settings(
+  model = "shared_patient_logistic", ndose = 5L
+)
+logistic_probability <- aide_phase12_true_endpoint_probability(
+  settings = logistic_truth,
+  regular_probability = truth_probability,
+  current_dose = 2L,
+  patient_random_effect = .5
+)
+stopifnot(isTRUE(all.equal(
+  logistic_probability$probability, stats::plogis(stats::qlogis(.20) + .5)
+)))
+
+effective_truth <- aide_phase12_true_generation_settings(
+  model = "effective_dose_geometric", ndose = 5L,
+  effective_dose_values = c(15, 20, 30, 35, 45),
+  effective_dose_alpha = .5
+)
+effective_cycle3 <- aide_phase12_true_endpoint_probability(
+  settings = effective_truth,
+  regular_probability = truth_probability,
+  current_dose = 3L,
+  history_doses = c(1L, 2L)
+)
+stopifnot(
+  isTRUE(all.equal(effective_cycle3$effective_dose, 43.75)),
+  isTRUE(all.equal(effective_cycle3$probability, .4875))
+)
 carryover_map <- lapply(
   c(
     "discount_shared", "discount_dose_specific",

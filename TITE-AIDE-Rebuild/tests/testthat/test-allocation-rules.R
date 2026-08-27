@@ -123,6 +123,63 @@ decision <- aide_one_stage_decision(
 stopifnot(decision$provisional_obd == 4L, decision$next_dose == 3L,
           decision$candidate_doses[1L] == 1L)
 
+## Option B moves one non-futile level toward the selected OBD.  It bypasses
+## an adjacent futile dose but never passes the selected target.
+one_level_config <- aide_phase12_config(
+  allocation = "one_stage", allocation_mode = "one_level_toward_obd",
+  Nmax = 18L, cohort_size = 3L
+)
+case <- make_allocation_state(one_level_config, "one_stage", 2L, 1:5)
+case$state$futile[3L] <- TRUE
+admissible <- aide_build_admissible_set(
+  case$state, fits$toxicity, fits$efficacy, one_level_config, case$scenario
+)
+admissible$mtd <- 5L
+decision <- aide_one_stage_decision(
+  case$state, toxicity_stay, admissible, fits$toxicity, fits$efficacy,
+  one_level_config
+)
+stopifnot(
+  decision$provisional_obd == 5L,
+  decision$next_dose == 4L,
+  identical(decision$allocation_action, "one_level_escalate_bypass_excluded")
+)
+
+## The TITE engine uses the same three selectable alternative truth
+## mechanisms as the non-TITE simulator.
+truth_probability <- c(.10, .20, .30, .40, .50)
+dose_specific_truth <- aide_phase12_tite_true_generation_settings(
+  "dose_specific_geometric", 5L, c(.2, .3, .4, .5, .6)
+)
+dose_specific_cycle3 <- aide_phase12_tite_true_endpoint_probability(
+  dose_specific_truth, truth_probability, 3L, c(1L, 2L)
+)
+stopifnot(isTRUE(all.equal(
+  dose_specific_cycle3$probability,
+  .30 + .3 * .20 + .2^2 * .10
+)))
+logistic_truth <- aide_phase12_tite_true_generation_settings(
+  "shared_patient_logistic", 5L
+)
+logistic_probability <- aide_phase12_tite_true_endpoint_probability(
+  logistic_truth, truth_probability, 2L, patient_random_effect = .5
+)
+stopifnot(isTRUE(all.equal(
+  logistic_probability$probability, stats::plogis(stats::qlogis(.20) + .5)
+)))
+effective_truth <- aide_phase12_tite_true_generation_settings(
+  "effective_dose_geometric", 5L,
+  effective_dose_values = c(15, 20, 30, 35, 45),
+  effective_dose_alpha = .5
+)
+effective_cycle3 <- aide_phase12_tite_true_endpoint_probability(
+  effective_truth, truth_probability, 3L, c(1L, 2L)
+)
+stopifnot(
+  isTRUE(all.equal(effective_cycle3$effective_dose, 43.75)),
+  isTRUE(all.equal(effective_cycle3$probability, .4875))
+)
+
 ## After Stage I, two-stage allocation is exactly the one-stage rule. It has
 ## one frozen allocation dose.
 two_stage_config <- aide_phase12_config(

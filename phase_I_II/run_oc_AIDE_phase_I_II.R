@@ -144,6 +144,7 @@ make_phase12_config_tag <- function(task) {
   paste0(
     "P12",
     "-a", allocation_tag,
+    "-om", task$allocation_mode_id,
     "-N", fmt_short(task$Nmax),
     "-s1", fmt_short(task$N_s1),
     "-u", task$utility_type,
@@ -165,6 +166,8 @@ make_phase12_config_tag <- function(task) {
     "-rate", fmt_short(task$arrival_rate),
     "-ta", fmt_short(task$toxicity_ipde_alpha),
     "-ea", fmt_short(task$efficacy_ipde_alpha),
+    ## Generation-model codes: 1 = default, 2--4 = PDF Models 1--3.
+    "-gm", task$true_generation_id,
     "-tg", as.integer(isTRUE(task$apply_ipde_toxicity_rule)),
     "-tc", fmt_short(task$ipde_toxicity_cutoff)
   )
@@ -255,6 +258,27 @@ one_stage_sizes <- data.frame(
 )
 design_size_grid <- rbind(two_stage_sizes, one_stage_sizes)
 
+## One-stage allocation options: option 1 is the historical upward
+## no-skipping rule; option 2 moves one non-futile level toward the OBD.
+allocation_mode_grid <- data.frame(
+  allocation_mode_id = c(1L, 2L),
+  allocation_mode = c("upward_no_skipping", "one_level_toward_obd"),
+  stringsAsFactors = FALSE
+)
+
+## Truth-generation codes in output names: 1 = default legacy generator;
+## 2, 3, and 4 are PDF Models 1, 2, and 3, respectively.
+true_generation_grid <- data.frame(
+  true_generation_id = 1:4,
+  true_generation = c(
+    "legacy",
+    "dose_specific_geometric",
+    "shared_patient_logistic",
+    "effective_dose_geometric"
+  ),
+  stringsAsFactors = FALSE
+)
+
 ## The arbitrary-cycle shared additive model propagates each patient's
 ## uncapped endpoint state across all administrations.
 model_grid <- data.frame(
@@ -302,6 +326,13 @@ alpha_grid <- data.frame(
   efficacy_ipde_alpha = c(0, 0.3, 0.6, 0.9),
   stringsAsFactors = FALSE
 )
+
+## Alternative-truth parameters.  Model 3 uses a non-zero carryover alpha so
+## the effective-dose mechanism differs from the default truth generator.
+true_dose_specific_alpha <- c(0.2, 0.3, 0.4, 0.5, 0.6)
+true_random_effect_eta <- 1
+true_effective_dose_values <- c(15, 20, 30, 35, 45)
+true_effective_dose_alpha <- 0.5
 
 utility_scores <- c(u00 = 0, u01 = 40, u10 = 60, u11 = 100)
 cohort_size <- 3L
@@ -353,13 +384,15 @@ setting_grid <- Reduce(
   cross_join,
   list(
     design_size_grid,
+    allocation_mode_grid,
     model_grid,
     crm_prior_grid,
     efficacy_prior_grid,
     enrollment_schemes,
     utility_grid,
     arrival_grid,
-    alpha_grid
+    alpha_grid,
+    true_generation_grid
   )
 )
 setting_grid$setting_id <- seq_len(nrow(setting_grid))
@@ -415,6 +448,7 @@ run_one_phase12_task <- function(task) {
       store_raw = FALSE,
 
       allocation = task$allocation,
+      allocation_mode = task$allocation_mode,
       Nmax = task$Nmax,
       N_s1 = task$N_s1,
       N_s2 = task$N_s2,
@@ -447,6 +481,11 @@ run_one_phase12_task <- function(task) {
 
       toxicity_ipde_alpha = task$toxicity_ipde_alpha,
       efficacy_ipde_alpha = task$efficacy_ipde_alpha,
+      true_generation = task$true_generation,
+      true_dose_specific_alpha = task$true_dose_specific_alpha,
+      true_random_effect_eta = task$true_random_effect_eta,
+      true_effective_dose_values = task$true_effective_dose_values,
+      true_effective_dose_alpha = task$true_effective_dose_alpha,
 
       efficacy_threshold = task$efficacy_threshold,
       futility_cutoff = task$futility_cutoff,
@@ -469,6 +508,16 @@ run_one_phase12_task <- function(task) {
     carryover_model = task$carryover_model,
     crm_r_model = task$crm_r_model,
     efficacy_model = task$efficacy_model,
+    allocation_mode_id = task$allocation_mode_id,
+    allocation_mode = task$allocation_mode,
+    true_generation_id = task$true_generation_id,
+    true_generation = task$true_generation,
+    true_generation_parameters = list(
+      dose_specific_alpha = task$true_dose_specific_alpha,
+      random_effect_eta = task$true_random_effect_eta,
+      effective_dose_values = task$true_effective_dose_values,
+      effective_dose_alpha = task$true_effective_dose_alpha
+    ),
     efficacy_additive_alpha_prior = c(
       task$efficacy_additive_alpha_a, task$efficacy_additive_alpha_b
     ),
@@ -541,6 +590,8 @@ for (setting_row in seq_len(nrow(setting_grid))) {
       e_true = e_true,
 
       allocation = as.character(setting$allocation),
+      allocation_mode_id = as.integer(setting$allocation_mode_id),
+      allocation_mode = as.character(setting$allocation_mode),
       Nmax = as.integer(setting$Nmax),
       N_s1 = as.integer(setting$N_s1),
       N_s2 = as.integer(setting$N_s2),
@@ -564,6 +615,12 @@ for (setting_row in seq_len(nrow(setting_grid))) {
       arrival_rate = as.numeric(setting$arrival_rate),
       toxicity_ipde_alpha = as.numeric(setting$toxicity_ipde_alpha),
       efficacy_ipde_alpha = as.numeric(setting$efficacy_ipde_alpha),
+      true_generation_id = as.integer(setting$true_generation_id),
+      true_generation = as.character(setting$true_generation),
+      true_dose_specific_alpha = true_dose_specific_alpha,
+      true_random_effect_eta = true_random_effect_eta,
+      true_effective_dose_values = true_effective_dose_values,
+      true_effective_dose_alpha = true_effective_dose_alpha,
 
       C = cohort_size,
       cycle_max = cycle_max,

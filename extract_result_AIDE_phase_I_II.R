@@ -47,6 +47,26 @@ one_stage_sizes <- data.frame(
 )
 design_size_grid <- rbind(two_stage_sizes, one_stage_sizes)
 
+## Match the runner's one-stage allocation option codes.
+allocation_mode_grid <- data.frame(
+  allocation_mode_id = c(1L, 2L),
+  allocation_mode = c("upward_no_skipping", "one_level_toward_obd"),
+  stringsAsFactors = FALSE
+)
+
+## Match the runner's truth-generation codes used in result-folder and final
+## output names: 1 = default; 2, 3, and 4 = PDF Models 1, 2, and 3.
+true_generation_grid <- data.frame(
+  true_generation_id = 1:4,
+  true_generation = c(
+    "legacy",
+    "dose_specific_geometric",
+    "shared_patient_logistic",
+    "effective_dose_geometric"
+  ),
+  stringsAsFactors = FALSE
+)
+
 ## Keep this paired model grid synchronized with the OC runner, including the
 ## arbitrary-cycle shared additive carryover model.
 model_grid <- data.frame(
@@ -174,13 +194,15 @@ setting_grid <- Reduce(
   cross_join,
   list(
     design_size_grid,
+    allocation_mode_grid,
     model_grid,
     crm_prior_grid,
     efficacy_prior_grid,
     enrollment_schemes,
     utility_grid,
     arrival_grid,
-    alpha_grid
+    alpha_grid,
+    true_generation_grid
   )
 )
 setting_grid$setting_id <- seq_len(nrow(setting_grid))
@@ -227,6 +249,7 @@ make_phase12_config_tag <- function(task) {
   paste0(
     "P12",
     "-a", allocation_tag,
+    "-om", task$allocation_mode_id,
     "-N", fmt_short(task$Nmax),
     "-s1", fmt_short(task$N_s1),
     "-u", task$utility_type,
@@ -248,6 +271,7 @@ make_phase12_config_tag <- function(task) {
     "-rate", fmt_short(task$arrival_rate),
     "-ta", fmt_short(task$toxicity_ipde_alpha),
     "-ea", fmt_short(task$efficacy_ipde_alpha),
+    "-gm", task$true_generation_id,
     "-tg", as.integer(isTRUE(apply_ipde_toxicity_rule)),
     "-tc", fmt_short(ipde_toxicity_cutoff)
   )
@@ -425,6 +449,12 @@ make_metadata <- function(result, task_id) {
     True_OBD = as.integer(truth$true_obd),
     Target_Toxicity = as.numeric(truth$target),
     Allocation = as.character(task_value(task, "allocation")),
+    Allocation_Mode_ID = as.integer(task_value(
+      task, "allocation_mode_id", task_value(runner, "allocation_mode_id")
+    )),
+    Allocation_Mode = as.character(task_value(
+      task, "allocation_mode", task_value(runner, "allocation_mode")
+    )),
     Nmax = as.integer(task_value(task, "Nmax")),
     Sample_Size = as.integer(task_value(task, "Nmax")),
     N_s1 = as.integer(task_value(task, "N_s1")),
@@ -441,6 +471,12 @@ make_metadata <- function(result, task_id) {
     CRM_Prior_b = as.numeric(task_value(task, "crm_b_r")),
     Efficacy_Model = as.character(task_value(
       task, "efficacy_model", "dose_specific_carryover"
+    )),
+    True_Generation_ID = as.integer(task_value(
+      task, "true_generation_id", task_value(runner, "true_generation_id")
+    )),
+    True_Generation = as.character(task_value(
+      task, "true_generation", task_value(runner, "true_generation")
     )),
     Efficacy_Prior_a = as.numeric(task_value(task, "efficacy_a")),
     Efficacy_Prior_b = as.numeric(task_value(task, "efficacy_b")),
@@ -637,6 +673,9 @@ for (task_row in seq_len(nrow(expected_tasks))) {
   cat("CRM r model:", task$crm_r_model, "\n")
   cat("Efficacy model:", task$efficacy_model, "\n")
   cat("Allocation:", task$allocation, "\n")
+  cat("Allocation mode:", task$allocation_mode, "\n")
+  cat("True generation model:", task$true_generation_id,
+      "(", task$true_generation, ")\n")
   cat("Nmax:", task$Nmax, "\n")
   cat("N_s1:", task$N_s1, "\n")
   if ("N_s2" %in% names(task)) cat("N_s2:", task$N_s2, "\n")
@@ -726,6 +765,10 @@ make_phase12_output_tag <- function() {
   paste0(
     "AIDE_phase_I_II",
     "_models", paste(unique(model_grid$model_id), collapse = "_"),
+    "_allocmode", paste(unique(allocation_mode_grid$allocation_mode_id), collapse = "_"),
+    "_generation_model", paste(
+      unique(true_generation_grid$true_generation_id), collapse = "_"
+    ),
     "_N", paste(fmt_short(unique(design_size_grid$Nmax)), collapse = "_"),
     "_ncycle", fmt_short(cycle_max),
     "_rp", paste(crm_priors, collapse = "_"),

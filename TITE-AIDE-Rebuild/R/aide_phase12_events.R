@@ -199,6 +199,24 @@ aide_assignment_dose <- function(state, queue_index, config) {
   sample(doses, size = 1L, prob = probabilities)
 }
 
+aide_phase12_tite_patient_random_effect <- function(state, patient_id,
+                                                      scenario) {
+  if (scenario$true_generation$model != "shared_patient_logistic") {
+    return(list(state = state, effect = 0))
+  }
+  key <- as.character(as.integer(patient_id))
+  effects <- state$true_generation$patient_random_effects
+  if (!(key %in% names(effects))) {
+    effects[key] <- stats::rnorm(
+      1L,
+      mean = 0,
+      sd = sqrt(state$true_generation$random_effect_variance)
+    )
+    state$true_generation$patient_random_effects <- effects
+  }
+  list(state = state, effect = unname(effects[key]))
+}
+
 aide_append_administration <- function(state, queue_index, config, scenario) {
   q <- state$queue[queue_index, , drop = FALSE]; is_retreat <- q$type == "retreat"
   previous <- NA_integer_; cycle <- 1L; arrival <- q$time
@@ -217,22 +235,40 @@ aide_append_administration <- function(state, queue_index, config, scenario) {
     previous_tox_state <- as.numeric(source_row$true_toxicity_state)
     previous_eff_state <- as.numeric(source_row$true_efficacy_state)
   }
-  tox_state <- scenario$p_true[dose] + scenario$toxicity_ipde_dgm$alpha_true * previous_tox_state
-  eff_state <- scenario$e_true[dose] + scenario$efficacy_ipde_dgm$alpha_true * previous_eff_state
-  p_tox <- if (is_retreat && identical(config$toxicity$model, "multicycle_additive")) {
-    min(1, tox_state)
-  } else if (is_retreat) {
-    aide_phase12_ipde_probability(scenario$p_true, scenario$toxicity_ipde_dgm$alpha_true, dose)
-  } else {
-    scenario$p_true[dose]
+  history_doses <- integer(0)
+  if (is_retreat) {
+    patient_history <- state$admin[state$admin$patient_id == q$patient_id, , drop = FALSE]
+    patient_history <- patient_history[order(
+      patient_history$cycle, patient_history$admin_id
+    ), , drop = FALSE]
+    history_doses <- as.integer(patient_history$dose)
   }
-  p_eff <- if (is_retreat && identical(config$efficacy$model, "multicycle_additive")) {
-    min(1, eff_state)
-  } else if (is_retreat) {
-    aide_phase12_ipde_probability(scenario$e_true, scenario$efficacy_ipde_dgm$alpha_true, dose)
-  } else {
-    scenario$e_true[dose]
-  }
+  patient_effect <- aide_phase12_tite_patient_random_effect(
+    state, q$patient_id, scenario
+  )
+  state <- patient_effect$state
+  tox_generation <- aide_phase12_tite_true_endpoint_probability(
+    settings = scenario$true_generation,
+    regular_probability = scenario$p_true,
+    current_dose = dose,
+    history_doses = history_doses,
+    patient_random_effect = patient_effect$effect,
+    legacy_alpha = scenario$toxicity_ipde_dgm$alpha_true,
+    legacy_multicycle = identical(config$toxicity$model, "multicycle_additive"),
+    previous_state = previous_tox_state
+  )
+  eff_generation <- aide_phase12_tite_true_endpoint_probability(
+    settings = scenario$true_generation,
+    regular_probability = scenario$e_true,
+    current_dose = dose,
+    history_doses = history_doses,
+    patient_random_effect = patient_effect$effect,
+    legacy_alpha = scenario$efficacy_ipde_dgm$alpha_true,
+    legacy_multicycle = identical(config$efficacy$model, "multicycle_additive"),
+    previous_state = previous_eff_state
+  )
+  p_tox <- tox_generation$probability
+  p_eff <- eff_generation$probability
   tox <- aide_draw_binary_event_time(p_tox, state$t_now, config$time$T_assess, config$time$dlt_dist)
   eff <- aide_draw_binary_event_time(p_eff, state$t_now, config$time$T_assess, config$time$efficacy_dist)
   state$counters$admin <- state$counters$admin + 1L; id <- state$counters$admin
@@ -241,7 +277,10 @@ aide_append_administration <- function(state, queue_index, config, scenario) {
     decision_next_dose = dose, previous_dose = previous, previous_admin_id = previous_admin_id, cycle = cycle, t_arrival = arrival, t_start = state$t_now,
     t_dlt = tox$event_time, t_response = eff$event_time, assessment_end = tox$window_end, dlt_final = tox$outcome,
     eff_final = eff$outcome, true_p_tox = p_tox, true_p_eff = p_eff,
-    true_toxicity_state = tox_state, true_efficacy_state = eff_state))
+    true_patient_random_effect = patient_effect$effect,
+    true_effective_dose = tox_generation$effective_dose,
+    true_toxicity_state = tox_generation$state,
+    true_efficacy_state = eff_generation$state))
   if (is.finite(tox$event_time)) state <- aide_event_schedule(state, tox$event_time, "dlt_observed", q$patient_id, id)
   if (is.finite(eff$event_time)) state <- aide_event_schedule(state, eff$event_time, "efficacy_response", q$patient_id, id)
   state <- aide_event_schedule(state, tox$window_end, "assessment_complete", q$patient_id, id)

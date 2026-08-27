@@ -67,6 +67,13 @@ aide_final_analysis <- function(state, config, scenario) {
 
 aide_summarize_trial <- function(state, config, scenario) {
   final <- aide_final_analysis(state, config, scenario)
+  final$true_generation <- c(
+    scenario$true_generation,
+    list(
+      random_effect_variance = state$true_generation$random_effect_variance,
+      patient_random_effects = state$true_generation$patient_random_effects
+    )
+  )
   list(config = config, scenario = scenario, admin = state$admin, event_log = state$logs$event_log,
        queue_log = state$queue, cohort_log = state$logs$cohort_log, n_eval_log = state$logs$n_eval_log,
        decision_log = state$logs$decision_log, retreat_log = state$logs$retreat_log,
