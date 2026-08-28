@@ -1958,6 +1958,50 @@ simulate_AIDE_phase_I_II <- function(
   current_dose <- 1L
   earlystop <- FALSE
   stop_reason <- NA_character_
+  ## A multicycle CRM fit is used for the toxicity move, utility selection,
+  ## and patient-specific recycle gate at a fixed administration history.
+  ## Reusing its posterior keeps these decisions coherent and avoids repeated
+  ## JAGS fits of identical data.
+  multicycle_toxicity_fit_cache <- list(
+    key = NULL,
+    fit = NULL
+  )
+
+  multicycle_toxicity_fit_cache_key <- function() {
+    if (!multicycle_toxicity_active || nrow(admin) == 0L) return(NULL)
+    dat <- toxicity_model_data()
+    paste(
+      nrow(dat),
+      paste(
+        vapply(dat, function(x) paste(x, collapse = ","), character(1)),
+        collapse = "|"
+      ),
+      sep = ":"
+    )
+  }
+
+  cached_multicycle_toxicity_fit <- function() {
+    key <- multicycle_toxicity_fit_cache_key()
+    if (is.null(key) || !identical(multicycle_toxicity_fit_cache$key, key)) {
+      return(NULL)
+    }
+    multicycle_toxicity_fit_cache$fit
+  }
+
+  cache_multicycle_toxicity_fit <- function(fit) {
+    key <- multicycle_toxicity_fit_cache_key()
+    if (!is.null(key) && !is.null(fit) && !is.null(fit$post)) {
+      multicycle_toxicity_fit_cache <<- list(key = key, fit = fit)
+    }
+    invisible(NULL)
+  }
+
+  toxicity_fit_stops_trial <- function(fit) {
+    mtd <- fit$MTD
+    isTRUE(fit$stop == 1L) ||
+      isTRUE(fit$earlystop == 1L) ||
+      (length(mtd) == 1L && is.finite(mtd) && as.integer(mtd) == 99L)
+  }
 
   latest_patient_state <- function() {
     if (nrow(admin) == 0L) return(admin)
@@ -2057,6 +2101,10 @@ simulate_AIDE_phase_I_II <- function(
     )
     toxicity_gate_for_patient <- if (toxicity_rule_applied) {
       toxicity_fit <- toxicity_utility_fit()
+      ## The dose-1 stopping rule ends the trial.  There is no valid recycle
+      ## destination in this state, and an early-stop selector need not be
+      ## passed to the patient-specific posterior gate.
+      if (toxicity_fit_stops_trial(toxicity_fit)) return(integer(0))
       toxicity_history <- crm_multicycle_history_data(admin, ndose = ndose)
       lapply(seq_len(nrow(state)), function(i) {
         crm_multicycle_recycle_toxicity_gate(
@@ -2414,7 +2462,7 @@ simulate_AIDE_phase_I_II <- function(
       ))
     }
 
-    crm_move(
+    move <- crm_move(
       current_dose = dose,
       ndose = ndose,
       dat = toxicity_model_data(),
@@ -2434,13 +2482,16 @@ simulate_AIDE_phase_I_II <- function(
       n_chains = crm_n_chains,
       n_adapt = crm_n_adapt,
       n_burnin = crm_n_burnin,
-      n_iter = crm_n_iter,
+      n_iter = max(5000L, crm_n_iter),
       thin = crm_thin,
       elimi = toxicity_eliminated,
       n_trt_curr = counts$n[dose],
       dose_cap = dose_cap,
-      no_skip = TRUE
+      no_skip = TRUE,
+      fit = cached_multicycle_toxicity_fit()
     )
+    cache_multicycle_toxicity_fit(move$fit)
+    move
   }
 
   final_toxicity_fit <- function() {
@@ -2468,7 +2519,7 @@ simulate_AIDE_phase_I_II <- function(
         restrict_to_tried = TRUE
       ))
     }
-    select.mtd.crm(
+    model_fit <- select.mtd.crm(
       target = target,
       dat = toxicity_model_data(),
       ndose = ndose,
@@ -2489,13 +2540,17 @@ simulate_AIDE_phase_I_II <- function(
       n_burnin = crm_n_burnin,
       n_iter = max(5000L, crm_n_iter),
       thin = crm_thin,
-      restrict_to_tried = TRUE
+      restrict_to_tried = TRUE,
+      fit = cached_multicycle_toxicity_fit()
     )
+    cache_multicycle_toxicity_fit(model_fit$fit)
+    model_fit
   }
 
-  ## Refit the user-selected toxicity model without restricting the estimate
-  ## vector to previously treated doses. This supplies model-based toxicity
-  ## probabilities for every dose that can enter the one-stage utility rule.
+  ## Fit (or reuse) the user-selected toxicity model without restricting the
+  ## estimate vector to previously treated doses. This supplies model-based
+  ## toxicity probabilities for every dose that can enter the one-stage
+  ## utility rule.
   toxicity_utility_fit <- function() {
     if (nrow(admin) == 0L) {
       return(list(
@@ -2519,7 +2574,7 @@ simulate_AIDE_phase_I_II <- function(
         restrict_to_tried = FALSE
       ))
     }
-    select.mtd.crm(
+    model_fit <- select.mtd.crm(
       target = target,
       dat = toxicity_model_data(),
       ndose = ndose,
@@ -2540,8 +2595,11 @@ simulate_AIDE_phase_I_II <- function(
       n_burnin = crm_n_burnin,
       n_iter = max(5000L, crm_n_iter),
       thin = crm_thin,
-      restrict_to_tried = FALSE
+      restrict_to_tried = FALSE,
+      fit = cached_multicycle_toxicity_fit()
     )
+    cache_multicycle_toxicity_fit(model_fit$fit)
+    model_fit
   }
 
   toxicity_estimate_from_fit <- function(model_fit) {

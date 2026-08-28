@@ -1323,7 +1323,8 @@ crm_move <- function(current_dose,
                      cumu_beta1_shape = 5.83,
                      cumu_beta1_rate = 1.21,
                      cumu_beta2_rate = 1,
-                     cumu_include_current = FALSE) {
+                     cumu_include_current = FALSE,
+                     fit = NULL) {
   
   r_model <- crm_normalize_r_model(r_model)
   if (!is.null(cutoff.eli)) cutoff <- cutoff.eli
@@ -1368,52 +1369,54 @@ crm_move <- function(current_dose,
     ))
   }
   
-  fit <- crm_fit(
-    dat = dat,
-    ndose = ndose,
-    skeleton = skeleton,
-    target = target,
-    cutoff = cutoff,
-    r_model = r_model,
-    r_carry = r_carry,
-    a_r = a_r,
-    b_r = b_r,
-    alpha_sd = alpha_sd,
-    model_file = model_file,
-    fixed_model_file = fixed_model_file,
-    random_model_file = random_model_file,
-    level_model_file = level_model_file,
-    previous_dose_model_file = previous_dose_model_file,
-    n_chains = n_chains,
-    n_adapt = n_adapt,
-    n_burnin = n_burnin,
-    n_iter = n_iter,
-    thin = thin,
-    seed = seed,
-    dose_values = dose_values,
-    dose_scores = dose_scores,
-    time_col = time_col,
-    assessment_window = assessment_window,
-    decision_time = decision_time,
-    weight_col = weight_col,
-    followup_col = followup_col,
-    alpha_grid = alpha_grid,
-    alpha_T = alpha_T,
-    theta_prior_mean = theta_prior_mean,
-    theta_prior_sd = theta_prior_sd,
-    alpha_L = alpha_L,
-    alpha_rel_tol = alpha_rel_tol,
-    alpha_eps = alpha_eps,
-    alpha_n_draw_prior = alpha_n_draw_prior,
-    cumu_model_file = cumu_model_file,
-    cumu_beta0_mean = cumu_beta0_mean,
-    cumu_beta0_prec = cumu_beta0_prec,
-    cumu_beta0_df = cumu_beta0_df,
-    cumu_beta1_shape = cumu_beta1_shape,
-    cumu_beta1_rate = cumu_beta1_rate,
-    cumu_beta2_rate = cumu_beta2_rate,
-    cumu_include_current = cumu_include_current
-  )
+  if (is.null(fit)) {
+    fit <- crm_fit(
+      dat = dat,
+      ndose = ndose,
+      skeleton = skeleton,
+      target = target,
+      cutoff = cutoff,
+      r_model = r_model,
+      r_carry = r_carry,
+      a_r = a_r,
+      b_r = b_r,
+      alpha_sd = alpha_sd,
+      model_file = model_file,
+      fixed_model_file = fixed_model_file,
+      random_model_file = random_model_file,
+      level_model_file = level_model_file,
+      previous_dose_model_file = previous_dose_model_file,
+      n_chains = n_chains,
+      n_adapt = n_adapt,
+      n_burnin = n_burnin,
+      n_iter = n_iter,
+      thin = thin,
+      seed = seed,
+      dose_values = dose_values,
+      dose_scores = dose_scores,
+      time_col = time_col,
+      assessment_window = assessment_window,
+      decision_time = decision_time,
+      weight_col = weight_col,
+      followup_col = followup_col,
+      alpha_grid = alpha_grid,
+      alpha_T = alpha_T,
+      theta_prior_mean = theta_prior_mean,
+      theta_prior_sd = theta_prior_sd,
+      alpha_L = alpha_L,
+      alpha_rel_tol = alpha_rel_tol,
+      alpha_eps = alpha_eps,
+      alpha_n_draw_prior = alpha_n_draw_prior,
+      cumu_model_file = cumu_model_file,
+      cumu_beta0_mean = cumu_beta0_mean,
+      cumu_beta0_prec = cumu_beta0_prec,
+      cumu_beta0_df = cumu_beta0_df,
+      cumu_beta1_shape = cumu_beta1_shape,
+      cumu_beta1_rate = cumu_beta1_rate,
+      cumu_beta2_rate = cumu_beta2_rate,
+      cumu_include_current = cumu_include_current
+    )
+  }
   
   if (!is.null(fit$stop) && isTRUE(fit$stop == 1L)) {
     return(list(
@@ -1439,7 +1442,8 @@ crm_move <- function(current_dose,
       crm_selected_dose = NA_integer_,
       r_carry = r_carry,
       r_model = r_model,
-      model_file = if (!is.null(fit$model_file)) fit$model_file else model_file
+      model_file = if (!is.null(fit$model_file)) fit$model_file else model_file,
+      fit = fit
     ))
   }
   
@@ -1468,7 +1472,8 @@ crm_move <- function(current_dose,
       stop_trial = FALSE,
       eliminated = elimi,
       crm_selected_dose = NA_integer_,
-      model_file = if (!is.null(fit$model_file)) fit$model_file else model_file
+      model_file = if (!is.null(fit$model_file)) fit$model_file else model_file,
+      fit = fit
     ))
   }
   
@@ -1516,7 +1521,8 @@ crm_move <- function(current_dose,
     crm_selected_dose = as.integer(crm_selected_dose),
     r_carry = r_carry,
     r_model = r_model,
-    model_file = if (!is.null(fit$model_file)) fit$model_file else model_file
+    model_file = if (!is.null(fit$model_file)) fit$model_file else model_file,
+    fit = fit
   )
 }
 
@@ -1568,7 +1574,8 @@ select.mtd.crm <- function(target,
                            cumu_beta1_shape = 5.83,
                            cumu_beta1_rate = 1.21,
                            cumu_beta2_rate = 1,
-                           cumu_include_current = FALSE) {
+                           cumu_include_current = FALSE,
+                           fit = NULL) {
   
   r_model <- crm_normalize_r_model(r_model)
   restrict_to_tried <- isTRUE(restrict_to_tried)
@@ -1621,52 +1628,54 @@ select.mtd.crm <- function(target,
     n_eff[j] <- sum(dat2$y[rows_j] == 1L) +
       sum(dat2$tite_weight[rows_j & dat2$y == 0L])
   }
-  fit <- crm_fit(
-    dat = dat2,
-    ndose = ndose,
-    skeleton = skeleton,
-    target = target,
-    cutoff = cutoff.eli,
-    r_model = r_model,
-    r_carry = r_carry,
-    a_r = a_r,
-    b_r = b_r,
-    alpha_sd = alpha_sd,
-    model_file = model_file,
-    fixed_model_file = fixed_model_file,
-    random_model_file = random_model_file,
-    level_model_file = level_model_file,
-    previous_dose_model_file = previous_dose_model_file,
-    n_chains = n_chains,
-    n_adapt = n_adapt,
-    n_burnin = n_burnin,
-    n_iter = n_iter,
-    thin = thin,
-    seed = seed,
-    dose_values = dose_values,
-    dose_scores = dose_scores,
-    time_col = time_col,
-    assessment_window = assessment_window,
-    decision_time = decision_time,
-    weight_col = weight_col,
-    followup_col = followup_col,
-    alpha_grid = alpha_grid,
-    alpha_T = alpha_T,
-    theta_prior_mean = theta_prior_mean,
-    theta_prior_sd = theta_prior_sd,
-    alpha_L = alpha_L,
-    alpha_rel_tol = alpha_rel_tol,
-    alpha_eps = alpha_eps,
-    alpha_n_draw_prior = alpha_n_draw_prior,
-    cumu_model_file = cumu_model_file,
-    cumu_beta0_mean = cumu_beta0_mean,
-    cumu_beta0_prec = cumu_beta0_prec,
-    cumu_beta0_df = cumu_beta0_df,
-    cumu_beta1_shape = cumu_beta1_shape,
-    cumu_beta1_rate = cumu_beta1_rate,
-    cumu_beta2_rate = cumu_beta2_rate,
-    cumu_include_current = cumu_include_current
-  )
+  if (is.null(fit)) {
+    fit <- crm_fit(
+      dat = dat2,
+      ndose = ndose,
+      skeleton = skeleton,
+      target = target,
+      cutoff = cutoff.eli,
+      r_model = r_model,
+      r_carry = r_carry,
+      a_r = a_r,
+      b_r = b_r,
+      alpha_sd = alpha_sd,
+      model_file = model_file,
+      fixed_model_file = fixed_model_file,
+      random_model_file = random_model_file,
+      level_model_file = level_model_file,
+      previous_dose_model_file = previous_dose_model_file,
+      n_chains = n_chains,
+      n_adapt = n_adapt,
+      n_burnin = n_burnin,
+      n_iter = n_iter,
+      thin = thin,
+      seed = seed,
+      dose_values = dose_values,
+      dose_scores = dose_scores,
+      time_col = time_col,
+      assessment_window = assessment_window,
+      decision_time = decision_time,
+      weight_col = weight_col,
+      followup_col = followup_col,
+      alpha_grid = alpha_grid,
+      alpha_T = alpha_T,
+      theta_prior_mean = theta_prior_mean,
+      theta_prior_sd = theta_prior_sd,
+      alpha_L = alpha_L,
+      alpha_rel_tol = alpha_rel_tol,
+      alpha_eps = alpha_eps,
+      alpha_n_draw_prior = alpha_n_draw_prior,
+      cumu_model_file = cumu_model_file,
+      cumu_beta0_mean = cumu_beta0_mean,
+      cumu_beta0_prec = cumu_beta0_prec,
+      cumu_beta0_df = cumu_beta0_df,
+      cumu_beta1_shape = cumu_beta1_shape,
+      cumu_beta1_rate = cumu_beta1_rate,
+      cumu_beta2_rate = cumu_beta2_rate,
+      cumu_include_current = cumu_include_current
+    )
+  }
   
   phat_out <- fit$p_hat
 
@@ -1700,7 +1709,8 @@ select.mtd.crm <- function(target,
       earlystop = 1L,
       stop = 1L,
       restrict_to_tried = restrict_to_tried,
-      restrict_to_target = restrict_to_target
+      restrict_to_target = restrict_to_target,
+      fit = fit
     ))
   }
   
